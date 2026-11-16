@@ -234,7 +234,7 @@ async function baseTotal(tx: Tx, t: Txn) {
 }
 
 /** Nothing may be dated inside a finalized bank reconciliation. */
-async function assertNotReconciled(tx: Tx, organizationId: string, bankIds: (string | null)[], date: Date) {
+export async function assertNotReconciled(tx: Tx, organizationId: string, bankIds: (string | null)[], date: Date) {
   const st = await tx.bankStatement.findFirst({
     where: { organizationId, bankAccountId: { in: bankIds.filter(Boolean) as string[] }, status: "RECONCILED", periodTo: { gte: date } },
     orderBy: { periodTo: "desc" },
@@ -351,9 +351,18 @@ export async function rejectCash(organizationId: string, userId: string, id: str
  * as an outstanding check or deposit in transit after the void date.
  */
 export async function voidCash(organizationId: string, userId: string, id: string, reason: string, reversalDate?: Date) {
-  return prisma.$transaction(async (tx) => {
+  return prisma.$transaction((tx) => voidCashTx(tx, organizationId, userId, id, reason, reversalDate));
+}
+
+/** `fromSubledger`: the AP module voiding the disbursement it created for a payment voucher. */
+export async function voidCashTx(tx: Tx, organizationId: string, userId: string, id: string, reason: string, reversalDate?: Date, fromSubledger = false) {
+  {
     const t = await load(tx, organizationId, id);
     if (t.status === "VOID") throw new LedgerError(["Voucher is already void"]);
+    if (!fromSubledger) {
+      const pv = await tx.apPayment.findUnique({ where: { cashTransactionId: id } });
+      if (pv && pv.status !== "VOID") throw new LedgerError([`This disbursement pays supplier bills (${pv.number}). Void the payment voucher in Payables instead.`]);
+    }
     if (!reason.trim()) throw new LedgerError(["Give a reason for voiding"]);
     if (t.replenishedById) {
       const r = await tx.cashTransaction.findUnique({ where: { id: t.replenishedById } });
@@ -376,7 +385,50 @@ export async function voidCash(organizationId: string, userId: string, id: strin
     await tx.cashTransaction.update({ where: { id }, data: { status: "VOID", voidedById: userId, voidedAt: new Date(), voidReason: reason.trim() } });
     if (t.isReplenishment) await tx.cashTransaction.updateMany({ where: { replenishedById: id }, data: { replenishedById: null } });
     await audit(tx, organizationId, userId, "cash.void", id, { number: t.number, reason: reason.trim() }, null, null, "cash");
+  }
+}
+
+/**
+ * A disbursement already approved in a sub-ledger (AP payment voucher): created and posted at once.
+ * `debits` are the other side of the entry (e.g. Accounts Payable per bill at the bill's rate); the bank
+ * line and any realized FX difference are added here. It then shows in check monitoring and bank rec.
+ */
+export async function postSubledgerDisbursementTx(tx: Tx, input: {
+  organizationId: string; userId: string; bankAccountId: string; date: Date; payee: string; partyType: string; partyId: string;
+  method: string; checkNo?: string | null; checkDate?: Date | null; reference?: string | null; memo: string; fxRate: string; amount: bigint;
+  displayLines: CashLine[]; debits: LineInput[]; withFx: (lines: LineInput[]) => Promise<LineInput[]>;
+}) {
+  const bank = await bankOf(tx, input.organizationId, input.bankAccountId);
+  const method = (input.method || "CASH").toUpperCase();
+  if (!(METHODS as readonly string[]).includes(method)) throw new LedgerError(["Choose a payment method"]);
+  if (method === "CHECK" && !isBank(bank.kind)) throw new LedgerError(["Checks can only be drawn on a bank account"]);
+  const date = asDay(input.date);
+  await assertNotReconciled(tx, input.organizationId, [bank.id], date);
+  if (!isBank(bank.kind)) {
+    const bal = await balanceOf(tx, input.organizationId, bank.glAccountId);
+    if (input.amount > bal) throw new LedgerError([`${bank.name} only has ${fmt(bal)} on hand`]);
+  }
+  const checkNo = await assignCheckNo(tx, input.organizationId, bank.id, "DISBURSEMENT", method, input.checkNo?.trim() || null);
+  const number = await nextNumber(tx, input.organizationId, bank.kind === "PETTY_CASH" ? "PCV" : "CD", date.getUTCFullYear());
+  const now = new Date();
+  const t = await tx.cashTransaction.create({ data: {
+    organizationId: input.organizationId, number, type: "DISBURSEMENT", bankAccountId: bank.id, date, payee: input.payee, partyType: input.partyType, partyId: input.partyId,
+    method, checkNo, checkDate: input.checkDate ? asDay(input.checkDate) : null, reference: input.reference?.trim() || null, memo: input.memo,
+    currencyCode: bank.currencyCode, fxRate: new Prisma.Decimal(input.fxRate || "1"), amount: new Prisma.Decimal(fromCentavos(input.amount)), lines: input.displayLines,
+    status: "POSTED", createdById: input.userId, submittedById: input.userId, submittedAt: now, approvedById: input.userId, approvedAt: now,
+  } });
+  const lines = await input.withFx([
+    { accountId: bank.glAccountId, credit: fromCentavos(input.amount), currencyCode: bank.currencyCode, fxRate: input.fxRate || "1", description: `To ${input.payee}`, partyType: input.partyType, partyId: input.partyId },
+    ...input.debits,
+  ]);
+  const e = await recordJournalTx(tx, {
+    organizationId: input.organizationId, userId: input.userId, date, memo: `${number}: ${input.memo}`,
+    reference: [input.reference, checkNo ? `Check ${checkNo}` : null].filter(Boolean).join(" / ") || number,
+    lines, source: "BANK", sourceId: t.id, action: "post",
   });
+  await tx.cashTransaction.update({ where: { id: t.id }, data: { journalEntryId: e.id } });
+  await audit(tx, input.organizationId, input.userId, "cash.post", t.id, { number, journal: e.number }, null, null, "cash");
+  return { ...t, journalEntryId: e.id };
 }
 
 /** Record the date a check was handed to the payee (check monitoring). */

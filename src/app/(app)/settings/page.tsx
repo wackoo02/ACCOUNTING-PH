@@ -20,6 +20,7 @@ export default async function Settings() {
           <div><label>RDO code</label><input name="rdoCode" defaultValue={o.rdoCode ?? ""} /></div>
         </div>
         <div className="row" style={{ marginTop: 10 }}>
+          <div style={{ flex: 2 }}><label>Business style / trade name (printed on invoices)</label><input name="tradeName" defaultValue={o.tradeName ?? ""} /></div>
           <div style={{ flex: 3 }}><label>Registered address</label><input name="registeredAddress" defaultValue={o.registeredAddress ?? ""} /></div>
           <div><label>Fiscal year starts in</label><select name="fiscalYearStartMonth" defaultValue={o.fiscalYearStartMonth}>{MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}</select></div>
           <div><label>Base / reporting currency</label><input value={o.baseCurrency} readOnly /></div>
