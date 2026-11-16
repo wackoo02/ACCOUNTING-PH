@@ -177,6 +177,23 @@ Loans are in the company's base currency for now. Code: `src/lib/debt/schedule.t
 - Cash and bank: `src/lib/bank/cash.ts` (vouchers), `src/lib/bank/recon.ts` (statements, matching, reconciliation), `src/lib/bank/match.ts` (pure matching rules). AR collections and AP payments can create cash vouchers or post BANK entries; anything posted to a bank's GL account shows up for matching automatically.
 - Purchasing and payables: `src/lib/purchasing/service.ts`, `src/lib/ap/` (bills, payments, aging, inbox, pure math in `compute.ts`) and `src/lib/approvals.ts` (approval matrix, reusable by other documents). AP payments post through `postSubledgerDisbursementTx` in cash.ts, so they show in check monitoring and bank reconciliation.
 
+## Payroll and HR
+**Payroll** (Payroll and HR → Payroll Runs). Computed per the Labor Code, BIR and statutory agencies (tables in `src/lib/payroll/rates.ts`; review them before each year's first payroll):
+- Monthly or daily paid; daily rate = monthly x 12 / work days per year (261, 313, 365)
+- Overtime 125%, rest day and special day 130% (OT 169%), special day on rest day 150%, regular holiday 200% (OT 260%), regular holiday on rest day 260%, double holiday 300%/390%; unworked regular holiday paid for daily-paid; night differential 10% for 10 PM to 6 AM; absences, unpaid leave, tardiness and undertime
+- SSS (15%: 5% employee, 10% employer, MSC P5,000-35,000, MPF above P20,000, EC), PhilHealth 5% (floor P10,000, ceiling P100,000), Pag-IBIG (fund salary up to P10,000), deducted on the whole month in the run that ends the month
+- BIR withholding tax on compensation (TRAIN tables, semi-monthly or monthly), minimum wage earner exemption, de minimis ceilings (RR 29-2025), 13th month and other benefits exempt up to P90,000, year-end annualization with refund of over-withholding
+- 13th month pay runs (1/12 of basic salary earned in the year) and special bonus runs; recurring allowances, loans (stop at zero balance), garnishments and employer benefits (HMO, insurance, retirement); one-time adjustments per run
+- Workflow: compute → submit for review → reviewer ticks each payslip → finalize (someone other than the preparer) posts the payroll accrual to the GL (source PAYROLL: salaries, overtime, bonuses, allowances, employer contributions by department and cost center; SSS/PhilHealth/Pag-IBIG/withholding tax/loan liabilities; net pay per employee to Salaries Payable) → release payslips to the employee portal → record the salary payment from a bank account (Dr Salaries Payable, Cr bank, ready for bank reconciliation). Void reverses the GL until payslips are released.
+- BIR Form 2316 per employee per year from finalized payrolls: prepare drafts → review → finalize → release to the employee portal
+- PDF only: payslips, payroll register, labor cost by department, withholding tax and contributions (1601-C and remittance basis), employee earnings summary, BIR 2316, attendance and leave reports
+
+**HR and employee portal** (`/portal`; employees sign in with the normal login and land there):
+- Time in / time out (night shifts that end the next day are handled), daily time record
+- Requests routed to the reporting manager (or HR if none): leave (VL, SL, EL, SIL, maternity, paternity, solo parent, VAWC, special leave for women, bereavement, leave without pay; balances checked, half days), overtime, time amendment (corrects the time log on approval), change of shift or rest day
+- Managers see "My team": pending approvals, team attendance, team attendance and leave PDFs
+- HR setup: shifts with rest days and grace period, holidays (auto-load the national list: Proclamation 1006 for 2026, computed for later years; add Eid'l Fitr / Eid'l Adha and local holidays manually), leave types and yearly credits, manual time entries, portal logins
+- Only approved time, overtime, leave and schedule changes feed payroll. Dates inside a finalized payroll can't be amended.
 
 ## Custom reports (report builder)
 **Reports → Custom Reports.** Every report can be customized and saved: start from a template (or press **Customize** on any standard report) and change

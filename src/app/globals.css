@@ -248,3 +248,13 @@ a.tile:hover { text-decoration: none; border-color: var(--brand); transform: tra
 .ret tr.strong td { font-weight: 600; }
 .cert { border: 1px solid var(--ink); padding: 14px; background: #fff; }
 .cert h3 { margin: 4px 0; text-align: center; }
+
+/* ---------- Payroll and HR ---------- */
+.badge.FOR_REVIEW, .badge.PENDING { background: #ddf4ff; color: #0969da; }
+.badge.FINALIZED, .badge.APPROVED, .badge.RELEASED { background: #dafbe1; color: var(--ok); }
+.badge.REJECTED { background: #fdecea; color: var(--danger); }
+.badge.CANCELLED { background: #eee; color: #666; }
+.portal { min-height: 100vh; background: var(--bg); }
+.portal-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px 24px; background: var(--panel); border-bottom: 3px solid var(--brand); }
+.portal-main { max-width: 1100px; margin: 0 auto; padding: 20px 16px; }
+@media (max-width: 760px) { .portal-top { padding: 10px 16px; } .portal-top nav { flex-wrap: wrap !important; } }
