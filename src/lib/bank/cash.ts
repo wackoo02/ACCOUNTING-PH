@@ -234,7 +234,7 @@ async function baseTotal(tx: Tx, t: Txn) {
 }
 
 /** Nothing may be dated inside a finalized bank reconciliation. */
-async function assertNotReconciled(tx: Tx, organizationId: string, bankIds: (string | null)[], date: Date) {
+export async function assertNotReconciled(tx: Tx, organizationId: string, bankIds: (string | null)[], date: Date) {
   const st = await tx.bankStatement.findFirst({
     where: { organizationId, bankAccountId: { in: bankIds.filter(Boolean) as string[] }, status: "RECONCILED", periodTo: { gte: date } },
     orderBy: { periodTo: "desc" },

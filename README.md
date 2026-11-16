@@ -107,6 +107,19 @@ One-time setup for the whole Veritus service (platform operator only):
 
 **What needs provider partnerships**: see Mobility Settings → Provider connections. Today Veritus works with statement / report imports and receipt capture. Pulling trips and orders automatically, booking from Veritus, or auto-paying needs a business account and API agreement with Grab for Business, Lalamove Business, Transportify, GCash for Business (Mynt) and Maya Business; direct card feeds need an agreement with the bank.
 
+## What's in Phase 4: Receivables and billing
+**Sales invoices and credit memos** (draft → for approval → issued; same approval limits and segregation of duties): VATable / zero-rated / VAT-exempt lines, prices with or without VAT, line discounts, products, revenue account and dimensions per line, foreign-currency customers, expected withholding by the customer (BIR 2307). Issuing posts Dr Accounts Receivable / Cr Sales + Output VAT (source SALES). A credit memo posts the reverse (Sales Returns) and is applied to the invoice it corrects. Non-VAT companies print NON-VAT and "not valid for claim of input tax".
+
+**BIR invoice series** (Receivables → BIR Invoice Series): register each ATP / CAS / CRM-POS / EIS serial range with permit and printer details. Serials are assigned only when a document is approved, cancelled invoices keep their number, and posting stops when a range is used up.
+
+**Collections**: cash or check received plus tax withheld (2307), applied to one or more open invoices (pay in full, oldest first, or by hand). Any excess becomes an advance (Advances from Customers) that can be applied later. Foreign-currency collections post the realized FX gain/loss. Voiding (e.g. bounced check) reopens the invoices and keeps the bank reconciliation clean.
+
+**Reports**: customer aging summary and detail (by days past due or invoice date; not yet due, 1-30, 31-60, 61-90, 91-120, over 120), with a tie-out to the AR control and customer advances GL balances; statement of account per customer with aging.
+
+**PDF and email**: BIR-format sales invoice, credit memo, collection receipt and statement PDFs (`/api/receivables/pdf`). Email to the customer's Invoice Emails with the PDF attached needs `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `MAIL_FROM` on the server; every send is logged.
+
+**Contract billing**: subscriptions and retainer contracts invoice every month/quarter/half/year (catching up missed periods, never billing a period twice); project contracts bill milestones by % or amount of the contract value. Hooks for POS (series type POS_INVOICE, invoice source POS) and scanned invoices (source SCAN) are in place.
+
 ## Design notes for later modules
 - **One entry point:** `src/lib/ledger/service.ts` → `recordJournal({ source, sourceId, lines, action })`. Sub-ledgers pass their own `source` (SALES, PURCHASES, BANK, PAYROLL, EXPENSE_CLAIM, FIXED_ASSETS, …) and skip the manual approval controls.
 - Find control accounts with `accountByRole(org, "AR_CONTROL")` etc., never hard-coded codes.

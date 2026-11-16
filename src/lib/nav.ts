@@ -39,6 +39,19 @@ export const NAV: NavSection[] = [
     ],
   },
   {
+    title: "Receivables and Billing",
+    items: [
+      { href: "/receivables", label: "Sales Invoices", icon: "receivables" },
+      { href: "/receivables?status=PENDING_APPROVAL", label: "Invoice Approvals", icon: "approvals", perm: "journal.post" },
+      { href: "/receivables?kind=CREDIT_MEMO", label: "Credit Memos", icon: "journal" },
+      { href: "/receivables/collections", label: "Collections", icon: "cash" },
+      { href: "/receivables/aging", label: "Customer Aging", icon: "activity" },
+      { href: "/receivables/statement", label: "Statements of Account", icon: "statements" },
+      { href: "/receivables/billing", label: "Contract Billing", icon: "recurring" },
+      { href: "/receivables/series", label: "BIR Invoice Series", icon: "bir" },
+    ],
+  },
+  {
     title: "Purchasing",
     items: [
       { href: "/purchasing/requests", label: "Purchase Requests", icon: "journal-new" },
@@ -112,7 +125,6 @@ export const NAV: NavSection[] = [
 ];
 
 export const COMING_NEXT: { label: string; icon: IconName }[] = [
-  { label: "Receivables and aging", icon: "receivables" },
   { label: "Payroll", icon: "payroll" },
   { label: "Depreciation and disposals", icon: "fixed-assets" },
   { label: "Prepaid expenses", icon: "prepaid" },
