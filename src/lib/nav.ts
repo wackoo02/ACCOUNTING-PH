@@ -8,7 +8,7 @@ export type { NavItem, NavSection };
 
 const MASTER_ICON: Record<string, IconName> = {
   accounts: "accounts", dimensions: "dimensions", taxes: "taxes", banks: "banks", products: "products",
-  employees: "employees", vendors: "vendors", customers: "customers", currencies: "currencies",
+  employees: "employees", vendors: "vendors", customers: "customers", currencies: "currencies", assets: "fixed-assets",
 };
 
 export const NAV: NavSection[] = [
@@ -39,6 +39,40 @@ export const NAV: NavSection[] = [
     ],
   },
   {
+    title: "Receivables and Billing",
+    items: [
+      { href: "/receivables", label: "Sales Invoices", icon: "receivables" },
+      { href: "/receivables?status=PENDING_APPROVAL", label: "Invoice Approvals", icon: "approvals", perm: "journal.post" },
+      { href: "/receivables?kind=CREDIT_MEMO", label: "Credit Memos", icon: "journal" },
+      { href: "/receivables/collections", label: "Collections", icon: "cash" },
+      { href: "/receivables/aging", label: "Customer Aging", icon: "activity" },
+      { href: "/receivables/statement", label: "Statements of Account", icon: "statements" },
+      { href: "/receivables/billing", label: "Contract Billing", icon: "recurring" },
+      { href: "/receivables/series", label: "BIR Invoice Series", icon: "bir" },
+    ],
+  },
+  {
+    title: "Expense and Mobility",
+    items: [
+      { href: "/expenses", label: "Mobility Dashboard", icon: "mobility" },
+      { href: "/expenses/claims", label: "Expense Claims", icon: "claims" },
+      { href: "/expenses/claims?q=manager", label: "Manager Approvals", icon: "approvals" },
+      { href: "/expenses/claims?q=finance", label: "Finance Review", icon: "audit", perm: "expense.finance" },
+      { href: "/expenses/reimbursements", label: "Reimbursements", icon: "wallet" },
+      { href: "/expenses/reconcile", label: "Wallet and Card Recon", icon: "reconcile" },
+      { href: "/expenses/report", label: "Employee Expense Report", icon: "employees" },
+      { href: "/expenses/settings", label: "Mobility Settings", icon: "settings" },
+    ],
+  },
+  {
+    title: "Fixed Assets",
+    items: [
+      { href: "/masters/assets", label: "Asset Register", icon: "fixed-assets" },
+      { href: "/assets/stickers", label: "QR Stickers", icon: "asset-audit" },
+      { href: "/assets/audits", label: "Asset Counts", icon: "audit" },
+    ],
+  },
+  {
     title: "Reports",
     items: [
       { href: "/reports/custom", label: "Custom Reports", icon: "report-builder" },
@@ -55,7 +89,7 @@ export const NAV: NavSection[] = [
   },
   {
     title: "Master Lists",
-    items: MASTER_KINDS.map((k) => ({ href: `/masters/${k}`, label: MASTERS[k].title, icon: MASTER_ICON[k] ?? "dimensions" })),
+    items: MASTER_KINDS.filter((k) => k !== "assets").map((k) => ({ href: `/masters/${k}`, label: MASTERS[k].title, icon: MASTER_ICON[k] ?? "dimensions" })),
   },
   {
     title: "Settings",
@@ -69,11 +103,9 @@ export const NAV: NavSection[] = [
 ];
 
 export const COMING_NEXT: { label: string; icon: IconName }[] = [
-  { label: "Receivables and aging", icon: "receivables" },
   { label: "Payables and aging", icon: "payables" },
-  { label: "Expense claims and mobility", icon: "mobility" },
   { label: "Payroll", icon: "payroll" },
-  { label: "Fixed assets", icon: "fixed-assets" },
+  { label: "Depreciation and disposals", icon: "fixed-assets" },
   { label: "Prepaid expenses", icon: "prepaid" },
   { label: "Leases (PFRS 16)", icon: "leases" },
   { label: "Debt", icon: "debt" },

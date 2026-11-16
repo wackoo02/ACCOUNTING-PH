@@ -150,7 +150,7 @@ export function ReportBuilder({ initialDef, initialResult, lookups, saved, start
               )}
               {info.measures && (
                 <div><label>Amounts to show</label>
-                  <div className="checks">
+                  <div className="measure-checks">
                     {MEASURES.map((m) => <Check key={m} label={MEASURE_LABEL[m]} checked={def.measures.includes(m)} onChange={() => up((d) => { const next = toggle(d.measures, m) as Measure[]; d.measures = MEASURES.filter((x) => next.includes(x)); })} />)}
                   </div>
                   <p className="muted small">Debit/credit and net movement are for each period; opening and closing balances are as of its start and end. Budget amounts come from Budgets (by department or project when you group or filter by one).</p>

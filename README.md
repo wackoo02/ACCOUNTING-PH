@@ -69,6 +69,39 @@ Turn `SEED_DEMO` off and change or remove the demo users before real company dat
 - Reconciliation report: balance per bank + deposits in transit − outstanding checks = balance per books ± bank items not yet booked; finalize when the difference is zero (locks its matches; owner/admin can reopen); nothing can be dated inside a finalized reconciliation
 **Petty cash (mobile app API)**: funds, vouchers from receipt photos (AI reads supplier, TIN, items, VAT, tips and proposes the account), VAT/EWT computation, fixed asset threshold with approved PO, approvals, and replenishment batches that post a Petty Cash journal. See [docs/MOBILE_API.md](docs/MOBILE_API.md).
 
+## Veritus Mobility app and Expense & Mobility (Phase 7, part)
+**Mobile app** at `/m`: an installable web app (PWA). On iPhone open it in Safari → Share → Add to Home Screen; on Android Chrome offers "Install app". Same login as the web ERP. Tiles: Petty Cash, Travel (local and international, foreign receipts translated to English and converted at the day's rate), Transport (Grab, inDrive, JoyRide, Angkas, taxi), Sent Package (Lalamove, Transportify, couriers), Sales Invoice (scan an issued invoice and post the sale) and Asset Audit (scan QR stickers).
+
+**One record per receipt**: every module and payer uses the same voucher table, so petty cash is never recorded twice. Receipts are read by AI or entered by hand when there is none; no VAT TIN on the receipt (or no receipt, or a foreign receipt) means non-VAT automatically.
+
+**Workflow**: Draft → Submitted → Manager (business purpose, budget, cost center; the employee's supervisor or an approver) → Approved / Returned / Rejected → Finance (receipt, tax compliance, duplicates) → Cleared / Hold. Clearing posts the journal (source EXPENSE_CLAIM):
+- Paid with corporate GCash / Maya / card: Dr expense / Cr the wallet or card account
+- Paid by the employee: Dr expense / Cr Employee Reimbursements Payable; Reimbursements creates one disbursement voucher per employee to pay them back
+- Petty cash fund: replenished in a batch as before
+
+**GL mapping** (Mobility Settings, editable): business ride 6050 Transportation, client visit 6051 (selling), staff shuttle 6053 (admin), delivery 6052, inventory delivery 1205 Inventory in Transit, local / international travel 6050 / 6056.
+
+**Reconciliation**: import the GCash, Maya or card statement in Bank Statements; Wallet and Card Recon auto-matches posted claims by amount and booking number; a charge with no claim is an exception that finance sends to the employee as a claim to complete.
+
+**Reports**: Mobility Dashboard (transport, delivery, by department / employee / project / provider / payment, top travelers and delivery users, unapproved, unreconciled, travel budget vs actual) and the Employee Expense Report.
+
+**Fixed assets (start)**: Fixed Asset Register master list, printable QR stickers, and asset counts scanned from the app (found / wrong location / unknown / missing, by location and category; closing marks unscanned assets missing). Depreciation and disposals come with the fixed asset module.
+
+**What needs provider partnerships**: see Mobility Settings → Provider connections. Today Veritus works with statement / report imports and receipt capture. Pulling trips and orders automatically, booking from Veritus, or auto-paying needs a business account and API agreement with Grab for Business, Lalamove Business, Transportify, GCash for Business (Mynt) and Maya Business; direct card feeds need an agreement with the bank.
+
+## What's in Phase 4: Receivables and billing
+**Sales invoices and credit memos** (draft → for approval → issued; same approval limits and segregation of duties): VATable / zero-rated / VAT-exempt lines, prices with or without VAT, line discounts, products, revenue account and dimensions per line, foreign-currency customers, expected withholding by the customer (BIR 2307). Issuing posts Dr Accounts Receivable / Cr Sales + Output VAT (source SALES). A credit memo posts the reverse (Sales Returns) and is applied to the invoice it corrects. Non-VAT companies print NON-VAT and "not valid for claim of input tax".
+
+**BIR invoice series** (Receivables → BIR Invoice Series): register each ATP / CAS / CRM-POS / EIS serial range with permit and printer details. Serials are assigned only when a document is approved, cancelled invoices keep their number, and posting stops when a range is used up.
+
+**Collections**: cash or check received plus tax withheld (2307), applied to one or more open invoices (pay in full, oldest first, or by hand). Any excess becomes an advance (Advances from Customers) that can be applied later. Foreign-currency collections post the realized FX gain/loss. Voiding (e.g. bounced check) reopens the invoices and keeps the bank reconciliation clean.
+
+**Reports**: customer aging summary and detail (by days past due or invoice date; not yet due, 1-30, 31-60, 61-90, 91-120, over 120), with a tie-out to the AR control and customer advances GL balances; statement of account per customer with aging.
+
+**PDF and email**: BIR-format sales invoice, credit memo, collection receipt and statement PDFs (`/api/receivables/pdf`). Email to the customer's Invoice Emails with the PDF attached needs `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `MAIL_FROM` on the server; every send is logged.
+
+**Contract billing**: subscriptions and retainer contracts invoice every month/quarter/half/year (catching up missed periods, never billing a period twice); project contracts bill milestones by % or amount of the contract value. Hooks for POS (series type POS_INVOICE, invoice source POS) and scanned invoices (source SCAN) are in place.
+
 ## Design notes for later modules
 - **One entry point:** `src/lib/ledger/service.ts` → `recordJournal({ source, sourceId, lines, action })`. Sub-ledgers pass their own `source` (SALES, PURCHASES, BANK, PAYROLL, EXPENSE_CLAIM, FIXED_ASSETS, …) and skip the manual approval controls.
 - Find control accounts with `accountByRole(org, "AR_CONTROL")` etc., never hard-coded codes.

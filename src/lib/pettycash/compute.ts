@@ -11,7 +11,9 @@ export type VoucherLineInput = {
   isFixedAsset?: boolean;
 };
 
-export type AccountInfo = { id: string; code: string; name: string; type: string; ifrsGroup: string };
+export type AccountInfo = { id: string; code: string; name: string; type: string; ifrsGroup: string; systemRole?: string | null };
+/** Freight on inventory deliveries is capitalized to Inventory in Transit (PAS 2), not expensed. */
+export const isInventoryTransit = (a?: AccountInfo) => !!a && a.systemRole === "INVENTORY_IN_TRANSIT";
 
 export type VoucherCalcInput = {
   lines: VoucherLineInput[];
@@ -98,7 +100,7 @@ export function computeVoucher(input: VoucherCalcInput): VoucherCalc {
     if (!l.description?.trim()) errors.push(`Item ${n}: enter a description`);
     const acct = input.accounts.get(l.accountId);
     if (!acct) errors.push(`Item ${n}: choose an account`);
-    else if (acct.type !== "EXPENSE" && !isAssetAccount(acct)) errors.push(`Item ${n}: ${acct.code} ${acct.name} is not an expense or property and equipment account`);
+    else if (acct.type !== "EXPENSE" && !isAssetAccount(acct) && !isInventoryTransit(acct)) errors.push(`Item ${n}: ${acct.code} ${acct.name} is not an expense or property and equipment account`);
     return {
       lineNo: n, description: (l.description ?? "").trim(), quantity: q ? `${q / 10000n}.${(q % 10000n).toString().padStart(4, "0")}` : "0",
       unitPrice: unit, amount, vat: 0n, net: amount, accountId: l.accountId, isFixedAsset: !!l.isFixedAsset || isAssetAccount(acct),
