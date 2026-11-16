@@ -26,7 +26,6 @@ export function Logo({ tagline = false, dark = false }: { tagline?: boolean; dar
       <LogoMark size={34} />
       <div>
         <div className="logo-name" style={{ color: dark ? "#fff" : "var(--ink)" }}>VERITUS</div>
-        <div className="logo-sub">ERP</div>
         {tagline && <div className="logo-tag">{BRAND.tagline}</div>}
       </div>
     </div>
