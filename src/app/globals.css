@@ -127,3 +127,4 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--b
   *, *::before, *::after { animation-duration: .001ms !important; animation-delay: 0s !important; transition-duration: .001ms !important; }
   .route-bar { display: none; }
 }
+.badge.BREACH { background: #fdecea; color: var(--danger); }
