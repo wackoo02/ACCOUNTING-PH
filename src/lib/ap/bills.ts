@@ -26,7 +26,7 @@ export type BillInput = {
 const snap = (x: unknown) => JSON.parse(JSON.stringify(x)) as Prisma.InputJsonValue;
 /** Bill total in base currency, for approval thresholds. */
 export const billBaseTotal = (b: { total: Prisma.Decimal; fxRate: Prisma.Decimal }) => roundDiv(cents(b.total) * q4of(b.fxRate), 10000n);
-export const normInvoiceNo = (s: string | null | undefined) => (s ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "").replace(/^0+/, "");
+export const normInvoiceNo = (s: string | null | undefined) => (s ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "").replace(/(^|[A-Z])0+(?=\d)/g, "$1");
 
 /** Another non-void bill from the same supplier with the same invoice number. */
 export async function findDuplicateBill(db: Tx | typeof prisma, organizationId: string, vendorId: string, invoiceNo: string, excludeId?: string) {
