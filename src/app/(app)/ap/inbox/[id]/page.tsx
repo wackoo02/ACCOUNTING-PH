@@ -38,7 +38,7 @@ export default async function InboxDoc({ params }: { params: Promise<{ id: strin
   return (
     <>
       <div className="top"><h1>{d.fileName}</h1>
-        <div className="row" style={{ gap: 8, flex: 0 }}>
+        <div className="row" style={{ gap: 8, flex: 0, flexWrap: "nowrap", whiteSpace: "nowrap" }}>
           {editable && <ActionForm action={inboxAction}><input type="hidden" name="id" value={d.id} /><input type="hidden" name="op" value="read" /><button className="secondary">Read again</button></ActionForm>}
           <Link className="btn secondary" href="/ap/inbox">Back to inbox</Link>
         </div>
@@ -48,7 +48,7 @@ export default async function InboxDoc({ params }: { params: Promise<{ id: strin
       {d.error && <div className="errors">{d.error}</div>}
       {match?.duplicateBill && <div className="errors">This invoice number from this supplier is already recorded as <Link href={`/ap/bills/${match.duplicateBill.id}`}>{match.duplicateBill.number}</Link>. Reject it as a duplicate unless it is a different invoice.</div>}
       {(d.duplicateOfId || match?.duplicateDocId) && <div className="notice">The same {d.duplicateOfId ? "file" : "invoice"} arrived before: <Link href={`/ap/inbox/${d.duplicateOfId ?? match?.duplicateDocId}`}>open the earlier copy</Link>.</div>}
-      <div style={{ display: "grid", gridTemplateColumns: "minmax(320px, 42%) 1fr", gap: 16, alignItems: "start" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "minmax(300px, 36%) minmax(0, 1fr)", gap: 16, alignItems: "start" }}>
         <div className="card" style={{ position: "sticky", top: 8 }}>
           <div className="muted" style={{ marginBottom: 6 }}>{d.fromEmail ? `From ${d.fromEmail}` : "Uploaded"} · {d.receivedAt.toISOString().slice(0, 16).replace("T", " ")}{d.subject ? ` · ${d.subject}` : ""}</div>
           {d.mediaType === "application/pdf"

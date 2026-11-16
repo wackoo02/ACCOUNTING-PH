@@ -42,7 +42,7 @@ export default async function BillView({ params }: { params: Promise<{ id: strin
     <>
       <div className="top">
         <h1>Bill {b.number} <span className={`badge ${b.status}`}>{statusText(b.status)}</span>{b.onHold && <span className="badge DRAFT"> ON HOLD</span>}</h1>
-        <div className="row" style={{ gap: 8, flex: 0 }}>
+        <div className="row" style={{ gap: 8, flex: "0 0 auto", maxWidth: "70%", flexWrap: "wrap", justifyContent: "flex-end", alignItems: "flex-start" }}>
           {b.status === "DRAFT" && create && <Link className="btn secondary" href={`/ap/bills/${b.id}/edit`}>Edit</Link>}
           {b.status === "POSTED" && open > 0n && create && !b.onHold && <Link className="btn secondary" href={`/ap/payments/new?vendor=${b.vendorId}&bill=${b.id}`}>Pay this bill</Link>}
           <Workflow doc="BILL" id={b.id} ops={ops} approveLabel={appr?.state.levels.length && appr.state.next?.level === appr.state.levels[appr.state.levels.length - 1].level ? "Approve and post" : "Approve"} voidNote="A posted bill's GL entry is reversed. Bills with payments cannot be voided until the payment is voided." />

@@ -42,7 +42,7 @@ export default async function PoView({ params }: { params: Promise<{ id: string 
     <>
       <div className="top">
         <h1>Purchase Order {po.number} <span className={`badge ${po.status}`}>{statusText(po.status)}</span></h1>
-        <div className="row" style={{ gap: 8, flex: 0 }}>
+        <div className="row" style={{ gap: 8, flex: "0 0 auto", maxWidth: "70%", flexWrap: "wrap", justifyContent: "flex-end", alignItems: "flex-start" }}>
           {po.status === "DRAFT" && create && progress.length > 0 && <Link className="btn secondary" href={`/purchasing/orders/${po.id}/edit`}>Edit</Link>}
           {["APPROVED", "CLOSED"].includes(po.status) && create && <Link className="btn secondary" href={`/ap/bills/new?po=${po.id}`}>Record supplier invoice</Link>}
           <Workflow doc="PO" id={po.id} ops={ops} />

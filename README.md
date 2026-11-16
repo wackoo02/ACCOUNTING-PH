@@ -69,9 +69,26 @@ Turn `SEED_DEMO` off and change or remove the demo users before real company dat
 - Reconciliation report: balance per bank + deposits in transit − outstanding checks = balance per books ± bank items not yet booked; finalize when the difference is zero (locks its matches; owner/admin can reopen); nothing can be dated inside a finalized reconciliation
 **Petty cash (mobile app API)**: funds, vouchers from receipt photos (AI reads supplier, TIN, items, VAT, tips and proposes the account), VAT/EWT computation, fixed asset threshold with approved PO, approvals, and replenishment batches that post a Petty Cash journal. See [docs/MOBILE_API.md](docs/MOBILE_API.md).
 
+## What's in Phase 5: Purchasing and Payables
+**Purchasing**: purchase requests (draft → for approval → approved) → RFQ / canvass sheet (quotes from several suppliers side by side; awarding a quote that is not the lowest needs a reason) → purchase order with approval → receiving reports (partial deliveries; each posts Dr expense/inventory/asset, Cr Goods Received Not Yet Invoiced).
+
+**Supplier bills (APV-)**: lines classified as expense, prepayment (with service period), fixed asset or inventory; VAT (inclusive or exclusive, zero-rated/exempt, non-VAT suppliers) and expanded withholding tax per line by tax code. Bills linked to a PO are 3-way matched: you cannot bill more than was received, the GRNI is cleared at PO cost and any price difference goes to the line's account. Fixed asset lines must come from an approved PO. The same supplier invoice number cannot be entered twice. Approval posts the bill to the GL.
+
+**Approval matrix** (Settings → Approval Matrix, admins): levels per document (PR, PO, bill, payment) by amount, approved by a role or a named person. The preparer cannot approve and one person approves one level only. With no rules, one approval by an accountant/admin/owner within their approval limit.
+
+**Payments (PV-)**: pay one or more bills of a supplier, by check, transfer or cash; the final approval releases the payment as a posted cash disbursement (next check number from the checkbook), printable check, voucher and **BIR Form 2307** per payment (and per quarter). Payment schedule with hold/release and a payment run that drafts one voucher per supplier. **AP aging** summary and detail by days past due or invoice date, tied to the AP control account in the GL.
+
+**AP invoice inbox**: suppliers email PDF/JPG/PNG invoices to the company's inbox address (or staff upload them). AI reads the supplier, TIN, invoice number, dates, VAT, withholding and each line, classifies the lines, matches the supplier and an approved PO, and flags duplicates. Accounting staff review the document side by side with the proposed bill; nothing reaches the AP ledger until they save it and it passes the approval matrix.
+
+Inbox email setup (once per deployment):
+1. Create a free [Postmark](https://postmarkapp.com) account and an inbound stream. Set its webhook URL to `https://<your-app>/api/inbound/ap-email/<token>`; the token is shown on Payables → AP Invoice Inbox → Setup (rotate it there if it leaks).
+2. Forward the company's AP address (e.g. ap@yourcompany.com) to the Postmark inbound address, and record that address on the setup page.
+3. Set `ANTHROPIC_API_KEY` in Vercel. Optional: `AP_INVOICE_MODEL` to choose the model. Without a key, documents still arrive and are keyed in by hand.
+
 ## Design notes for later modules
 - **One entry point:** `src/lib/ledger/service.ts` → `recordJournal({ source, sourceId, lines, action })`. Sub-ledgers pass their own `source` (SALES, PURCHASES, BANK, PAYROLL, EXPENSE_CLAIM, FIXED_ASSETS, …) and skip the manual approval controls.
 - Find control accounts with `accountByRole(org, "AR_CONTROL")` etc., never hard-coded codes.
 - Lines carry `partyType`/`partyId` (customer, vendor, employee, partner) for aging and expense-per-person reports, and `clearedAt`/`clearingRef` for bank reconciliation and transaction clearing.
 - All money math is in integer centavos (`src/lib/money.ts`).
 - Cash and bank: `src/lib/bank/cash.ts` (vouchers), `src/lib/bank/recon.ts` (statements, matching, reconciliation), `src/lib/bank/match.ts` (pure matching rules). AR collections and AP payments can create cash vouchers or post BANK entries; anything posted to a bank's GL account shows up for matching automatically.
+- Purchasing and payables: `src/lib/purchasing/service.ts`, `src/lib/ap/` (bills, payments, aging, inbox, pure math in `compute.ts`) and `src/lib/approvals.ts` (approval matrix, reusable by other documents). AP payments post through `postSubledgerDisbursementTx` in cash.ts, so they show in check monitoring and bank reconciliation.

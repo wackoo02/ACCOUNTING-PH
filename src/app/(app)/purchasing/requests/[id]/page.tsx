@@ -36,7 +36,7 @@ export default async function PrView({ params }: { params: Promise<{ id: string 
     <>
       <div className="top">
         <h1>Purchase Request {pr.number} <span className={`badge ${pr.status}`}>{statusText(pr.status)}</span></h1>
-        <div className="row" style={{ gap: 8, flex: 0 }}>
+        <div className="row" style={{ gap: 8, flex: "0 0 auto", maxWidth: "70%", flexWrap: "wrap", justifyContent: "flex-end", alignItems: "flex-start" }}>
           {pr.status === "DRAFT" && create && <Link className="btn secondary" href={`/purchasing/requests/${pr.id}/edit`}>Edit</Link>}
           <Workflow doc="PR" id={pr.id} ops={ops} />
         </div>

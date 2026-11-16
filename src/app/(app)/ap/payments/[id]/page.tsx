@@ -38,7 +38,7 @@ export default async function PayView({ params }: { params: Promise<{ id: string
     <>
       <div className="top">
         <h1>Payment Voucher {p.number} <span className={`badge ${p.status}`}>{p.status === "POSTED" ? "RELEASED" : statusText(p.status)}</span></h1>
-        <div className="row" style={{ gap: 8, flex: 0 }}>
+        <div className="row" style={{ gap: 8, flex: "0 0 auto", maxWidth: "70%", flexWrap: "wrap", justifyContent: "flex-end", alignItems: "flex-start" }}>
           {p.status === "DRAFT" && create && <Link className="btn secondary" href={`/ap/payments/${p.id}/edit`}>Edit</Link>}
           {p.status === "POSTED" && p.method === "CHECK" && <Link className="btn secondary" href={`/ap/payments/${p.id}/check`}>Print check</Link>}
           {ewt > 0n && <Link className="btn secondary" href={`/ap/payments/${p.id}/2307`}>BIR 2307</Link>}

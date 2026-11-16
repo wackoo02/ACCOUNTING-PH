@@ -12,11 +12,11 @@ export function Workflow({ doc, id, ops, approveLabel, approveHint, voidNote }: 
   const hidden = (op: string) => <><input type="hidden" name="doc" value={doc} /><input type="hidden" name="id" value={id} /><input type="hidden" name="op" value={op} /></>;
   const needsReason = (o: Op) => o === "return" || o === "void" || o === "cancel" || o === "close";
   return (
-    <div className="noprint">
-      <div className="row" style={{ gap: 8, flex: 0, flexWrap: "wrap" }}>
-        {ops.includes("submit") && <ActionForm action={apWorkflow}>{hidden("submit")}<button>{LABEL.submit}</button></ActionForm>}
-        {ops.includes("approve") && <ActionForm action={apWorkflow}>{hidden("approve")}<button title={approveHint}>{approveLabel ?? "Approve"}</button></ActionForm>}
-        {ops.filter(needsReason).map((o) => mode !== o && <button key={o} type="button" className={o === "void" || o === "cancel" ? "danger" : "secondary"} onClick={() => setMode(o)}>{LABEL[o]}</button>)}
+    <div className="noprint" style={{ flex: "0 0 auto", minWidth: 0 }}>
+      <div className="row" style={{ gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+        {ops.includes("submit") && <ActionForm action={apWorkflow}>{hidden("submit")}<button style={{ whiteSpace: "nowrap" }}>{LABEL.submit}</button></ActionForm>}
+        {ops.includes("approve") && <ActionForm action={apWorkflow}>{hidden("approve")}<button title={approveHint} style={{ whiteSpace: "nowrap" }}>{approveLabel ?? "Approve"}</button></ActionForm>}
+        {ops.filter(needsReason).map((o) => mode !== o && <button key={o} type="button" className={o === "void" || o === "cancel" ? "danger" : "secondary"} style={{ whiteSpace: "nowrap" }} onClick={() => setMode(o)}>{LABEL[o]}</button>)}
         <button type="button" className="secondary" onClick={() => window.print()}>Print</button>
       </div>
       {mode && needsReason(mode) && (

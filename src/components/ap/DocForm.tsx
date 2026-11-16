@@ -107,9 +107,9 @@ export function DocForm({ mode, data, initial, initialLines, openPos = [], requi
         </div>}
       </div>
 
-      <div className="table-wrap"><table>
+      <div className="table-wrap"><table style={{ minWidth: mode === "PR" ? 760 : 1020 }}>
         <thead><tr>
-          <th style={{ minWidth: 200 }}>Item</th><th>Type</th><th style={{ minWidth: 190 }}>Account</th><th className="num" style={{ width: 80 }}>Qty</th>
+          <th style={{ minWidth: 200 }}>Item</th><th>Type</th><th style={{ minWidth: 190 }}>Account</th><th className="num" style={{ width: 80, minWidth: 70 }}>Qty</th>
           {mode !== "BILL" && <th style={{ width: 70 }}>Unit</th>}
           <th className="num" style={{ width: 120 }}>{mode === "PR" ? "Est. unit cost" : "Unit price"}</th>
           {mode !== "PR" && <th style={{ width: 110 }}>VAT</th>}
