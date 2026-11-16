@@ -1,6 +1,6 @@
-import { Montserrat } from "next/font/google";
+import { Syncopate } from "next/font/google";
 
-const wordmark = Montserrat({ subsets: ["latin"], weight: "600", display: "swap" });
+const wordmark = Syncopate({ subsets: ["latin"], weight: ["400", "700"], display: "swap" });
 
 export const BRAND = { name: "Veritus ERP", tagline: "Intelligent. Integrated. Compliant." };
 
@@ -22,10 +22,11 @@ export function LogoMark({ size = 28 }: { size?: number }) {
 
 export function Logo({ tagline = false, dark = false }: { tagline?: boolean; dark?: boolean }) {
   return (
-    <div className="logo">
-      <LogoMark />
+    <div className={"logo " + wordmark.className}>
+      <LogoMark size={34} />
       <div>
-        <div className={"logo-name " + wordmark.className} style={{ color: dark ? "#fff" : "var(--ink)" }}>Veritus <span style={{ color: "var(--accent)" }}>ERP</span></div>
+        <div className="logo-name" style={{ color: dark ? "#fff" : "var(--ink)" }}>VERITUS</div>
+        <div className="logo-sub">ERP</div>
         {tagline && <div className="logo-tag">{BRAND.tagline}</div>}
       </div>
     </div>
