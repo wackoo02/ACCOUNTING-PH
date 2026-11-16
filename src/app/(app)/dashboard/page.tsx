@@ -6,9 +6,17 @@ import { fiscalStart } from "@/lib/budgets";
 import { fiscalYearOf } from "@/lib/ledger/service";
 import { formatPeso, toCentavos } from "@/lib/money";
 import { fmtDate, today } from "@/lib/format";
+import { Icon } from "@/components/Icon";
+import { CountUp } from "@/components/CountUp";
+import type { IconName } from "@/lib/icons";
 
 const pct = (n: number | null) => (n === null ? "—" : `${n.toFixed(1)}%`);
 const x = (n: number | null) => (n === null ? "—" : n.toFixed(2));
+
+const TILE_ICON: Record<string, IconName> = {
+  Revenue: "income-statement", "Gross margin": "allocations", "Operating expenses": "cash-out", "Net profit": "trial-balance",
+  "Cash position": "wallet", "Working capital": "balance-sheet", "Current ratio": "ratio", "Debt-to-equity": "debt", "Expense budget variance": "budget",
+};
 
 export default async function Dashboard() {
   const ctx = await requireCtx("reports.view");
@@ -60,7 +68,7 @@ export default async function Dashboard() {
         </div>
       )}
       <div className="grid">
-        {tiles.map(([l, n, sub]) => <div key={l} className="card stat"><div className="n">{n}</div><div className="l">{l}</div>{sub && <div className="l">{sub}</div>}</div>)}
+        {tiles.map(([l, n, sub]) => <div key={l} className="card stat"><span className="stat-icon"><Icon name={TILE_ICON[l] ?? "activity"} size={18} /></span><div className="n"><CountUp text={n} /></div><div className="l">{l}</div>{sub && <div className="l">{sub}</div>}</div>)}
       </div>
       <div className="row" style={{ alignItems: "stretch" }}>
         <DimTable title="Cost per department" rows={byDept} />

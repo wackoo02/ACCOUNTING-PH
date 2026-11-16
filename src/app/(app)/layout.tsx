@@ -1,15 +1,18 @@
 import { Logo } from "@/components/Logo";
-import Link from "next/link";
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 import { requireCtx } from "@/lib/auth";
-import { can } from "@/lib/permissions";
 import { ROLE_LABELS } from "@/lib/permissions";
-import { MASTERS, MASTER_KINDS } from "@/lib/masters/config";
+import { navFor, COMING_NEXT } from "@/lib/nav";
+import { SideNav } from "@/components/SideNav";
+import { ModuleHeader } from "@/components/ModuleHeader";
+import { RouteTransition } from "@/components/RouteTransition";
+import { Icon } from "@/components/Icon";
 import { logout } from "../(auth)/actions";
 import { changeCompany } from "./actions";
 
 export default async function AppLayout({ children }: { children: ReactNode }) {
   const ctx = await requireCtx();
+  const sections = navFor(ctx.role);
   return (
     <div className="shell">
       <aside className="side">
@@ -26,47 +29,16 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
         )}
         <div style={{ margin: "0 10px", fontSize: 12 }}>{ctx.user.name} · {ROLE_LABELS[ctx.role]}</div>
         <nav>
-          <Link href="/dashboard">Dashboard</Link>
-          <div className="sect">General Ledger</div>
-          <Link href="/journals">Journal Entries</Link>
-          {can(ctx.role, "journal.create") && <Link href="/journals/new">New Journal Entry</Link>}
-          {can(ctx.role, "journal.post") && <Link href="/journals?status=PENDING_APPROVAL">Approvals</Link>}
-          <Link href="/recurring">Recurring Entries</Link>
-          <Link href="/allocations">Allocations</Link>
-          <Link href="/intercompany">Intercompany</Link>
-          <Link href="/fx">FX Revaluation</Link>
-          <Link href="/periods">Fiscal Periods</Link>
-          <div className="sect">Cash and Bank</div>
-          <Link href="/bank">Bank and Cash Accounts</Link>
-          <Link href="/cash">Receipts and Disbursements</Link>
-          {can(ctx.role, "journal.post") && <Link href="/cash?status=PENDING_APPROVAL">Voucher Approvals</Link>}
-          <Link href="/cash/petty">Petty Cash</Link>
-          <Link href="/cash/checks">Check Monitoring</Link>
-          <Link href="/bank/statements">Bank Statements</Link>
-          <Link href="/bank/reconcile">Bank Reconciliation</Link>
-          <div className="sect">Reports</div>
-          <Link href="/trial-balance">Trial Balance</Link>
-          <Link href="/reports/balance-sheet">Balance Sheet</Link>
-          <Link href="/reports/income-statement">Income Statement</Link>
-          <Link href="/reports/cash-flow">Cash Flow</Link>
-          <Link href="/reports/gl-listing">General Ledger Listing</Link>
-          <Link href="/ledger">Account Ledger</Link>
-          <Link href="/reports/account-activity">Account Activity</Link>
-          <Link href="/reports/budget-vs-actual">Budget vs Actual</Link>
-          <Link href="/reports/consolidated">Consolidated TB</Link>
-          <div className="sect">Master Lists</div>
-          {MASTER_KINDS.map((k) => <Link key={k} href={`/masters/${k}`}>{MASTERS[k].title}</Link>)}
-          <div className="sect">Settings</div>
-          <Link href="/entities">Entities and Intercompany</Link>
-          {can(ctx.role, "org.manage") && <Link href="/settings">Company Settings</Link>}
-          {can(ctx.role, "users.manage") && <Link href="/users">Users and Roles</Link>}
-          {can(ctx.role, "org.manage") && <Link href="/audit">Audit Trail</Link>}
-          <form action={logout}><button className="link" style={{ color: "#cfd8e3", padding: "7px 10px" }}>Sign out</button></form>
-          <div className="sect">Coming next</div>
-          {["Receivables and aging", "Payables and aging", "Expense claims and mobility", "Payroll", "Fixed assets", "Prepaid expenses", "Leases (PFRS 16)", "Debt", "Inventory", "BIR reports"].map((m) => <div key={m} className="soon">{m}</div>)}
+          <Suspense fallback={null}>
+            <SideNav sections={sections} comingNext={COMING_NEXT} />
+          </Suspense>
+          <form action={logout}><button className="link signout"><Icon name="signout" size={17} /><span>Sign out</span></button></form>
         </nav>
       </aside>
-      <main className="main">{children}</main>
+      <main className="main">
+        <Suspense fallback={null}><ModuleHeader sections={sections} /></Suspense>
+        <RouteTransition>{children}</RouteTransition>
+      </main>
     </div>
   );
 }
