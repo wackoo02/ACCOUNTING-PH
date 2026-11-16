@@ -104,6 +104,7 @@ export const PH_IFRS_TEMPLATE: TemplateAccount[] = [
   { code: "5000", name: "Cost of Sales", type: X, ifrsGroup: "Cost of sales", header: true },
   { code: "5010", name: "Cost of Goods Sold", type: X, ifrsGroup: "Cost of sales", parent: "5000", systemRole: "COGS" },
   { code: "5020", name: "Cost of Services", type: X, ifrsGroup: "Cost of sales", parent: "5000" },
+  { code: "5030", name: "Inventory Losses and Count Adjustments", type: X, ifrsGroup: "Cost of sales", parent: "5000", systemRole: "INVENTORY_ADJUSTMENT" },
 
   // ---- OPERATING EXPENSES ----
   { code: "6000", name: "Operating Expenses", type: X, ifrsGroup: "Operating expenses", header: true },

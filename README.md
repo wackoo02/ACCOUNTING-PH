@@ -87,6 +87,25 @@ One-time setup for the whole Veritus service (platform operator only):
 2. Set the stream's webhook URL to `https://veritus:<secret>@<your-app>/api/inbound/ap-email`. Emails are routed to the company by recipient address.
 3. In Vercel set `AP_INBOX_DOMAIN` (e.g. inbox.veritus.ph), `INBOUND_WEBHOOK_SECRET` (the same random secret, 16+ characters) and `ANTHROPIC_API_KEY` (optional `AP_INVOICE_MODEL`). Without a key, documents still arrive and are keyed in by hand.
 
+## What's in Phase 6: Inventory and warehouse (PAS 2)
+**Master data** (Master Lists, Excel upload): Products and Prices gains Track Inventory, category, barcode, costing method, standard cost, reorder point and quantity, default warehouse / bin / vendor, inventory GL account and COGS account. New lists: Warehouses (optionally tagged to a branch) and Warehouse Locations (bins).
+
+**Costing** (`src/lib/inventory/engine.ts`): FIFO, moving weighted average per warehouse, and specific identification by lot / serial no. (no LIFO). Every inbound quantity is a cost layer keeping its receipt date through transfers; taking the last unit always takes the exact remaining value; stock can never go negative.
+
+**Documents** (draft → post; adjustments need approval with segregation of duties), each posting to the GL as source INVENTORY:
+- Receipt RR: Dr Inventory / Cr Goods Received Not Yet Invoiced (or a chosen account)
+- Issue IS: Dr COGS (item's account, or a chosen expense account with dimensions) / Cr Inventory
+- Transfer ST between warehouses or bins: no GL, cost and age move with the stock
+- Adjustment IA (+/−): against 5030 Inventory Losses and Count Adjustments
+- Customer return CRT (Dr Inventory / Cr COGS) and return to vendor VRT (Dr GRNI or AP / Cr Inventory)
+- Void restores the stock and reverses the GL entry (a receipt only while its stock is unused); inventory GL entries cannot be reversed from the journal screen.
+
+**Counts**: cycle counts (by category, bin or items) and full physical counts with a printable, optionally blind count sheet; items found can be added; variances post as one approved adjustment.
+
+**Reports**: stock status with bins/lots and reorder flags, inventory valuation as of any date reconciled to the inventory GL accounts, aging by receipt date, slow-moving / non-moving, turnover and days on hand, and a stock card per item. **Barcodes**: scan box on every document (USB/Bluetooth scanners), printable Code 128 labels.
+
+**Hooks for Purchasing and Sales** (`src/lib/inventory/hooks.ts`): `receiveGoodsTx`, `issueGoodsTx`, `returnFromCustomerTx`, `returnToVendorTx`, `voidBySourceTx`, `onHand`. Call them inside your own transaction; documents they create can only be voided from the source document.
+
 ## Veritus Mobility app and Expense & Mobility (Phase 7, part)
 **Mobile app** at `/m`: an installable web app (PWA). On iPhone open it in Safari → Share → Add to Home Screen; on Android Chrome offers "Install app". Same login as the web ERP. Tiles: Petty Cash, Travel (local and international, foreign receipts translated to English and converted at the day's rate), Transport (Grab, inDrive, JoyRide, Angkas, taxi), Sent Package (Lalamove, Transportify, couriers), Sales Invoice (scan an issued invoice and post the sale) and Asset Audit (scan QR stickers).
 
@@ -133,6 +152,22 @@ One-time setup for the whole Veritus service (platform operator only):
 **Reports**: debt schedule with GL agreement per account, debt aging (contractual maturity buckets with undiscounted interest per PFRS 7, and past-due installments by days), amortization table per loan (contract and EIR columns, paid / overdue status), covenant monitoring (current ratio, debt to equity, liabilities to equity, interest coverage, DSCR, net debt to EBITDA, minimum net worth, or a manual value; pass / watch / breach / waived).
 
 Loans are in the company's base currency for now. Code: `src/lib/debt/schedule.ts` (pure schedule and EIR math), `src/lib/debt/service.ts`.
+
+## Leases (PFRS 16 / IFRS 16, lessee)
+**Lease register** (Leases → New Lease): lease number, lessor (vendor list or free text), lease type, asset, start and end dates, payment per period with frequency (monthly / quarterly / semi-annual / annual), in advance or in arrears, rent escalation (e.g. +5% every 12 months), incremental borrowing rate and the discount rate used, currency and rate, 12% VAT and EWT on payments, initial direct costs, advance rent, incentives, restoration cost, and the GL accounts (ROU asset, accumulated depreciation, current and non-current lease liability, interest, depreciation, payable, gain/loss). Saving calculates the liability, ROU asset and full monthly schedule before anything posts.
+
+**Transactions** (all post to the GL as source LEASE; the preparer cannot approve their own lease):
+- Commencement: Dr ROU asset, Cr lease liability (split current / non-current), Cr advance rent / payable for direct costs, Cr restoration provision
+- Monthly (Leases → Post Lease Entries, at each month-end): interest on the liability, ROU depreciation, payment due to Accounts Payable tagged to the lessor (with input VAT and EWT for BIR 2307), current / non-current reclass; the fully depreciated ROU asset comes off at the end
+- Modification (PFRS 16.44-46): renewal or shortening, new rent, revised rate, decrease in scope (with gain/loss); the liability is remeasured and the ROU asset adjusted, schedule recalculated from the effective date
+- Early termination: interest and depreciation to the day, derecognition, termination penalty, gain or loss
+- Undo last posting (reverses its GL entry); the journal screen cannot reverse lease entries on its own
+- Short-term and low-value exemptions: straight-line rent with accrued/prepaid rent
+- Existing leases at go-live: balances taken up at the go-live date against an offset account
+
+**Reports**: ROU asset rollforward, lease liability schedule (rollforward with current / non-current, plus each lease's amortization table), interest expense schedule by month (posted and still to come), maturity analysis of undiscounted payments reconciled to the liability (PFRS 16.58 / PFRS 7.39).
+
+**Method**: discount rate ÷ 12 compounded monthly (equals Excel `=PV(rate/12, n, -payment, 0, 1)` for an advance lease starting on the 1st), interest summarised per calendar month with part months by days, straight-line depreciation over the term (or useful life when ownership transfers). Code: `src/lib/leases/` (`engine.ts` is the pure calculation, `service.ts` the postings, `reports.ts` the reports). Not yet: Excel upload of leases, unwinding of the restoration provision (PAS 37). For a foreign-currency lease, give the liability account that currency so FX revaluation picks it up.
 
 ## Design notes for later modules
 - **One entry point:** `src/lib/ledger/service.ts` → `recordJournal({ source, sourceId, lines, action })`. Sub-ledgers pass their own `source` (SALES, PURCHASES, BANK, PAYROLL, EXPENSE_CLAIM, FIXED_ASSETS, …) and skip the manual approval controls.

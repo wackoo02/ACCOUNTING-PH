@@ -8,7 +8,7 @@ export type { NavItem, NavSection };
 
 const MASTER_ICON: Record<string, IconName> = {
   accounts: "accounts", dimensions: "dimensions", taxes: "taxes", banks: "banks", products: "products",
-  employees: "employees", vendors: "vendors", customers: "customers", currencies: "currencies", assets: "fixed-assets",
+  employees: "employees", vendors: "vendors", customers: "customers", currencies: "currencies", assets: "fixed-assets", warehouses: "inventory", locations: "inventory",
 };
 
 export const NAV: NavSection[] = [
@@ -83,6 +83,21 @@ export const NAV: NavSection[] = [
     ],
   },
   {
+    title: "Inventory",
+    items: [
+      { href: "/inventory", label: "Stock Status", icon: "inventory" },
+      { href: "/inventory/transactions", label: "Inventory Transactions", icon: "journal" },
+      { href: "/inventory/transactions/new?type=RECEIPT", label: "Receive Stock", icon: "journal-new", perm: "inventory.transact" },
+      { href: "/inventory/transactions?status=PENDING_APPROVAL", label: "Adjustment Approvals", icon: "approvals", perm: "inventory.approve" },
+      { href: "/inventory/counts", label: "Cycle and Physical Counts", icon: "checks" },
+      { href: "/inventory/reports/valuation", label: "Inventory Valuation", icon: "balance-sheet" },
+      { href: "/inventory/reports/aging", label: "Inventory Aging", icon: "periods" },
+      { href: "/inventory/reports/slow-moving", label: "Slow Moving Inventory", icon: "activity" },
+      { href: "/inventory/reports/turnover", label: "Inventory Turnover", icon: "ratio" },
+      { href: "/inventory/labels", label: "Barcode Labels", icon: "products" },
+    ],
+  },
+  {
     title: "Expense and Mobility",
     items: [
       { href: "/expenses", label: "Mobility Dashboard", icon: "mobility" },
@@ -101,6 +116,18 @@ export const NAV: NavSection[] = [
       { href: "/masters/assets", label: "Asset Register", icon: "fixed-assets" },
       { href: "/assets/stickers", label: "QR Stickers", icon: "asset-audit" },
       { href: "/assets/audits", label: "Asset Counts", icon: "audit" },
+    ],
+  },
+  {
+    title: "Leases (PFRS 16)",
+    items: [
+      { href: "/leases", label: "Lease Register", icon: "leases" },
+      { href: "/leases/new", label: "New Lease", icon: "journal-new", perm: "journal.create" },
+      { href: "/leases/post", label: "Post Lease Entries", icon: "recurring", perm: "journal.post" },
+      { href: "/leases/reports/rou-rollforward", label: "ROU Asset Rollforward", icon: "activity" },
+      { href: "/leases/reports/liability-schedule", label: "Lease Liability Schedule", icon: "ledger" },
+      { href: "/leases/reports/interest", label: "Interest Expense Schedule", icon: "ratio" },
+      { href: "/leases/reports/maturity", label: "Maturity Analysis", icon: "periods" },
     ],
   },
   {
@@ -152,8 +179,6 @@ export const COMING_NEXT: { label: string; icon: IconName }[] = [
   { label: "Payroll", icon: "payroll" },
   { label: "Depreciation and disposals", icon: "fixed-assets" },
   { label: "Prepaid expenses", icon: "prepaid" },
-  { label: "Leases (PFRS 16)", icon: "leases" },
-  { label: "Inventory", icon: "inventory" },
 ];
 
 export function navFor(role: Role): NavSection[] {
