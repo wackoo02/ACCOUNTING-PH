@@ -73,6 +73,16 @@ export const NAV: NavSection[] = [
     ],
   },
   {
+    title: "Debt",
+    items: [
+      { href: "/debt", label: "Loans and Borrowings", icon: "debt" },
+      { href: "/debt/period-end", label: "Debt Period-end Run", icon: "periods", perm: "journal.post" },
+      { href: "/debt/reports/schedule", label: "Debt Schedule", icon: "gl-listing" },
+      { href: "/debt/reports/aging", label: "Debt Aging and Maturity", icon: "activity" },
+      { href: "/debt/reports/covenants", label: "Covenant Monitoring", icon: "ratio" },
+    ],
+  },
+  {
     title: "Inventory",
     items: [
       { href: "/inventory", label: "Stock Status", icon: "inventory" },
@@ -111,6 +121,7 @@ export const NAV: NavSection[] = [
   {
     title: "Reports",
     items: [
+      { href: "/reports/custom", label: "Custom Reports", icon: "report-builder" },
       { href: "/trial-balance", label: "Trial Balance", icon: "trial-balance" },
       { href: "/reports/balance-sheet", label: "Balance Sheet", icon: "balance-sheet" },
       { href: "/reports/income-statement", label: "Income Statement", icon: "income-statement" },
@@ -144,7 +155,6 @@ export const COMING_NEXT: { label: string; icon: IconName }[] = [
   { label: "Depreciation and disposals", icon: "fixed-assets" },
   { label: "Prepaid expenses", icon: "prepaid" },
   { label: "Leases (PFRS 16)", icon: "leases" },
-  { label: "Debt", icon: "debt" },
   { label: "BIR reports", icon: "bir" },
 ];
 

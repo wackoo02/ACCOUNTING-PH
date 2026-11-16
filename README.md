@@ -139,6 +139,20 @@ One-time setup for the whole Veritus service (platform operator only):
 
 **Contract billing**: subscriptions and retainer contracts invoice every month/quarter/half/year (catching up missed periods, never billing a period twice); project contracts bill milestones by % or amount of the contract value. Hooks for POS (series type POS_INVOICE, invoice source POS) and scanned invoices (source SCAN) are in place.
 
+## Debt: loans and borrowings
+**Loan master** (Debt → Loans and Borrowings): loan number, lender (optionally linked to a vendor), loan type (term loan, revolving line, notes payable, related party), original principal or credit limit, rate (fixed or floating) and day count (Actual/365, Actual/360, 30/360), start, first payment and maturity dates, payment terms (monthly to annual or single payment; equal installments, equal principal, or bullet; principal grace months), and the current portion, non-current portion, interest expense, accrued interest and (optional) unamortized transaction cost accounts.
+
+**Transactions** (all post to the GL as source DEBT; undo is only from the loan page):
+- Drawdown: bank receives the proceeds net of transaction costs; the loan is credited and split into current / non-current; the repayment schedule and effective interest rate are computed from the drawdown date. Revolving lines can be drawn again up to the limit.
+- Interest accrual by the effective interest method (PFRS 9): expense at the EIR on the carrying amount, payable at the contract rate, the difference amortizes the transaction costs.
+- Principal and interest payments create a **cash disbursement voucher** (approval workflow, checks, bank reconciliation). Interest is accrued to the payment date first; principal settles the current portion first; the loan updates when the voucher is posted or voided. Fully repaid loans are settled and leftover costs written off.
+- Period-end run: accrues every loan to the date, then moves principal due within 12 months from non-current to current (PAS 1). An unwaived covenant breach at the date makes the whole loan current.
+- Modification: PFRS 9 10% test. Non-substantial: carrying amount adjusted to the new cash flows at the original EIR, gain or loss recognized, fees amortized. Substantial: old loan derecognized, unamortized costs and fees expensed. Floating-rate resets and re-amortization after a prepayment change the EIR going forward with no gain or loss.
+
+**Reports**: debt schedule with GL agreement per account, debt aging (contractual maturity buckets with undiscounted interest per PFRS 7, and past-due installments by days), amortization table per loan (contract and EIR columns, paid / overdue status), covenant monitoring (current ratio, debt to equity, liabilities to equity, interest coverage, DSCR, net debt to EBITDA, minimum net worth, or a manual value; pass / watch / breach / waived).
+
+Loans are in the company's base currency for now. Code: `src/lib/debt/schedule.ts` (pure schedule and EIR math), `src/lib/debt/service.ts`.
+
 ## Design notes for later modules
 - **One entry point:** `src/lib/ledger/service.ts` → `recordJournal({ source, sourceId, lines, action })`. Sub-ledgers pass their own `source` (SALES, PURCHASES, BANK, PAYROLL, EXPENSE_CLAIM, FIXED_ASSETS, …) and skip the manual approval controls.
 - Find control accounts with `accountByRole(org, "AR_CONTROL")` etc., never hard-coded codes.
@@ -146,3 +160,17 @@ One-time setup for the whole Veritus service (platform operator only):
 - All money math is in integer centavos (`src/lib/money.ts`).
 - Cash and bank: `src/lib/bank/cash.ts` (vouchers), `src/lib/bank/recon.ts` (statements, matching, reconciliation), `src/lib/bank/match.ts` (pure matching rules). AR collections and AP payments can create cash vouchers or post BANK entries; anything posted to a bank's GL account shows up for matching automatically.
 - Purchasing and payables: `src/lib/purchasing/service.ts`, `src/lib/ap/` (bills, payments, aging, inbox, pure math in `compute.ts`) and `src/lib/approvals.ts` (approval matrix, reusable by other documents). AP payments post through `postSubledgerDisbursementTx` in cash.ts, so they show in check monitoring and bank reconciliation.
+
+
+## Custom reports (report builder)
+**Reports → Custom Reports.** Every report can be customized and saved: start from a template (or press **Customize** on any standard report) and change
+- **Report type:** account balances (TB, account activity, budget vs actual, cost per department, expenses per employee/partner, your own statement layout), income statement, balance sheet, cash flow, GL lines, journal entries, aging (customers, vendors, employees).
+- **Periods:** months, quarters, year to date, fiscal years, balances as of a date, or fixed dates. Periods are relative to the report date, so saved reports stay current. Add comparisons (change and %) between any two periods.
+- **Columns:** side by side by entity/subsidiary or by any dimension (department, cost center, branch, project...), with a total. Amounts: opening, debit, credit, net movement, closing, budget, variance, variance %. Detail reports: pick, order, sort and subtotal columns.
+- **Rows:** group by account, type, IFRS line, parent account, entity, party or any dimension (up to 4 levels with subtotals), or design your own rows from account ranges/lists/types and formulas (e.g. `REV - COS`).
+- **Filters:** entities, specific accounts or code ranges, account types, IFRS lines, dimensions (by code, so they work across entities), source modules, customers/vendors/employees, entry status, text.
+- **Save and share:** only me, whole company, by role, or specific people; optionally let them edit. Others can always run it and save their own copy. Export to Excel or print to PDF.
+
+Access rules: a report is shared only inside its company, and each person only sees data for entities they are a member of.
+
+For developers: definitions are JSON validated by `src/lib/reporting/definition.ts`. Each report type is a source in `src/lib/reporting/sources/`, listed in `catalog.ts` (what the builder shows) and `run.ts` (how it runs). Later modules (AR/AP invoices, payroll, fixed assets) add a source there and return the common `ReportResult` shape, and get columns, saving, sharing, Excel and printing for free.
