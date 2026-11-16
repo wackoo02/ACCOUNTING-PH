@@ -881,3 +881,114 @@ model ReceiptImage {
   createdAt      DateTime     @default(now())
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 }
+
+// ---------- Debt: loans and borrowings (PFRS 9 amortized cost) ----------
+// Kept free of relations to shared models so parallel modules can migrate independently.
+
+model Loan {
+  id                       String    @id @default(cuid())
+  organizationId           String
+  number                   String // loan number / lender's reference
+  lender                   String
+  lenderVendorCode         String? // vendor master code: tags GL lines with the lender for party reports
+  loanType                 String // TERM_LOAN | REVOLVING | NOTES_PAYABLE | RELATED_PARTY | OTHER
+  originalPrincipal        Decimal   @db.Decimal(18, 2)
+  interestRate             Decimal   @db.Decimal(9, 6) // nominal annual %, e.g. 7.5
+  rateType                 String    @default("FIXED") // FIXED | FLOATING
+  dayCount                 String    @default("ACT_365") // ACT_365 | ACT_360 | 30_360
+  startDate                DateTime  @db.Date
+  maturityDate             DateTime  @db.Date
+  firstPaymentDate         DateTime? @db.Date
+  paymentFrequency         String // MONTHLY | QUARTERLY | SEMI_ANNUAL | ANNUAL | AT_MATURITY
+  repaymentType            String // ANNUITY | EQUAL_PRINCIPAL | BULLET
+  graceMonths              Int       @default(0) // principal grace period from the start date (interest only)
+  stAccountId              String // current portion
+  ltAccountId              String // non-current portion
+  interestExpenseAccountId String
+  interestPayableAccountId String
+  issueCostAccountId       String? // unamortized transaction costs (contra); blank = the non-current loan account
+  bankAccountId            String? // default bank account for drawdowns and payments
+  effectiveRate            Decimal?  @db.Decimal(12, 8) // current EIR, % p.a.
+  lastAccrualDate          DateTime? @db.Date
+  status                   String    @default("ACTIVE") // ACTIVE | SETTLED
+  notes                    String?
+  createdById              String
+  updatedById              String?
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
+
+  schedule     LoanScheduleLine[]
+  transactions LoanTransaction[]
+  covenants    LoanCovenant[]
+
+  @@unique([organizationId, number])
+  @@index([organizationId, status])
+}
+
+model LoanScheduleLine {
+  id               String   @id @default(cuid())
+  loanId           String
+  seq              Int
+  periodStart      DateTime @db.Date
+  dueDate          DateTime @db.Date
+  openingPrincipal Decimal  @db.Decimal(18, 2)
+  interest         Decimal  @db.Decimal(18, 2)
+  principal        Decimal  @db.Decimal(18, 2)
+  payment          Decimal  @db.Decimal(18, 2)
+  closingPrincipal Decimal  @db.Decimal(18, 2)
+  openingCarrying  Decimal  @db.Decimal(18, 2)
+  eirInterest      Decimal  @db.Decimal(18, 2)
+  amortization     Decimal  @db.Decimal(18, 2)
+  closingCarrying  Decimal  @db.Decimal(18, 2)
+
+  loan Loan @relation(fields: [loanId], references: [id], onDelete: Cascade)
+
+  @@index([loanId, dueDate])
+}
+
+// Every change to a loan's balances. Balances as of a date = sum of POSTED rows up to that date.
+model LoanTransaction {
+  id                String   @id @default(cuid())
+  organizationId    String
+  loanId            String
+  type              String // DRAWDOWN | PAYMENT | ACCRUAL | RECLASS | MODIFICATION | WRITE_OFF
+  date              DateTime @db.Date
+  memo              String
+  principalChange   Decimal  @default(0) @db.Decimal(18, 2) // + drawn, - repaid
+  currentChange     Decimal  @default(0) @db.Decimal(18, 2) // change in the current (ST) portion
+  costChange        Decimal  @default(0) @db.Decimal(18, 2) // change in unamortized transaction costs
+  accruedChange     Decimal  @default(0) @db.Decimal(18, 2) // change in accrued interest payable
+  interestExpense   Decimal  @default(0) @db.Decimal(18, 2) // interest / modification loss in profit or loss
+  cashChange        Decimal  @default(0) @db.Decimal(18, 2) // + received, - paid
+  details           Json?
+  status            String   @default("POSTED") // PENDING (payment voucher not yet posted) | POSTED | VOID
+  journalEntryId    String?
+  cashTransactionId String?  @unique
+  createdById       String
+  createdAt         DateTime @default(now())
+
+  loan Loan @relation(fields: [loanId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, loanId, date])
+  @@index([organizationId, status])
+}
+
+model LoanCovenant {
+  id             String    @id @default(cuid())
+  organizationId String
+  loanId         String
+  name           String
+  metric         String // CURRENT_RATIO | DEBT_TO_EQUITY | LIABILITIES_TO_EQUITY | INTEREST_COVERAGE | DSCR | NET_DEBT_TO_EBITDA | MIN_NET_WORTH | MANUAL
+  operator       String // MIN (value must be at least) | MAX (at most)
+  threshold      Decimal   @db.Decimal(18, 4)
+  frequency      String    @default("QUARTERLY") // QUARTERLY | SEMI_ANNUAL | ANNUAL
+  manualValue    Decimal?  @db.Decimal(18, 4)
+  waiverUntil    DateTime? @db.Date // lender waiver of a breach, valid until
+  notes          String?
+  isActive       Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+
+  loan Loan @relation(fields: [loanId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, loanId])
+}
