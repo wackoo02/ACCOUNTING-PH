@@ -881,3 +881,124 @@ model ReceiptImage {
   createdAt      DateTime     @default(now())
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 }
+
+// ---------- Leases (PFRS 16 / IFRS 16, lessee) ----------
+// Accounts and the lessor are stored as ids/codes (no relations) so this module does not touch the
+// shared Account / Vendor / Organization models. Every GL entry is source LEASE with sourceId = lease id.
+model Lease {
+  id                  String    @id @default(cuid())
+  organizationId      String
+  number              String    // lease number, e.g. LSE-2026-000001 or the contract number
+  lessorName          String
+  lessorVendorCode    String?   // Vendor master code: tags the payable lines for AP aging and BIR 2307
+  leaseType           String    // PROPERTY | VEHICLE | EQUIPMENT | IT_EQUIPMENT | LAND | OTHER
+  assetDescription    String
+  location            String?
+  commencementDate    DateTime  @db.Date
+  endDate             DateTime  @db.Date // last day of the lease term (current terms)
+  paymentAmount       Decimal   @db.Decimal(18, 2) // per period, before escalation, excluding VAT
+  paymentFrequency    String    // MONTHLY | QUARTERLY | SEMI_ANNUAL | ANNUAL
+  paymentTiming       String    // ADVANCE | ARREARS
+  escalationPct       Decimal   @db.Decimal(7, 4) @default(0)
+  escalationEveryMonths Int     @default(12)
+  incrementalBorrowingRate Decimal @db.Decimal(9, 6) // annual %
+  discountRate        Decimal   @db.Decimal(9, 6) // annual % actually used (implicit rate if known, else IBR)
+  currencyCode        String    @default("PHP")
+  fxRate              Decimal   @db.Decimal(18, 6) @default(1) // at commencement (ROU asset stays at this rate)
+  exemption           String    @default("NONE") // NONE | SHORT_TERM | LOW_VALUE
+  transfersOwnership  Boolean   @default(false)  // or purchase option reasonably certain
+  usefulLifeMonths    Int?
+  initialDirectCosts  Decimal   @db.Decimal(18, 2) @default(0)
+  prepaidLeasePayments Decimal  @db.Decimal(18, 2) @default(0)
+  leaseIncentives     Decimal   @db.Decimal(18, 2) @default(0)
+  restorationCost     Decimal   @db.Decimal(18, 2) @default(0)
+  vatable             Boolean   @default(false) // 12% input VAT on each payment
+  ewtTaxCodeId        String?   // e.g. WC160 / WI160 rent 5%
+  // GL accounts
+  rouAccountId        String
+  accumDepAccountId   String
+  liabilityAccountId  String    // non-current lease liability (accrued/prepaid rent for exempt leases)
+  currentLiabilityAccountId String? // current portion; blank = no current/non-current split
+  interestAccountId   String
+  depreciationAccountId String
+  rentExpenseAccountId String?  // exempt leases
+  paymentAccountId    String    // where payments due are credited (Accounts Payable or a bank account)
+  gainLossAccountId   String    // modification / termination gain or loss
+  initialCostsAccountId String? // offset for prepaid rent, initial direct costs and incentives
+  restorationAccountId String?  // provision for restoration
+  takeUpDate          DateTime? @db.Date // existing lease brought in at go-live: balances taken up at this date
+  takeUpOffsetAccountId String?
+  dims                Json?     // dimensions for the expense lines
+  payments            Json      // [{ date, amount, eod }] current lease payments (lease currency, centavos as string)
+  initialLiability    Decimal   @db.Decimal(18, 2) @default(0)
+  initialRou          Decimal   @db.Decimal(18, 2) @default(0)
+  status              String    @default("DRAFT") // DRAFT | ACTIVE | ENDED | TERMINATED
+  notes               String?
+  createdById         String
+  updatedById         String?
+  approvedById        String?
+  approvedAt          DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  schedule            LeaseScheduleLine[]
+  events              LeaseEvent[]
+
+  @@unique([organizationId, number])
+  @@index([organizationId, status])
+}
+
+// One row per calendar month (part-months at the ends). Posted rows carry their journal entry.
+model LeaseScheduleLine {
+  id             String    @id @default(cuid())
+  leaseId        String
+  organizationId String
+  periodStart    DateTime  @db.Date
+  periodEnd      DateTime  @db.Date
+  opening        Decimal   @db.Decimal(18, 2) // liability, lease currency
+  interest       Decimal   @db.Decimal(18, 2)
+  payment        Decimal   @db.Decimal(18, 2)
+  closing        Decimal   @db.Decimal(18, 2)
+  currentPortion Decimal   @db.Decimal(18, 2)
+  depreciation   Decimal   @db.Decimal(18, 2) // base currency; straight-line rent for exempt leases
+  rouOpening     Decimal   @db.Decimal(18, 2)
+  rouClosing     Decimal   @db.Decimal(18, 2)
+  journalEntryId String?
+  postedAt       DateTime?
+  lease          Lease     @relation(fields: [leaseId], references: [id], onDelete: Cascade)
+
+  @@unique([leaseId, periodStart])
+  @@index([organizationId, periodEnd])
+}
+
+// Every posting the module makes, with its amounts, for the rollforwards and the audit trail.
+model LeaseEvent {
+  id                    String   @id @default(cuid())
+  leaseId               String
+  organizationId        String
+  type                  String   // COMMENCEMENT | TAKE_UP | PERIOD | MODIFICATION | TERMINATION
+  date                  DateTime @db.Date
+  journalEntryId        String?
+  scheduleLineId        String?
+  // ROU asset (base currency)
+  rouAddition           Decimal  @db.Decimal(18, 2) @default(0)
+  rouRemeasurement      Decimal  @db.Decimal(18, 2) @default(0)
+  rouDerecognized       Decimal  @db.Decimal(18, 2) @default(0) // cost removed
+  depreciation          Decimal  @db.Decimal(18, 2) @default(0)
+  accumDepDerecognized  Decimal  @db.Decimal(18, 2) @default(0)
+  // Lease liability (lease currency)
+  liabilityAddition     Decimal  @db.Decimal(18, 2) @default(0)
+  liabilityRemeasurement Decimal @db.Decimal(18, 2) @default(0)
+  interest              Decimal  @db.Decimal(18, 2) @default(0)
+  payment               Decimal  @db.Decimal(18, 2) @default(0)
+  liabilityDerecognized Decimal  @db.Decimal(18, 2) @default(0)
+  gainLoss              Decimal  @db.Decimal(18, 2) @default(0) // + gain, - loss (base)
+  rentExpense           Decimal  @db.Decimal(18, 2) @default(0) // exempt leases (base)
+  details               Json?    // inputs, plus the replaced schedule so the event can be undone
+  createdById           String
+  createdAt             DateTime @default(now())
+  lease                 Lease    @relation(fields: [leaseId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, date])
+  @@index([leaseId, createdAt])
+}
