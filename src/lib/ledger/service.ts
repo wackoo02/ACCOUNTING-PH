@@ -322,6 +322,9 @@ export async function voidOrReverseTx(tx: Tx, organizationId: string, userId: st
     if (e.source === "BANK" && e.sourceId && !fromSubledger) {
       throw new LedgerError(["This entry came from Cash and Bank. Void the cash voucher, or undo the bank adjustment on the reconciliation screen, instead."]);
     }
+    if (e.source === "PURCHASES" && e.sourceId && !fromSubledger) {
+      throw new LedgerError(["This entry came from Purchasing / Payables. Void the supplier bill or receiving report instead."]);
+    }
     if (e.lines.some((l) => l.clearedAt)) {
       throw new LedgerError(["This entry is already cleared against the bank statement. Undo the match on the bank reconciliation screen first."]);
     }
