@@ -153,6 +153,22 @@ One-time setup for the whole Veritus service (platform operator only):
 
 Loans are in the company's base currency for now. Code: `src/lib/debt/schedule.ts` (pure schedule and EIR math), `src/lib/debt/service.ts`.
 
+## Leases (PFRS 16 / IFRS 16, lessee)
+**Lease register** (Leases → New Lease): lease number, lessor (vendor list or free text), lease type, asset, start and end dates, payment per period with frequency (monthly / quarterly / semi-annual / annual), in advance or in arrears, rent escalation (e.g. +5% every 12 months), incremental borrowing rate and the discount rate used, currency and rate, 12% VAT and EWT on payments, initial direct costs, advance rent, incentives, restoration cost, and the GL accounts (ROU asset, accumulated depreciation, current and non-current lease liability, interest, depreciation, payable, gain/loss). Saving calculates the liability, ROU asset and full monthly schedule before anything posts.
+
+**Transactions** (all post to the GL as source LEASE; the preparer cannot approve their own lease):
+- Commencement: Dr ROU asset, Cr lease liability (split current / non-current), Cr advance rent / payable for direct costs, Cr restoration provision
+- Monthly (Leases → Post Lease Entries, at each month-end): interest on the liability, ROU depreciation, payment due to Accounts Payable tagged to the lessor (with input VAT and EWT for BIR 2307), current / non-current reclass; the fully depreciated ROU asset comes off at the end
+- Modification (PFRS 16.44-46): renewal or shortening, new rent, revised rate, decrease in scope (with gain/loss); the liability is remeasured and the ROU asset adjusted, schedule recalculated from the effective date
+- Early termination: interest and depreciation to the day, derecognition, termination penalty, gain or loss
+- Undo last posting (reverses its GL entry); the journal screen cannot reverse lease entries on its own
+- Short-term and low-value exemptions: straight-line rent with accrued/prepaid rent
+- Existing leases at go-live: balances taken up at the go-live date against an offset account
+
+**Reports**: ROU asset rollforward, lease liability schedule (rollforward with current / non-current, plus each lease's amortization table), interest expense schedule by month (posted and still to come), maturity analysis of undiscounted payments reconciled to the liability (PFRS 16.58 / PFRS 7.39).
+
+**Method**: discount rate ÷ 12 compounded monthly (equals Excel `=PV(rate/12, n, -payment, 0, 1)` for an advance lease starting on the 1st), interest summarised per calendar month with part months by days, straight-line depreciation over the term (or useful life when ownership transfers). Code: `src/lib/leases/` (`engine.ts` is the pure calculation, `service.ts` the postings, `reports.ts` the reports). Not yet: Excel upload of leases, unwinding of the restoration provision (PAS 37). For a foreign-currency lease, give the liability account that currency so FX revaluation picks it up.
+
 ## Design notes for later modules
 - **One entry point:** `src/lib/ledger/service.ts` → `recordJournal({ source, sourceId, lines, action })`. Sub-ledgers pass their own `source` (SALES, PURCHASES, BANK, PAYROLL, EXPENSE_CLAIM, FIXED_ASSETS, …) and skip the manual approval controls.
 - Find control accounts with `accountByRole(org, "AR_CONTROL")` etc., never hard-coded codes.

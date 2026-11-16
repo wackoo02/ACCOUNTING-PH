@@ -119,6 +119,18 @@ export const NAV: NavSection[] = [
     ],
   },
   {
+    title: "Leases (PFRS 16)",
+    items: [
+      { href: "/leases", label: "Lease Register", icon: "leases" },
+      { href: "/leases/new", label: "New Lease", icon: "journal-new", perm: "journal.create" },
+      { href: "/leases/post", label: "Post Lease Entries", icon: "recurring", perm: "journal.post" },
+      { href: "/leases/reports/rou-rollforward", label: "ROU Asset Rollforward", icon: "activity" },
+      { href: "/leases/reports/liability-schedule", label: "Lease Liability Schedule", icon: "ledger" },
+      { href: "/leases/reports/interest", label: "Interest Expense Schedule", icon: "ratio" },
+      { href: "/leases/reports/maturity", label: "Maturity Analysis", icon: "periods" },
+    ],
+  },
+  {
     title: "Reports",
     items: [
       { href: "/reports/custom", label: "Custom Reports", icon: "report-builder" },
@@ -154,7 +166,6 @@ export const COMING_NEXT: { label: string; icon: IconName }[] = [
   { label: "Payroll", icon: "payroll" },
   { label: "Depreciation and disposals", icon: "fixed-assets" },
   { label: "Prepaid expenses", icon: "prepaid" },
-  { label: "Leases (PFRS 16)", icon: "leases" },
   { label: "BIR reports", icon: "bir" },
 ];
 

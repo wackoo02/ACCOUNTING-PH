@@ -14,7 +14,7 @@ const env = { ...process.env, DATABASE_URL: url };
 
 // Migrations written to be safe to re-run. If a deploy stopped partway through one of them,
 // Prisma blocks all later deploys (error P3009); marking it rolled back lets it run again.
-const RERUNNABLE = ["20261116031500_cash_and_bank", "20261116060000_receivables", "20261116062457_inventory", "20261116062647_debt", "20261116070000_ap_and_purchasing", "20261116070000_saved_reports", "20261116090000_sales_inventory", "20261116210000_ap_inbox_per_company"];
+const RERUNNABLE = ["20261116031500_cash_and_bank", "20261116060000_receivables", "20261116062457_inventory", "20261116062647_debt", "20261116070000_ap_and_purchasing", "20261116070000_saved_reports", "20261116090000_sales_inventory", "20261116210000_ap_inbox_per_company", "20261116062844_leases_pfrs16"];
 for (const name of RERUNNABLE) {
   try {
     execSync(`npx prisma migrate resolve --rolled-back ${name}`, { stdio: "pipe", env });
