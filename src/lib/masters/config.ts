@@ -15,13 +15,13 @@ export type Field = {
   list?: boolean; // show in list table
 };
 
-export type MasterKind = "accounts" | "dimensions" | "taxes" | "banks" | "products" | "employees" | "vendors" | "customers" | "currencies" | "assets";
+export type MasterKind = "accounts" | "dimensions" | "taxes" | "banks" | "products" | "employees" | "vendors" | "customers" | "currencies" | "assets" | "asset-categories";
 
 export type MasterDef = {
   kind: MasterKind;
   title: string;
   singular: string;
-  model: "account" | "dimensionValue" | "taxCode" | "bankAccount" | "product" | "employee" | "vendor" | "customer" | "currency" | "fixedAsset";
+  model: "account" | "dimensionValue" | "taxCode" | "bankAccount" | "product" | "employee" | "vendor" | "customer" | "currency" | "fixedAsset" | "assetCategory";
   fields: Field[];
 };
 
@@ -174,20 +174,47 @@ export const MASTERS: Record<MasterKind, MasterDef> = {
       active,
     ],
   },
+  "asset-categories": {
+    kind: "asset-categories", title: "Asset Categories", singular: "Asset category", model: "assetCategory",
+    fields: [
+      { key: "code", header: "Category Code", type: "text", required: true, example: "IT", list: true },
+      { key: "name", header: "Category Name", type: "text", required: true, example: "IT equipment", list: true },
+      { key: "prefix", header: "Asset No. Prefix", type: "text", example: "IT", list: true, help: "New assets in this category are numbered PREFIX-000001. Blank = FA." },
+      { key: "assetAccountCode", header: "GL Asset Account", type: "text", required: true, example: "1530", list: true, help: "Property and equipment cost account." },
+      { key: "accumDepAccountCode", header: "Accumulated Depreciation Account", type: "text", example: "1535", list: true, help: "Blank only for land (not depreciated)." },
+      { key: "depExpenseAccountCode", header: "Depreciation Expense Account", type: "text", example: "6090", list: true },
+      { key: "usefulLifeMonths", header: "Useful Life (months)", type: "int", required: true, example: 36, list: true, help: "Default for new assets, e.g. 36 for laptops, 60 for vehicles, 240 for buildings." },
+      { key: "depreciationMethod", header: "Depreciation Method", type: "enum", options: ["STRAIGHT_LINE", "DECLINING_BALANCE", "SUM_OF_YEARS", "NONE"], example: "STRAIGHT_LINE", list: true, help: "NONE for land." },
+      { key: "salvagePct", header: "Salvage Value % of Cost", type: "number", example: 0, help: "Default residual value, e.g. 10 for 10%." },
+      active,
+    ],
+  },
   assets: {
     kind: "assets", title: "Fixed Asset Register", singular: "Fixed asset", model: "fixedAsset",
     fields: [
       { key: "code", header: "Asset No.", type: "text", required: true, example: "FA-000123", list: true, help: "Printed on the QR sticker." },
       { key: "name", header: "Description", type: "text", required: true, example: "Dell Latitude 5440 laptop", list: true },
-      { key: "category", header: "Category", type: "text", example: "IT equipment", list: true },
-      { key: "location", header: "Location", type: "text", example: "Makati HQ - 5F Finance", list: true },
-      { key: "custodianCode", header: "Custodian Employee No.", type: "text", example: "E-001", list: true },
+      { key: "categoryCode", header: "Category Code", type: "text", example: "IT", list: true, help: "From Asset Categories. Fills in blank accounts, useful life and method." },
       { key: "serialNo", header: "Serial No.", type: "text", example: "5CG1234XYZ" },
-      { key: "acquisitionDate", header: "Acquisition Date", type: "date", example: "2025-06-30", help: "YYYY-MM-DD" },
-      { key: "cost", header: "Cost", type: "number", example: 65000, list: true },
-      { key: "accountCode", header: "GL Account Code", type: "text", example: "1530" },
+      { key: "location", header: "Location", type: "text", example: "Makati HQ - 5F Finance", list: true },
+      { key: "departmentCode", header: "Department Code", type: "text", example: "FIN", help: "Dimension code; depreciation is charged to it." },
+      { key: "costCenterCode", header: "Cost Center Code", type: "text", example: "CC-ADMIN", help: "Dimension code; depreciation is charged to it." },
+      { key: "custodianCode", header: "Custodian Employee No.", type: "text", example: "E-001", list: true },
+      { key: "vendorCode", header: "Vendor Code", type: "text", example: "V-0001" },
+      { key: "poNumber", header: "PO / Invoice No.", type: "text", example: "PO-2025-000041" },
+      { key: "acquisitionDate", header: "Purchase Date", type: "date", example: "2025-06-30", help: "YYYY-MM-DD" },
+      { key: "inServiceDate", header: "In-Service Date", type: "date", example: "", help: "When it was ready for use. Blank = purchase date. On or before the 15th depreciates from that month, otherwise from the next." },
+      { key: "cost", header: "Acquisition Cost", type: "number", example: 65000, list: true },
+      { key: "salvageValue", header: "Salvage Value", type: "number", example: 0, help: "Blank = the category's salvage %." },
+      { key: "usefulLifeMonths", header: "Useful Life (months)", type: "int", example: 36, help: "Blank = the category's useful life." },
+      { key: "depreciationMethod", header: "Depreciation Method", type: "enum", options: ["STRAIGHT_LINE", "DECLINING_BALANCE", "SUM_OF_YEARS", "NONE"], example: "STRAIGHT_LINE" },
+      { key: "accountCode", header: "GL Asset Account", type: "text", example: "1530" },
+      { key: "accumDepAccountCode", header: "Accumulated Depreciation Account", type: "text", example: "1535" },
+      { key: "depExpenseAccountCode", header: "Depreciation Expense Account", type: "text", example: "6090" },
+      { key: "accumulatedDepreciation", header: "Opening Accumulated Depreciation", type: "number", example: 0, help: "For assets already partly depreciated before go-live (already in your GL opening balance)." },
+      { key: "depreciatedThrough", header: "Depreciated Through", type: "date", example: "", help: "Last month-end covered by the opening accumulated depreciation, e.g. 2025-12-31." },
       { key: "tagCode", header: "Old Tag / Sticker No.", type: "text", example: "", help: "An existing sticker to map to this asset. Scanning it finds this asset." },
-      { key: "status", header: "Status", type: "enum", options: ["ACTIVE", "FOR_REPAIR", "MISSING", "DISPOSED"], example: "ACTIVE", list: true },
+      { key: "status", header: "Status", type: "enum", options: ["ACTIVE", "FOR_REPAIR", "MISSING"], example: "ACTIVE", list: true, help: "Sell or retire assets from the asset's page, not here." },
       active,
     ],
   },

@@ -110,7 +110,7 @@ export async function closeAudit(organizationId: string, userId: string, auditId
   const s = await auditSummary(organizationId, auditId);
   if (s.audit.status !== "OPEN") throw new LedgerError(["This audit is already closed"]);
   await prisma.$transaction(async (tx) => {
-    if (markMissing && s.missing.length) await tx.fixedAsset.updateMany({ where: { id: { in: s.missing.map((m) => m.id) }, status: { not: "DISPOSED" } }, data: { status: "MISSING" } });
+    if (markMissing && s.missing.length) await tx.fixedAsset.updateMany({ where: { id: { in: s.missing.map((m) => m.id) }, status: { notIn: ["DISPOSED", "RETIRED", "CANCELLED"] } }, data: { status: "MISSING" } });
     await tx.assetAudit.update({ where: { id: auditId }, data: { status: "CLOSED", closedById: userId, closedAt: new Date() } });
     await audit(tx, organizationId, userId, "asset.audit_close", auditId, { found: s.totals.found, missing: s.totals.missing }, null, null, "asset_audit");
   });
@@ -128,7 +128,7 @@ type Bucket = { key: string; expected: number; found: number; missing: number; c
 export async function auditSummary(organizationId: string, auditId: string) {
   const au = await prisma.assetAudit.findFirst({ where: { id: auditId, organizationId }, include: { scans: { orderBy: { scannedAt: "asc" } } } });
   if (!au) throw new LedgerError(["Audit not found"]);
-  const scope = await prisma.fixedAsset.findMany({ where: { organizationId, isActive: true, status: { not: "DISPOSED" }, ...(au.location ? { location: { equals: au.location, mode: "insensitive" } } : {}) }, orderBy: { code: "asc" } });
+  const scope = await prisma.fixedAsset.findMany({ where: { organizationId, isActive: true, status: { notIn: ["DISPOSED", "RETIRED", "CANCELLED"] }, ...(au.location ? { location: { equals: au.location, mode: "insensitive" } } : {}) }, orderBy: { code: "asc" } });
   const scannedIds = new Set(au.scans.map((s) => s.assetId).filter(Boolean) as string[]);
   const extraIds = [...scannedIds].filter((id) => !scope.some((a) => a.id === id));
   const extra = extraIds.length ? await prisma.fixedAsset.findMany({ where: { id: { in: extraIds } } }) : [];

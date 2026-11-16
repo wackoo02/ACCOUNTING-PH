@@ -130,11 +130,11 @@ async function main() {
   ]);
   await importMasters("customers", P, owner.id, [{ code: "C-0001", name: "XYZ Trading Corp.", tin: "222-333-444-00000", email: "ap@xyz.example" }]);
   await importMasters("assets", P, owner.id, [
-    { code: "FA-000101", name: "Dell Latitude 5440 laptop", category: "IT equipment", location: "Makati HQ", custodianCode: "E-002", cost: 65000, accountCode: "1530", acquisitionDate: new Date(`${y}-01-15`) },
-    { code: "FA-000102", name: "Epson L15150 printer", category: "IT equipment", location: "Makati HQ", custodianCode: "E-003", cost: 38500, accountCode: "1530", acquisitionDate: new Date(`${y}-01-15`) },
-    { code: "FA-000103", name: "Executive desk", category: "Furniture", location: "Makati HQ", custodianCode: "E-001", cost: 24000, accountCode: "1550" },
-    { code: "FA-000104", name: "Split-type aircon 2HP", category: "Office equipment", location: "Makati HQ", cost: 52000, accountCode: "1530" },
-    { code: "FA-000105", name: "Toyota Innova (NBC 1234)", category: "Vehicles", location: "Cebu branch", custodianCode: "E-003", cost: 1450000, accountCode: "1540" },
+    { code: "FA-000101", name: "Dell Latitude 5440 laptop", categoryCode: "IT", location: "Makati HQ", custodianCode: "E-002", cost: 65000, acquisitionDate: new Date(`${y}-01-15`) },
+    { code: "FA-000102", name: "Epson L15150 printer", categoryCode: "IT", location: "Makati HQ", custodianCode: "E-003", cost: 38500, acquisitionDate: new Date(`${y}-01-15`) },
+    { code: "FA-000103", name: "Executive desk", categoryCode: "FURN", location: "Makati HQ", custodianCode: "E-001", cost: 24000, acquisitionDate: new Date(`${y}-01-10`) },
+    { code: "FA-000104", name: "Split-type aircon 2HP", categoryCode: "OFFEQ", location: "Makati HQ", cost: 52000, acquisitionDate: new Date(`${y}-01-20`) },
+    { code: "FA-000105", name: "Toyota Innova (NBC 1234)", categoryCode: "VEH", location: "Cebu branch", custodianCode: "E-003", cost: 1450000, acquisitionDate: new Date(`${y}-01-05`) },
   ]);
   const gcash = await bank("GCASH");
   const emp = async (code: string) => (await prisma.employee.findFirstOrThrow({ where: { organizationId: P, code } })).id;

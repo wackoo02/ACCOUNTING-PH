@@ -946,32 +946,119 @@ model ReceiptImage {
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 }
 
-// ---------- Fixed asset register (minimal; the Fixed Assets module will add depreciation) ----------
+// ---------- Fixed assets (PAS 16): register, transactions, depreciation ----------
+// The asset audit tables below (AssetAudit / AssetScan) update lastSeen*, condition and status from QR scans.
+
+model AssetCategory {
+  id                    String   @id @default(cuid())
+  organizationId        String
+  code                  String   // e.g. IT, FURN, VEH
+  name                  String
+  prefix                String?  // asset number prefix for new assets, e.g. IT -> IT-000001 (default FA)
+  assetAccountCode      String   // GL cost account, e.g. 1530 Office Equipment
+  accumDepAccountCode   String?  // e.g. 1535 Accumulated Depreciation - Office Equipment (blank for land)
+  depExpenseAccountCode String?  // e.g. 6090 Depreciation Expense
+  usefulLifeMonths      Int      @default(60)
+  depreciationMethod    String   @default("STRAIGHT_LINE") // STRAIGHT_LINE | DECLINING_BALANCE | SUM_OF_YEARS | NONE
+  salvagePct            Decimal  @db.Decimal(5, 2) @default(0)
+  isActive              Boolean  @default(true)
+  createdAt             DateTime @default(now())
+
+  @@unique([organizationId, code])
+}
 
 model FixedAsset {
-  id               String    @id @default(cuid())
-  organizationId   String
-  code             String    // asset number, printed as a QR sticker
-  name             String
-  category         String?   // e.g. IT equipment, furniture, vehicles
-  location         String?   // where it should be
-  custodianCode    String?   // employee no. accountable for it
-  serialNo         String?
-  acquisitionDate  DateTime? @db.Date
-  cost             Decimal   @db.Decimal(18, 2) @default(0)
-  accountCode      String?   // property and equipment GL account
-  tagCode          String?   // an older / supplier sticker mapped to this asset
-  status           String    @default("ACTIVE") // ACTIVE | FOR_REPAIR | MISSING | DISPOSED
-  condition        String?   // GOOD | FAIR | DAMAGED | FOR_REPAIR (last audit)
-  taggedAt         DateTime? // when the sticker was first scanned / mapped
-  lastSeenAt       DateTime?
-  lastSeenLocation String?
-  lastAuditId      String?
-  isActive         Boolean   @default(true)
-  createdAt        DateTime  @default(now())
+  id                    String    @id @default(cuid())
+  organizationId        String
+  code                  String    // asset number, printed as a QR sticker
+  name                  String    // description
+  categoryCode          String?   // AssetCategory.code (defaults for accounts, life, method)
+  category              String?   // category name shown on reports and audits
+  location              String?   // where it should be
+  departmentCode        String?   // DEPARTMENT dimension code (depreciation is charged here)
+  costCenterCode        String?   // COST_CENTER dimension code
+  custodianCode         String?   // employee no. accountable for it
+  serialNo              String?
+  vendorCode            String?
+  poNumber              String?   // purchase order / supplier invoice it came from
+  acquisitionDate       DateTime? @db.Date
+  inServiceDate         DateTime? @db.Date // available for use; depreciation starts here (defaults to acquisition date)
+  cost                  Decimal   @db.Decimal(18, 2) @default(0) // current gross cost (additions + improvements)
+  salvageValue          Decimal   @db.Decimal(18, 2) @default(0)
+  usefulLifeMonths      Int?
+  depreciationMethod    String    @default("STRAIGHT_LINE")
+  accountCode           String?   // GL asset (cost) account
+  accumDepAccountCode   String?
+  depExpenseAccountCode String?
+  accumulatedDepreciation Decimal @db.Decimal(18, 2) @default(0)
+  depreciatedThrough    DateTime? @db.Date // last month-end depreciation was charged for
+  disposedAt            DateTime? @db.Date
+  tagCode               String?   // an older / supplier sticker mapped to this asset
+  status                String    @default("ACTIVE") // ACTIVE | FOR_REPAIR | MISSING | DISPOSED | RETIRED
+  condition             String?   // GOOD | FAIR | DAMAGED | FOR_REPAIR (last audit)
+  taggedAt              DateTime? // when the sticker was first scanned / mapped
+  lastSeenAt            DateTime?
+  lastSeenLocation      String?
+  lastAuditId           String?
+  isActive              Boolean   @default(true)
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @default(now()) @updatedAt
+  txns                  FixedAssetTxn[]
 
   @@unique([organizationId, code])
   @@index([organizationId, tagCode])
+}
+
+// Every change to an asset's cost or accumulated depreciation is a transaction, so the
+// rollforward and register can be rebuilt as of any date.
+model FixedAssetTxn {
+  id                     String    @id @default(cuid())
+  organizationId         String
+  assetId                String
+  number                 String    // FAT-2026-000001
+  type                   String    // OPENING | ADDITION | IMPROVEMENT | TRANSFER | DEPRECIATION | DISPOSAL | RETIREMENT
+  date                   DateTime  @db.Date
+  costChange             Decimal   @db.Decimal(18, 2) @default(0) // + additions/improvements, - disposals
+  accumChange            Decimal   @db.Decimal(18, 2) @default(0) // + depreciation, - disposals
+  depreciation           Decimal   @db.Decimal(18, 2) @default(0) // depreciation expense in this transaction
+  proceeds               Decimal?  @db.Decimal(18, 2)
+  gainLoss               Decimal?  @db.Decimal(18, 2) // + gain, - loss
+  lifeChangeMonths       Int?
+  details                Json?     // transfer from/to, disposal buyer, months depreciated, etc.
+  memo                   String?
+  reference              String?
+  journalEntryId         String?
+  runId                  String?
+  prevDepreciatedThrough DateTime? @db.Date
+  status                 String    @default("POSTED") // POSTED | VOID
+  createdById            String
+  createdAt              DateTime  @default(now())
+  asset                  FixedAsset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, number])
+  @@index([organizationId, assetId])
+  @@index([organizationId, date])
+  @@index([runId])
+}
+
+model DepreciationRun {
+  id             String    @id @default(cuid())
+  organizationId String
+  number         String    // DEP-2026-000001
+  year           Int
+  month          Int
+  periodEnd      DateTime  @db.Date
+  total          Decimal   @db.Decimal(18, 2) @default(0)
+  assetCount     Int       @default(0)
+  journalEntryId String?
+  status         String    @default("POSTED") // POSTED | REVERSED
+  createdById    String
+  createdAt      DateTime  @default(now())
+  reversedById   String?
+  reversedAt     DateTime?
+
+  @@unique([organizationId, number])
+  @@index([organizationId, year, month])
 }
 
 model AssetAudit {
