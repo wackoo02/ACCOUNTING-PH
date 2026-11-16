@@ -60,6 +60,19 @@ export const NAV: NavSection[] = [
     ],
   },
   {
+    title: "BIR Tax",
+    items: [
+      { href: "/tax", label: "Tax Overview and Calendar", icon: "bir" },
+      { href: "/tax/review", label: "Tax Review", icon: "audit" },
+      { href: "/tax/returns/2550Q", label: "VAT Return (2550Q)", icon: "taxes" },
+      { href: "/tax/returns/1601EQ", label: "Withholding Returns", icon: "taxes" },
+      { href: "/tax/lists/slsp", label: "SLSP, QAP and SAWT", icon: "statements" },
+      { href: "/tax/2307", label: "BIR 2307 Certificates", icon: "checks" },
+      { href: "/tax/alphalist", label: "Alphalists", icon: "employees" },
+      { href: "/tax/books", label: "Books of Accounts", icon: "ledger" },
+    ],
+  },
+  {
     title: "Reports",
     items: [
       { href: "/trial-balance", label: "Trial Balance", icon: "trial-balance" },
@@ -97,7 +110,6 @@ export const COMING_NEXT: { label: string; icon: IconName }[] = [
   { label: "Leases (PFRS 16)", icon: "leases" },
   { label: "Debt", icon: "debt" },
   { label: "Inventory", icon: "inventory" },
-  { label: "BIR reports", icon: "bir" },
 ];
 
 export function navFor(role: Role): NavSection[] {
