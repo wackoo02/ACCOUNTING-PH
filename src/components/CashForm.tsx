@@ -3,6 +3,9 @@ import { Fragment, useActionState, useMemo, useState } from "react";
 import { saveCash } from "@/app/(app)/bank-actions";
 import type { CashFormData } from "@/lib/bank/form-data";
 import { Errors } from "./Errors";
+import { MasterLookup, type AddTarget, type LookupOption, type SavedRecord } from "./MasterLookup";
+import { DIMENSIONS } from "@/lib/ledger/dimensions";
+import type { MasterKind } from "@/lib/masters/config";
 
 export type CashMode = "RECEIPT" | "DISBURSEMENT" | "PETTY" | "TRANSFER";
 type Line = { accountId: string; amount: string; description: string; dims: Record<string, string> };
@@ -15,6 +18,11 @@ const blank = (): Line => ({ accountId: "", amount: "", description: "", dims: {
 const cents = (s: string) => { const n = Number(String(s).replace(/,/g, "")); return Number.isFinite(n) ? Math.round(n * 100) : 0; };
 const money = (c: number) => (c / 100).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const TYPES = ["ASSET", "LIABILITY", "EQUITY", "INCOME", "EXPENSE"];
+const PARTY_KIND: Record<string, MasterKind> = { CUSTOMER: "customers", VENDOR: "vendors", EMPLOYEE: "employees", PARTNER: "employees" };
+const dimAdd = (key: string) => {
+  const type = DIMENSIONS.find((d) => d.key === key)?.type;
+  return type ? { kind: "dimensions" as const, type, prefill: { type } } : undefined;
+};
 const METHOD_LABELS: Record<string, string> = { CASH: "Cash", CHECK: "Check", BANK_TRANSFER: "Bank transfer / InstaPay / PESONet", ONLINE: "Online / card", EWALLET: "GCash / Maya" };
 
 export function CashForm(props: CashFormData & { mode: CashMode; initial: CashInitial; canPost: boolean }) {
@@ -52,6 +60,16 @@ export function CashForm(props: CashFormData & { mode: CashMode; initial: CashIn
     lines: transfer ? [] : lines.map((l) => ({ ...l, dims: Object.fromEntries(Object.entries(l.dims).map(([k, v]) => [k, v || null])) })),
     toFxRate: toForeign ? h.toFxRate : to && to.currencyCode !== baseCurrency ? h.fxRate : "1",
   });
+  const bankOpt = (b: (typeof banks)[number]): LookupOption => ({ value: b.id, code: b.code, label: b.name, hint: b.currencyCode !== baseCurrency ? b.currencyCode : undefined });
+  const accountOptions: LookupOption[] = TYPES.flatMap((t) => accounts.filter((a) => a.type === t && (!a.currencyCode || a.currencyCode === ccy)).map((a) => ({ value: a.id, code: a.code, label: a.name, group: t })));
+  const partyOptions: LookupOption[] = parties.map((p) => {
+    const [prefix, code] = p.value.split(":");
+    const kind = PARTY_KIND[prefix];
+    return { value: p.value, code, label: p.name, hint: prefix.charAt(0) + prefix.slice(1).toLowerCase(), kind };
+  });
+  const partyAdd: AddTarget[] = (receipt ? ["customers", "employees", "vendors"] : ["vendors", "employees", "customers"]).map((k) => ({
+    kind: k as MasterKind, toValue: (r: SavedRecord) => `${k === "employees" ? (r.isPartner ? "PARTNER" : "EMPLOYEE") : k === "vendors" ? "VENDOR" : "CUSTOMER"}:${r.code}`,
+  }));
   const ready = transfer ? cents(h.amount) > 0 && !!h.toBankAccountId : net > 0 && lines.every((l) => l.accountId && cents(l.amount) > 0);
 
   return (
@@ -60,15 +78,10 @@ export function CashForm(props: CashFormData & { mode: CashMode; initial: CashIn
       <div className="card">
         <div className="row">
           <div><label>{receipt ? "Deposit to" : transfer ? "Transfer from" : mode === "PETTY" ? "Petty cash fund" : "Pay from"}</label>
-            <select value={h.bankAccountId} onChange={(e) => pickBank(e.target.value)} required>
-              <option value="">Choose…</option>
-              {fromBanks.map((b) => <option key={b.id} value={b.id}>{b.code} · {b.name}{b.currencyCode !== baseCurrency ? ` (${b.currencyCode})` : ""}</option>)}
-            </select></div>
+            <MasterLookup ariaLabel="Bank or cash account" required value={h.bankAccountId} options={fromBanks.map(bankOpt)} add={{ kind: "banks" }} onChange={(v) => pickBank(v)} /></div>
           {transfer && <div><label>Transfer to</label>
-            <select value={h.toBankAccountId} onChange={(e) => { const b = banks.find((x) => x.id === e.target.value); setH({ ...h, toBankAccountId: e.target.value, toFxRate: b && b.currencyCode !== baseCurrency ? rateFor(b.currencyCode) : "1" }); }} required>
-              <option value="">Choose…</option>
-              {banks.filter((b) => b.id !== h.bankAccountId).map((b) => <option key={b.id} value={b.id}>{b.code} · {b.name}{b.currencyCode !== baseCurrency ? ` (${b.currencyCode})` : ""}</option>)}
-            </select></div>}
+            <MasterLookup ariaLabel="Transfer to" required value={h.toBankAccountId} options={banks.filter((b) => b.id !== h.bankAccountId).map(bankOpt)} add={{ kind: "banks" }}
+              onChange={(v) => { const b = banks.find((x) => x.id === v); setH({ ...h, toBankAccountId: v, toFxRate: b && b.currencyCode !== baseCurrency ? rateFor(b.currencyCode) : "1" }); }} /></div>}
           <div><label>Date</label><input type="date" value={h.date} onChange={(e) => setH({ ...h, date: e.target.value })} required /></div>
           {mode !== "PETTY" && (
             <div><label>{receipt ? "Received as" : "Payment method"}</label>
@@ -83,10 +96,8 @@ export function CashForm(props: CashFormData & { mode: CashMode; initial: CashIn
         </div>
         <div className="row" style={{ marginTop: 10 }}>
           {!transfer && <div style={{ flex: 2 }}><label>{receipt ? "Received from (customer, employee, other)" : "Payee"}</label>
-            <select value={h.party} onChange={(e) => { const p = parties.find((x) => x.value === e.target.value); setH({ ...h, party: e.target.value, payee: p ? p.name : h.payee }); }}>
-              <option value="">— Not in master lists —</option>
-              {parties.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
-            </select></div>}
+            <MasterLookup ariaLabel="Party" emptyLabel="— Not in master lists" value={h.party} options={partyOptions} add={partyAdd}
+              onChange={(v, rec) => { const p = parties.find((x) => x.value === v); setH({ ...h, party: v, payee: p ? p.name : rec ? rec.label : h.payee }); }} /></div>}
           {!transfer && <div style={{ flex: 2 }}><label>Name as printed {receipt ? "on the receipt" : "on the check / voucher"}</label><input value={h.payee} onChange={(e) => setH({ ...h, payee: e.target.value })} /></div>}
           <div><label>Reference (OR, SI, invoice, transfer ref.)</label><input value={h.reference} onChange={(e) => setH({ ...h, reference: e.target.value })} /></div>
         </div>
@@ -111,10 +122,7 @@ export function CashForm(props: CashFormData & { mode: CashMode; initial: CashIn
               {lines.map((l, i) => (
                 <Fragment key={i}>
                   <tr>
-                    <td><select value={l.accountId} onChange={(e) => set(i, { accountId: e.target.value })} aria-label={`Account line ${i + 1}`}>
-                      <option value="">Choose account…</option>
-                      {TYPES.map((t) => <optgroup key={t} label={t}>{accounts.filter((a) => a.type === t && (!a.currencyCode || a.currencyCode === ccy)).map((a) => <option key={a.id} value={a.id}>{a.code} · {a.name}</option>)}</optgroup>)}
-                    </select></td>
+                    <td><MasterLookup ariaLabel={`Account line ${i + 1}`} placeholder="Type account code or name…" value={l.accountId} options={accountOptions} add={{ kind: "accounts" }} onChange={(v) => set(i, { accountId: v })} /></td>
                     <td><input value={l.description} onChange={(e) => set(i, { description: e.target.value })} /></td>
                     <td><input className="num" inputMode="decimal" value={l.amount} onChange={(e) => set(i, { amount: e.target.value })} aria-label={`Amount line ${i + 1}`} /></td>
                     <td>{lines.length > 1 && <button type="button" className="link" style={{ color: "var(--danger)" }} onClick={() => setLines((ls) => ls.filter((_, j) => j !== i))} aria-label="Remove line">✕</button>}</td>
@@ -122,7 +130,7 @@ export function CashForm(props: CashFormData & { mode: CashMode; initial: CashIn
                   {showDims && (
                     <tr><td colSpan={4} style={{ background: "#fafbfc" }}><div className="row" style={{ gap: 6 }}>
                       {dims.map((d) => <div key={d.key} style={{ minWidth: 130 }}><label>{d.label}</label>
-                        <select value={l.dims[d.key] ?? ""} onChange={(e) => setDim(i, d.key, e.target.value)}><option value="">—</option>{d.values.map((v) => <option key={v.id} value={v.id}>{v.code} · {v.name}</option>)}</select></div>)}
+                        <MasterLookup ariaLabel={`${d.label} line ${i + 1}`} placeholder="—" emptyLabel="— None" value={l.dims[d.key] ?? ""} options={d.values.map((v) => ({ value: v.id, code: v.code, label: v.name }))} add={dimAdd(d.key)} onChange={(v) => setDim(i, d.key, v)} /></div>)}
                     </div></td></tr>
                   )}
                 </Fragment>
@@ -138,10 +146,9 @@ export function CashForm(props: CashFormData & { mode: CashMode; initial: CashIn
           </table></div>
           <div className="card row">
             <div style={{ flex: 2 }}><label>{receipt ? "Tax withheld by the customer (BIR 2307 received)" : "Expanded withholding tax to deduct"}</label>
-              <select value={h.withholdingTaxCodeId} onChange={(e) => setH({ ...h, withholdingTaxCodeId: e.target.value, withholdingAmount: "" })}>
-                <option value="">None</option>
-                {taxCodes.map((t) => <option key={t.id} value={t.id}>{t.code} · {t.name}</option>)}
-              </select></div>
+              <MasterLookup ariaLabel="Withholding tax" emptyLabel="None" placeholder="None" value={h.withholdingTaxCodeId}
+                options={taxCodes.map((t) => ({ value: t.id, code: t.code, label: t.name, hint: `${t.rate}%` }))} add={{ kind: "taxes" }}
+                onChange={(v) => setH({ ...h, withholdingTaxCodeId: v, withholdingAmount: "" })} /></div>
             {tc && <div><label>Tax amount (blank = {tc.rate}% of {money(gross)})</label><input className="num" inputMode="decimal" value={h.withholdingAmount} placeholder={money(wht)} onChange={(e) => setH({ ...h, withholdingAmount: e.target.value })} /></div>}
             <div className="stat"><div className="l">Total</div><div className="n">{money(gross)}</div></div>
             {tc && <div className="stat"><div className="l">Less withholding</div><div className="n">({money(wht)})</div></div>}

@@ -24,7 +24,7 @@ export default async function EditMaster({ params, searchParams }: { params: Pro
   return (
     <>
       <div className="top"><h1>{code ? `Edit ${def.singular.toLowerCase()} ${code}` : `Add ${def.singular.toLowerCase()}`}</h1></div>
-      <MasterForm kind={kind} fields={def.fields} record={record} originalCode={code} />
+      <MasterForm kind={kind} fields={def.fields} record={record} originalCode={code} singular={def.singular} />
     </>
   );
 }
