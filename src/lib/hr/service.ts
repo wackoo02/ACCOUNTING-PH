@@ -132,6 +132,8 @@ export async function saveEmployeeHr(organizationId: string, userId: string, emp
       where: { id: employeeId },
       data: {
         shiftId: input.shiftId || null, managerId: input.managerId || null,
+        // Keep the Mobility app's approver (supervisorCode) in step with the reporting manager.
+        supervisorCode: input.managerId ? (await tx.employee.findUnique({ where: { id: input.managerId } }))?.code ?? null : before!.supervisorCode,
         workDaysPerYear: input.workDaysPerYear && input.workDaysPerYear > 0 ? input.workDaysPerYear : before!.workDaysPerYear,
         minimumWageEarner: input.minimumWageEarner ?? before!.minimumWageEarner,
         costCenter: input.costCenter?.trim() || null, bankAccountNo: input.bankAccountNo?.trim() || null,
@@ -298,7 +300,8 @@ export async function createRequest(organizationId: string, userId: string, inpu
   if (!input.reason?.trim()) fail("Enter the reason");
   const data: Prisma.HrRequestUncheckedCreateInput = {
     organizationId, number: "", employeeId: emp!.id, type: input.type, dateFrom: new Date(from), dateTo: new Date(to), reason: input.reason.trim(),
-    approverId: emp!.managerId, createdById: userId,
+    approverId: emp!.managerId ?? (emp!.supervisorCode ? (await prisma.employee.findFirst({ where: { organizationId, code: emp!.supervisorCode } }))?.id ?? null : null),
+    createdById: userId,
   };
   if (input.type === "LEAVE") {
     const lt = await prisma.leaveType.findFirst({ where: { id: input.leaveTypeId ?? "", organizationId, isActive: true } });

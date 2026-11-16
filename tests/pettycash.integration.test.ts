@@ -143,8 +143,22 @@ describe("petty cash mobile API", () => {
       lines: [{ description: "Grab to BIR RDO 47", unitPrice: "245", accountId: meals }],
     });
     expect((await call("POST", `vouchers/${v.data.id}/reject`, ownerTok, { reason: "" })).status).toBe(422);
-    const r = await call("POST", `vouchers/${v.data.id}/reject`, ownerTok, { reason: "Charge to transportation" });
-    expect(r.data).toMatchObject({ status: "REJECTED", rejectedReason: "Charge to transportation" });
+    const r = await call("POST", `vouchers/${v.data.id}/return`, ownerTok, { reason: "Charge to transportation" });
+    expect(r.data).toMatchObject({ status: "RETURNED", rejectedReason: "Charge to transportation" });
+    const fixed = await call("PUT", `vouchers/${v.data.id}`, clerkTok, { fundId, receiptDate: "2026-11-12", vendorName: "Grab", lines: [{ description: "Grab to BIR RDO 47", unitPrice: "245", accountId: meals }] });
+    expect(fixed.data.status).toBe("DRAFT");
+    expect((await call("POST", `vouchers/${v.data.id}/submit`, clerkTok)).data.status).toBe("SUBMITTED");
+    const rej = await call("POST", `vouchers/${v.data.id}/reject`, ownerTok, { reason: "Personal trip" });
+    expect(rej.data).toMatchObject({ status: "REJECTED" });
+    expect((await call("PUT", `vouchers/${v.data.id}`, clerkTok, { fundId, receiptDate: "2026-11-12", vendorName: "Grab", lines: [] })).status).toBe(422);
+  });
+
+  it("needs finance review before the voucher can be replenished", async () => {
+    expect((await call("POST", "batches", clerkTok, { fundId })).status).toBe(422); // approved but not cleared yet
+    expect((await call("POST", `vouchers/${vouchers[0]}/clear`, clerkTok, {})).status).toBe(403);
+    const checks = await call("GET", `vouchers/${vouchers[0]}/checks`, acctTok);
+    expect(checks.data.find((c: { key: string }) => c.key === "tax")).toMatchObject({ ok: true });
+    for (const id of vouchers) expect((await call("POST", `vouchers/${id}/clear`, acctTok, {})).data.status).toBe("CLEARED");
   });
 
   it("builds a replenishment batch with a balanced journal and posts it to the GL", async () => {

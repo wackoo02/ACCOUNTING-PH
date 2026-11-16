@@ -15,13 +15,13 @@ export type Field = {
   list?: boolean; // show in list table
 };
 
-export type MasterKind = "accounts" | "dimensions" | "taxes" | "banks" | "products" | "employees" | "vendors" | "customers" | "currencies";
+export type MasterKind = "accounts" | "dimensions" | "taxes" | "banks" | "products" | "employees" | "vendors" | "customers" | "currencies" | "assets";
 
 export type MasterDef = {
   kind: MasterKind;
   title: string;
   singular: string;
-  model: "account" | "dimensionValue" | "taxCode" | "bankAccount" | "product" | "employee" | "vendor" | "customer" | "currency";
+  model: "account" | "dimensionValue" | "taxCode" | "bankAccount" | "product" | "employee" | "vendor" | "customer" | "currency" | "fixedAsset";
   fields: Field[];
 };
 
@@ -74,7 +74,7 @@ export const MASTERS: Record<MasterKind, MasterDef> = {
     fields: [
       { key: "code", header: "Code", type: "text", required: true, example: "BDO-CA", list: true, help: "Short code, e.g. BDO-CA, BPI-SA, PCF-ADMIN." },
       { key: "name", header: "Name", type: "text", required: true, example: "BDO Current Account - Makati", list: true },
-      { key: "kind", header: "Kind", type: "enum", required: true, options: ["CURRENT", "SAVINGS", "PETTY_CASH", "CASH_ON_HAND", "EWALLET"], example: "CURRENT", list: true, help: "CURRENT/SAVINGS = bank (reconciled against statements), PETTY_CASH = imprest fund, CASH_ON_HAND = undeposited collections, EWALLET = GCash/Maya." },
+      { key: "kind", header: "Kind", type: "enum", required: true, options: ["CURRENT", "SAVINGS", "PETTY_CASH", "CASH_ON_HAND", "EWALLET", "CREDIT_CARD"], example: "CURRENT", list: true, help: "CURRENT/SAVINGS = bank (reconciled against statements; debit cards draw on these), PETTY_CASH = imprest fund, CASH_ON_HAND = undeposited collections, EWALLET = corporate GCash / Maya (put GCash or Maya in the name), CREDIT_CARD = corporate credit card (GL account 2015 Corporate Credit Card Payable)." },
       { key: "glAccountCode", header: "GL Account Code", type: "text", required: true, example: "1020", list: true, help: "The cash account in the chart of accounts (Cash and cash equivalents). Each bank/cash account needs its own GL account." },
       { key: "bankName", header: "Bank", type: "text", example: "BDO Unibank", list: true },
       { key: "branchName", header: "Bank Branch", type: "text", example: "Makati Ayala" },
@@ -120,7 +120,10 @@ export const MASTERS: Record<MasterKind, MasterDef> = {
       { key: "employmentStatus", header: "Employment Status", type: "enum", options: ["REGULAR", "PROBATIONARY", "CONTRACTUAL", "PROJECT"], example: "REGULAR" },
       { key: "payBasis", header: "Pay Basis", type: "enum", options: ["MONTHLY", "DAILY"], example: "MONTHLY" },
       { key: "basicRate", header: "Basic Rate", type: "number", example: 25000, help: "Monthly salary or daily rate depending on Pay Basis." },
-      { key: "costCenter", header: "Cost Center", type: "text", example: "CC-100", help: "Cost center dimension code; payroll cost posts to it." },
+      { key: "costCenter", header: "Cost Center Code", type: "text", example: "CC-SALES", help: "Default cost center for this person's expense and mobility claims." },
+      { key: "projectCode", header: "Project Code", type: "text", example: "", help: "Default project for claims (dimension code)." },
+      { key: "businessUnit", header: "Business Unit", type: "text", example: "" },
+      { key: "supervisorCode", header: "Supervisor Employee No.", type: "text", example: "E-000", help: "The manager who approves this person's claims in the Veritus Mobility app (their Email must match their user login)." },
       { key: "workDaysPerYear", header: "Work Days per Year", type: "int", example: 261, help: "Daily-rate factor: 261 (Mon-Fri), 313 (Mon-Sat), 365. Default 261." },
       { key: "minimumWageEarner", header: "Minimum Wage Earner", type: "bool", example: false, help: "TRUE = basic, holiday, overtime and night differential pay are tax-exempt." },
       { key: "birthDate", header: "Birth Date", type: "date", example: "1990-05-20", help: "YYYY-MM-DD (for BIR 2316)" },
@@ -173,6 +176,23 @@ export const MASTERS: Record<MasterKind, MasterDef> = {
       { key: "name", header: "Currency Name", type: "text", required: true, example: "US Dollar", list: true },
       { key: "symbol", header: "Symbol", type: "text", example: "$", list: true },
       { key: "rateToBase", header: "Rate to PHP", type: "number", example: 58.25, list: true, help: "How many pesos per 1 unit of this currency." },
+      active,
+    ],
+  },
+  assets: {
+    kind: "assets", title: "Fixed Asset Register", singular: "Fixed asset", model: "fixedAsset",
+    fields: [
+      { key: "code", header: "Asset No.", type: "text", required: true, example: "FA-000123", list: true, help: "Printed on the QR sticker." },
+      { key: "name", header: "Description", type: "text", required: true, example: "Dell Latitude 5440 laptop", list: true },
+      { key: "category", header: "Category", type: "text", example: "IT equipment", list: true },
+      { key: "location", header: "Location", type: "text", example: "Makati HQ - 5F Finance", list: true },
+      { key: "custodianCode", header: "Custodian Employee No.", type: "text", example: "E-001", list: true },
+      { key: "serialNo", header: "Serial No.", type: "text", example: "5CG1234XYZ" },
+      { key: "acquisitionDate", header: "Acquisition Date", type: "date", example: "2025-06-30", help: "YYYY-MM-DD" },
+      { key: "cost", header: "Cost", type: "number", example: 65000, list: true },
+      { key: "accountCode", header: "GL Account Code", type: "text", example: "1530" },
+      { key: "tagCode", header: "Old Tag / Sticker No.", type: "text", example: "", help: "An existing sticker to map to this asset. Scanning it finds this asset." },
+      { key: "status", header: "Status", type: "enum", options: ["ACTIVE", "FOR_REPAIR", "MISSING", "DISPOSED"], example: "ACTIVE", list: true },
       active,
     ],
   },
