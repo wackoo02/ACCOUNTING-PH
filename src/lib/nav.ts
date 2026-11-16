@@ -73,6 +73,16 @@ export const NAV: NavSection[] = [
     ],
   },
   {
+    title: "Debt",
+    items: [
+      { href: "/debt", label: "Loans and Borrowings", icon: "debt" },
+      { href: "/debt/period-end", label: "Debt Period-end Run", icon: "periods", perm: "journal.post" },
+      { href: "/debt/reports/schedule", label: "Debt Schedule", icon: "gl-listing" },
+      { href: "/debt/reports/aging", label: "Debt Aging and Maturity", icon: "activity" },
+      { href: "/debt/reports/covenants", label: "Covenant Monitoring", icon: "ratio" },
+    ],
+  },
+  {
     title: "Expense and Mobility",
     items: [
       { href: "/expenses", label: "Mobility Dashboard", icon: "mobility" },
@@ -143,7 +153,6 @@ export const COMING_NEXT: { label: string; icon: IconName }[] = [
   { label: "Depreciation and disposals", icon: "fixed-assets" },
   { label: "Prepaid expenses", icon: "prepaid" },
   { label: "Leases (PFRS 16)", icon: "leases" },
-  { label: "Debt", icon: "debt" },
   { label: "Inventory", icon: "inventory" },
 ];
 
