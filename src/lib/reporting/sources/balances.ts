@@ -219,7 +219,12 @@ export async function runBalances(ctx: RunContext): Promise<ReportResult> {
   };
   walk(root, 0);
   if (rows.length === 0) ctx.notes.push("No posted amounts match this report's filters.");
-  else rows.push({ key: "grand", kind: "total", depth: 0, label: "Total", cells: cellsFor(recipes, root.vecs) });
+  else {
+    // In normal-balance signs, adding debit-normal and credit-normal accounts together means nothing.
+    const sides = new Set([...leaves.values()].map((l) => l.account.normalBalance));
+    if (natural && sides.size > 1) ctx.notes.push("No grand total: with normal-balance signs, income and expenses (or assets and liabilities) would be added together. Use subtotals by account type, or your own rows with a formula.");
+    else rows.push({ key: "grand", kind: "total", depth: 0, label: "Total", cells: cellsFor(recipes, root.vecs) });
+  }
   if (!natural && measures.some((m) => m === "closing" || m === "net" || m === "opening")) ctx.notes.push("Balances are debit-positive; credits show in parentheses. Switch the sign option to show each account in its normal balance.");
   return { title: def.title || "Account balances", subtitle: subtitle(ctx), labelHead: rowFields.map(fieldLabel).join(" / "), columns: cols, rows, notes: ctx.notes };
 }

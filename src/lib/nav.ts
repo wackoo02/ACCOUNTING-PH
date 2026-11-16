@@ -41,6 +41,7 @@ export const NAV: NavSection[] = [
   {
     title: "Reports",
     items: [
+      { href: "/reports/custom", label: "Custom Reports", icon: "report-builder" },
       { href: "/trial-balance", label: "Trial Balance", icon: "trial-balance" },
       { href: "/reports/balance-sheet", label: "Balance Sheet", icon: "balance-sheet" },
       { href: "/reports/income-statement", label: "Income Statement", icon: "income-statement" },

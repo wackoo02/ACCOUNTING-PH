@@ -50,6 +50,7 @@ export const ICONS = {
   ledger: [p("M3 5.5C5.5 4 9 4 12 6c3-2 6.5-2 9-.5V19c-2.5-1.5-6-1.5-9 .5-3-2-6.5-2-9-.5z"), p("M12 6v13.5"), p("M15 9.5h3M15 13h3", true)],
   activity: [rr(2.5, 3.5, 19, 17, 3), p("M6 12h2.5l2-4.5 3 9 2-4.5H18", true)],
   budget: [circle(12, 12, 9), circle(12, 12, 5), circle(12, 12, 1.5, true), p("M12 12l7-7M16 4.5h3.5V8", true)],
+  "report-builder": [rr(3, 3, 18, 18, 2.5), p("M7 8h10M7 12h10M7 16h10"), circle(10, 8, 1.6, true), circle(15, 12, 1.6, true), circle(9, 16, 1.6, true)],
   consolidated: [rr(3, 3, 6, 6, 1.5), rr(15, 3, 6, 6, 1.5), rr(9, 15, 6, 6, 1.5, true), p("M6 9v2.5a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V9M12 13.5V15")],
   accounts: [rr(3, 3, 7, 5, 1.5), p("M6.5 8v9.5A1.5 1.5 0 0 0 8 19h5M6.5 12H13"), rr(13, 9.5, 8, 5, 1.5, true), rr(13, 16.5, 8, 5, 1.5, true)],
   dimensions: [rr(3, 3, 8, 8, 1.5), rr(13, 3, 8, 8, 1.5), rr(3, 13, 8, 8, 1.5), rr(13, 13, 8, 8, 1.5, true)],

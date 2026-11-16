@@ -1,3 +1,4 @@
+import { CustomizeLink } from "@/components/reporting/CustomizeLink";
 import { requireCtx } from "@/lib/auth";
 import { cashFlow } from "@/lib/ledger/reports";
 import { formatPeso } from "@/lib/money";
@@ -13,7 +14,7 @@ export default async function CashFlow({ searchParams }: { searchParams: SP }) {
   const r = await cashFlow(ctx.org.id, new Date(from), new Date(to));
   return (
     <>
-      <div className="top"><h1>Statement of Cash Flows</h1><span className="muted">{ctx.org.name} · {from} to {to} · indirect method</span></div>
+      <div className="top"><h1>Statement of Cash Flows</h1><CustomizeLink template="cash_flow" from={from} to={to} /><span className="muted">{ctx.org.name} · {from} to {to} · indirect method</span></div>
       <form className="card row noprint">
         <div><label>From</label><input type="date" name="from" defaultValue={from} /></div>
         <div><label>To</label><input type="date" name="to" defaultValue={to} /></div>

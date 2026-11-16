@@ -91,7 +91,7 @@ describe("report engine", () => {
     const tb = await trialBalance(orgId, d("03-31"));
     const cash = r.rows.find((x) => x.label.startsWith("1020 "))!;
     const std = tb.rows.find((x) => x.account.code === "1020")!;
-    expect(cash.cells[col(r, full.from === "" ? "" : r.columns[0].head[0], "Closing balance")]).toBe(std.closing.toString());
+    expect(cash.cells[col(r, r.columns[0].head[0], "Closing balance")]).toBe(std.closing.toString());
     expect(rowByLabel(r, "Total")!.cells[col(r, r.columns[0].head[0], "Closing balance")]).toBe("0"); // debits = credits
     expect(r.rows.some((x) => x.label.includes("Someone Else"))).toBe(false);
   });

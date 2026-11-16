@@ -1,3 +1,4 @@
+import { CustomizeLink } from "@/components/reporting/CustomizeLink";
 import Link from "next/link";
 import { requireCtx } from "@/lib/auth";
 import { accountActivity, accountLedger } from "@/lib/ledger/reports";
@@ -20,7 +21,7 @@ export default async function GLListing({ searchParams }: { searchParams: SP }) 
   }
   return (
     <>
-      <div className="top"><h1>General Ledger Listing</h1><span className="muted">{ctx.org.name} · {from} to {to}</span></div>
+      <div className="top"><h1>General Ledger Listing</h1><CustomizeLink template="gl_listing" from={from} to={to} /><span className="muted">{ctx.org.name} · {from} to {to}</span></div>
       <form className="card row noprint">
         <div><label>From</label><input type="date" name="from" defaultValue={from} /></div>
         <div><label>To</label><input type="date" name="to" defaultValue={to} /></div>
