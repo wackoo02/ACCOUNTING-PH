@@ -34,6 +34,7 @@ export default async function InvoiceView({ params }: { params: Promise<{ id: st
     inv.seriesId ? prisma.documentSeries.findUnique({ where: { id: inv.seriesId } }) : null,
     inv.contractId ? prisma.billingContract.findUnique({ where: { id: inv.contractId } }) : null,
   ]);
+  const stockDocs = cm ? [] : await prisma.inventoryTransaction.findMany({ where: { organizationId: ctx.org.id, sourceModule: "SALES", sourceId: inv.id }, orderBy: { createdAt: "asc" } });
   const accts = new Map((await prisma.account.findMany({ where: { id: { in: inv.lines.map((l) => l.accountId) } } })).map((a) => [a.id, a]));
   const otherIds = apps.map((a) => (cm ? a.invoiceId : a.creditMemoId)).filter(Boolean) as string[];
   const others = new Map((await prisma.salesInvoice.findMany({ where: { id: { in: otherIds } } })).map((x) => [x.id, x]));
@@ -137,6 +138,7 @@ export default async function InvoiceView({ params }: { params: Promise<{ id: st
           <tbody>{journal.lines.map((l) => <tr key={l.id}><td>{l.account.code} · {l.account.name}</td><td>{l.description}</td><td className="num">{formatPeso(c(l.debit), { blankZero: true })}</td><td className="num">{formatPeso(c(l.credit), { blankZero: true })}</td></tr>)}</tbody>
         </table></div>
       </>}
+      {stockDocs.length > 0 && <p>Cost of goods sold: {stockDocs.map((d, k) => <span key={d.id}>{k > 0 && ", "}<Link href={`/inventory/transactions/${d.id}`}>{d.number}</Link> {formatPeso(c(d.totalValue))}{d.status === "VOID" && " (void)"}</span>)}</p>}
 
       {emails.length > 0 && <>
         <h2>Emails</h2>

@@ -1095,6 +1095,7 @@ model SalesInvoice {
   source           String    @default("MANUAL") // MANUAL | CONTRACT | SCAN | POS
   sourceRef        String?
   contractId       String?
+  warehouseId      String?   // stocked items ship from here (blank = each item's default warehouse)
   journalEntryId   String?
   createdById      String
   updatedById      String?
@@ -1131,6 +1132,7 @@ model SalesInvoiceLine {
   netAmount   Decimal      @db.Decimal(18, 2) // after discount, before VAT
   vatAmount   Decimal      @db.Decimal(18, 2) @default(0)
   dims        Json?
+  lotNo       String?      // lot / serial for specific-identification inventory items
   invoice     SalesInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
 }
 

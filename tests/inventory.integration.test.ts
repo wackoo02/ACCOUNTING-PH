@@ -7,6 +7,7 @@ import { importMasters, saveMaster } from "@/lib/masters/store";
 import { approveInventory, ensureRoleAccount, rejectInventory, saveInventoryTransaction, voidInventory, type InvInput } from "@/lib/inventory/service";
 import { createCount, postCount, saveCountSheet, submitCount } from "@/lib/inventory/counts";
 import { issueGoodsTx, receiveGoodsTx, voidBySourceTx } from "@/lib/inventory/hooks";
+import { approveInvoice, saveInvoice, voidInvoice } from "@/lib/ar/service";
 import { aging, slowMoving, stockCard, stockStatus, turnover, valuation } from "@/lib/inventory/reports";
 
 let org = "", owner = "", clerk = "", accountant = "";
@@ -53,6 +54,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  await prisma.salesInvoice.deleteMany({ where: { organizationId: org } });
   await prisma.inventoryMove.deleteMany({ where: { organizationId: org } });
   await prisma.inventoryLayer.deleteMany({ where: { organizationId: org } });
   await prisma.inventoryBalance.deleteMany({ where: { organizationId: org } });
@@ -240,5 +242,42 @@ describe("reports", () => {
     expect(t.rows.find((r) => r.code === "FIFO")!.cogs).toBeGreaterThan(0n);
     const card = await stockCard(org, { itemId: items.FIFO, from: d("10-01"), to: d("12-31") });
     expect(card.rows.at(-1)!.balanceQty).toBe(card.closingQty);
+  });
+});
+
+describe("sales invoices book cost of goods sold", () => {
+  it("issues stocked lines from the invoice warehouse and returns them when the invoice is voided", async () => {
+    await importMasters("customers", org, owner, [{ code: "C-1", name: "Buyer Inc." }]);
+    await importMasters("products", org, owner, [{ code: "SOLD", name: "Ink", kind: "GOODS", isStocked: true, costingMethod: "FIFO", defaultWarehouseCode: "WH2", sellingPrice: "80" }]);
+    items.SOLD = (await prisma.product.findFirstOrThrow({ where: { organizationId: org, code: "SOLD" } })).id;
+    const customerId = (await prisma.customer.findUniqueOrThrow({ where: { organizationId_code: { organizationId: org, code: "C-1" } } })).id;
+    await post("RECEIPT", [{ itemId: items.SOLD, qty: "6", unitCost: "50" }], { warehouseId: wh2, date: d("11-10") });
+    await post("RECEIPT", [{ itemId: items.SOLD, qty: "6", unitCost: "60" }], { warehouseId: wh2, date: d("11-11") });
+    const line = (itemId: string, qty: string, extra = {}) => ({ productId: itemId, description: "", quantity: qty, unitPrice: "100", vatType: "VATABLE" as const, ...extra });
+
+    await expect(saveInvoice({ organizationId: org, userId: clerk, customerId, date: d("11-12"), action: "submit", lines: [line(items.SPEC, "1")] }))
+      .rejects.toThrow(/choose the warehouse|lot or serial/);
+    await expect(saveInvoice({ organizationId: org, userId: clerk, customerId, date: d("11-12"), action: "submit", warehouseId: wh1, lines: [line(items.SPEC, "1")] }))
+      .rejects.toThrow(/lot or serial/);
+
+    const cogsBefore = await glBalance("5010");
+    const draft = await saveInvoice({ organizationId: org, userId: clerk, customerId, date: d("11-12"), action: "submit", lines: [line(items.SOLD, "8"), { description: "Delivery", quantity: "1", unitPrice: "200", vatType: "VATABLE" }] });
+    expect(await bal("SOLD", wh2)).toEqual({ qty: 12, value: 660 }); // nothing moves until it is issued
+    const inv = await approveInvoice(org, accountant, draft.id);
+    const issue = await prisma.inventoryTransaction.findFirstOrThrow({ where: { organizationId: org, sourceModule: "SALES", sourceId: inv.id } });
+    expect(issue.warehouseId).toBe(wh2);
+    expect(issue.reference).toBe(`SI ${inv.number}`);
+    expect(Number(issue.totalValue)).toBe(6 * 50 + 2 * 60); // FIFO
+    expect(await bal("SOLD", wh2)).toEqual({ qty: 4, value: 240 });
+    expect(await glBalance("5010")).toBe(cogsBefore + 420);
+
+    await expect(prisma.$transaction((tx) => issueGoodsTx(tx, {
+      organizationId: org, userId: clerk, date: d("11-13"), warehouseId: wh2, memo: "x", sourceModule: "SALES", sourceId: "y", lines: [{ itemId: items.SOLD, qty: "5" }],
+    }))).rejects.toThrow();
+
+    await voidInvoice(org, owner, inv.id, "Cancelled sale");
+    expect(await bal("SOLD", wh2)).toEqual({ qty: 12, value: 660 });
+    expect(await glBalance("5010")).toBe(cogsBefore);
+    expect((await prisma.inventoryTransaction.findUniqueOrThrow({ where: { id: issue.id } })).status).toBe("VOID");
   });
 });
