@@ -1,6 +1,6 @@
 # Veritus icon set
 
-52 duotone line icons (24px grid, 1.75 stroke, round caps). The orange strokes use the accent colour #FF6B1A, and the rest use ink #1E1338 (or white on dark backgrounds).
+59 duotone line icons (24px grid, 1.75 stroke, round caps). The orange strokes use the accent colour #FF6B1A, and the rest use ink #1E1338 (or white on dark backgrounds).
 
 - Source of truth: `src/lib/icons.ts`. Edit it there, then run `npx tsx scripts/export-icons.ts`.
 - `light/*.svg` and `dark/*.svg` are ready-made files for the mobile app or for documents.
