@@ -24,6 +24,17 @@ export const PH_TAX_CODES = [
 ];
 
 /** Create a company with its owner, default PH/IFRS chart of accounts and PHP currency. */
+// Starter asset categories (edit under Fixed Assets → Asset Categories). Useful lives are common PH
+// practice for book purposes; set them to your own estimates under PAS 16.
+export const DEFAULT_ASSET_CATEGORIES = [
+  { code: "LAND", name: "Land", prefix: "LND", assetAccountCode: "1510", accumDepAccountCode: null, depExpenseAccountCode: null, usefulLifeMonths: 1, depreciationMethod: "NONE" },
+  { code: "BLDG", name: "Building", prefix: "BLD", assetAccountCode: "1520", accumDepAccountCode: "1525", depExpenseAccountCode: "6090", usefulLifeMonths: 240, depreciationMethod: "STRAIGHT_LINE" },
+  { code: "IT", name: "IT equipment", prefix: "IT", assetAccountCode: "1530", accumDepAccountCode: "1535", depExpenseAccountCode: "6090", usefulLifeMonths: 36, depreciationMethod: "STRAIGHT_LINE" },
+  { code: "OFFEQ", name: "Office equipment", prefix: "OE", assetAccountCode: "1530", accumDepAccountCode: "1535", depExpenseAccountCode: "6090", usefulLifeMonths: 60, depreciationMethod: "STRAIGHT_LINE" },
+  { code: "VEH", name: "Vehicles", prefix: "VEH", assetAccountCode: "1540", accumDepAccountCode: "1545", depExpenseAccountCode: "6090", usefulLifeMonths: 60, depreciationMethod: "STRAIGHT_LINE" },
+  { code: "FURN", name: "Furniture and fixtures", prefix: "FF", assetAccountCode: "1550", accumDepAccountCode: "1555", depExpenseAccountCode: "6090", usefulLifeMonths: 60, depreciationMethod: "STRAIGHT_LINE" },
+];
+
 export async function provisionOrganization(input: { name: string; tin?: string | null; ownerUserId: string }) {
   return prisma.$transaction(async (tx) => {
     const org = await tx.organization.create({ data: { name: input.name.trim(), tin: input.tin?.trim() || null } });
@@ -31,6 +42,7 @@ export async function provisionOrganization(input: { name: string; tin?: string 
     await seedChartOfAccounts(tx, org.id);
     await tx.taxCode.createMany({ data: PH_TAX_CODES.map((t) => ({ ...t, organizationId: org.id })) });
     await tx.currency.create({ data: { organizationId: org.id, code: "PHP", name: "Philippine Peso", symbol: "₱", rateToBase: 1 } });
+    await tx.assetCategory.createMany({ data: DEFAULT_ASSET_CATEGORIES.map((c) => ({ ...c, organizationId: org.id })) });
     return org;
   }, { timeout: 30_000 });
 }

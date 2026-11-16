@@ -122,7 +122,7 @@ One-time setup for the whole Veritus service (platform operator only):
 
 **Reports**: Mobility Dashboard (transport, delivery, by department / employee / project / provider / payment, top travelers and delivery users, unapproved, unreconciled, travel budget vs actual) and the Employee Expense Report.
 
-**Fixed assets (start)**: Fixed Asset Register master list, printable QR stickers, and asset counts scanned from the app (found / wrong location / unknown / missing, by location and category; closing marks unscanned assets missing). Depreciation and disposals come with the fixed asset module.
+**Fixed assets**: asset counts scanned from the app (found / wrong location / unknown / missing, by location and category; closing marks unscanned assets missing). See "What's in Fixed Assets" below.
 
 **What needs provider partnerships**: see Mobility Settings → Provider connections. Today Veritus works with statement / report imports and receipt capture. Pulling trips and orders automatically, booking from Veritus, or auto-paying needs a business account and API agreement with Grab for Business, Lalamove Business, Transportify, GCash for Business (Mynt) and Maya Business; direct card feeds need an agreement with the bank.
 
@@ -152,6 +152,24 @@ One-time setup for the whole Veritus service (platform operator only):
 **Reports**: debt schedule with GL agreement per account, debt aging (contractual maturity buckets with undiscounted interest per PFRS 7, and past-due installments by days), amortization table per loan (contract and EIR columns, paid / overdue status), covenant monitoring (current ratio, debt to equity, liabilities to equity, interest coverage, DSCR, net debt to EBITDA, minimum net worth, or a manual value; pass / watch / breach / waived).
 
 Loans are in the company's base currency for now. Code: `src/lib/debt/schedule.ts` (pure schedule and EIR math), `src/lib/debt/service.ts`.
+
+## What's in Fixed Assets (PAS 16)
+**Master data** (Fixed Assets → Asset Register, or Excel upload under Master Lists): asset no. (auto-numbered per category prefix, e.g. IT-000001), description, category, serial no., location, department, cost center, custodian, vendor, PO / invoice no., purchase and in-service dates, acquisition cost, useful life, salvage value, depreciation method (straight-line, double declining balance, sum-of-the-years' digits, none for land), GL asset / accumulated depreciation / depreciation expense accounts. **Asset categories** carry the defaults (accounts, life, method, salvage %, number prefix); new companies get Land, Building, IT, Office equipment, Vehicles, Furniture.
+
+**Transactions** (all post to the GL as source FIXED_ASSETS; the GL entry can only be undone from Fixed Assets):
+- Addition: Dr asset / Cr Accounts Payable, cash or another account, or "already in the books" for the opening balance (with opening accumulated depreciation and the month it runs through)
+- From supplier bills: posted AP bill lines classified as Fixed asset are listed on New asset; Register fills in the description, cost, date, vendor, PO and account and links the asset to the bill line (no second GL entry)
+- Improvement: capitalizes the cost, optionally extends the life; spread over the remaining life
+- Transfer: location, custodian, department, cost center (no GL entry; later depreciation is charged to the new department / cost center). Changing these in the Excel upload also records a transfer
+- Sale / disposal: depreciation to the disposal date, removal of cost and accumulated depreciation, proceeds (with output VAT) and gain (7030) or loss (7545)
+- Retirement / write-off: net book value to loss
+- The latest transaction on an asset can be undone (its journal is reversed)
+
+**Monthly depreciation**: preview, then one journal for the month (Dr expense by department and cost center / Cr accumulated depreciation), catching up any months an asset missed. Runs go in month order; the latest run can be undone. Convention: in service on or before the 15th depreciates from that month, otherwise from the next; disposals the same way.
+
+**Reports**: asset register as of any date (with last-count status: found / moved / missing / not tagged), depreciation schedule by month (posted and projected), property and equipment rollforward (PAS 16.73: beginning, additions, improvements, disposals, depreciation, ending, by category, GL account or location), disposal report with gain/loss. Code: `src/lib/assets/` (`depreciation.ts` pure math, `service.ts` transactions, `reports.ts`, `master.ts` Excel/manual saves, `audit.ts` QR counts).
+
+**QR tagging and counts**: print stickers (Fixed Assets → QR Stickers), scan them in the Veritus Mobility app (Asset Audit tile). Scans update the register; closing a count marks unscanned assets missing; an asset found somewhere else shows as "Moved" and its new location can be accepted (recorded as a transfer).
 
 ## Leases (PFRS 16 / IFRS 16, lessee)
 **Lease register** (Leases → New Lease): lease number, lessor (vendor list or free text), lease type, asset, start and end dates, payment per period with frequency (monthly / quarterly / semi-annual / annual), in advance or in arrears, rent escalation (e.g. +5% every 12 months), incremental borrowing rate and the discount rate used, currency and rate, 12% VAT and EWT on payments, initial direct costs, advance rent, incentives, restoration cost, and the GL accounts (ROU asset, accumulated depreciation, current and non-current lease liability, interest, depreciation, payable, gain/loss). Saving calculates the liability, ROU asset and full monthly schedule before anything posts.

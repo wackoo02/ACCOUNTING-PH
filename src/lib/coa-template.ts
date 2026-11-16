@@ -139,12 +139,13 @@ export const PH_IFRS_TEMPLATE: TemplateAccount[] = [
   { code: "7010", name: "Interest Income", type: I, ifrsGroup: "Finance income", parent: "7000" },
   { code: "7020", name: "Foreign Exchange Gain - Realized", type: I, ifrsGroup: "Other income", parent: "7000", systemRole: "FX_GAIN" },
   { code: "7025", name: "Unrealized Foreign Exchange Gain", type: I, ifrsGroup: "Other income", parent: "7000", systemRole: "UNREALIZED_FX_GAIN" },
-  { code: "7030", name: "Gain on Sale of Assets", type: I, ifrsGroup: "Other income", parent: "7000" },
+  { code: "7030", name: "Gain on Sale of Assets", type: I, ifrsGroup: "Other income", parent: "7000", systemRole: "FA_DISPOSAL_GAIN" },
   { code: "7040", name: "Miscellaneous Income", type: I, ifrsGroup: "Other income", parent: "7000" },
   { code: "7510", name: "Interest Expense", type: X, ifrsGroup: "Finance costs", parent: "7000" },
   { code: "7520", name: "Bank Charges", type: X, ifrsGroup: "Finance costs", parent: "7000", systemRole: "BANK_CHARGES" },
   { code: "7530", name: "Foreign Exchange Loss - Realized", type: X, ifrsGroup: "Other expenses", parent: "7000", systemRole: "FX_LOSS" },
   { code: "7535", name: "Unrealized Foreign Exchange Loss", type: X, ifrsGroup: "Other expenses", parent: "7000", systemRole: "UNREALIZED_FX_LOSS" },
+  { code: "7545", name: "Loss on Disposal of Property and Equipment", type: X, ifrsGroup: "Other expenses", parent: "7000", systemRole: "FA_DISPOSAL_LOSS" },
   { code: "7540", name: "Final Tax on Interest Income", type: X, ifrsGroup: "Other expenses", parent: "7000" },
 
   // ---- INCOME TAX ----

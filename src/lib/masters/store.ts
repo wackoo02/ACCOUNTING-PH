@@ -5,9 +5,9 @@ import { MASTERS, type MasterKind } from "./config";
 
 type Tx = Prisma.TransactionClient;
 
-export class MasterError extends Error {
-  constructor(public errors: string[]) { super(errors.join("; ")); }
-}
+import { MasterError } from "./store-error";
+import { saveAssetCategory, saveAssetMaster } from "../assets/master";
+export { MasterError };
 
 // Optional in the sheet but required in the database (it has a default): a blank cell keeps the default.
 const NOT_NULL = new Set(["currencyCode"]);
@@ -160,7 +160,9 @@ async function saveLocation(tx: Tx, organizationId: string, d: Record<string, un
   });
 }
 
-async function saveOne(tx: Tx, kind: MasterKind, organizationId: string, d: Record<string, unknown>, codeToId: Map<string, string>) {
+async function saveOne(tx: Tx, kind: MasterKind, organizationId: string, userId: string, d: Record<string, unknown>, codeToId: Map<string, string>) {
+  if (kind === "asset-categories") return saveAssetCategory(tx, organizationId, d);
+  if (kind === "assets") return saveAssetMaster(tx, organizationId, userId, d);
   if (kind === "accounts") return saveAccount(tx, organizationId, d, codeToId);
   if (kind === "dimensions") return saveDimension(tx, organizationId, d, codeToId);
   if (kind === "banks") return saveBankAccount(tx, organizationId, d);
@@ -183,7 +185,7 @@ export async function saveMaster(kind: MasterKind, organizationId: string, userI
       throw new MasterError(["Codes cannot be changed once created. Create a new record and deactivate this one."]);
     }
     const before = await findExisting(tx, kind, organizationId, data);
-    const r = await saveOne(tx, kind, organizationId, data, new Map());
+    const r = await saveOne(tx, kind, organizationId, userId, data, new Map());
     await tx.auditLog.create({ data: {
       organizationId, userId, action: before ? `${kind}.update` : `${kind}.create`, entity: kind, entityId: keyOf(kind, data),
       before: before ? JSON.parse(JSON.stringify(before)) : undefined, after: JSON.parse(JSON.stringify(r)),
@@ -211,7 +213,7 @@ export async function importMasters(kind: MasterKind, organizationId: string, us
       : await (tx as unknown as Record<string, { findMany: (a: unknown) => Promise<Record<string, unknown>[]> }>)[model].findMany({ where: { organizationId } });
     const byKey = new Map(existing.map((x) => [keyOf(kind, x), x]));
     for (const r of ordered) {
-      const after = await saveOne(tx, kind, organizationId, r, codeToId);
+      const after = await saveOne(tx, kind, organizationId, userId, r, codeToId);
       const before = byKey.get(keyOf(kind, r));
       if (before) updated++; else created++;
       await tx.auditLog.create({ data: {

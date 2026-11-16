@@ -126,9 +126,15 @@ export const NAV: NavSection[] = [
   {
     title: "Fixed Assets",
     items: [
-      { href: "/masters/assets", label: "Asset Register", icon: "fixed-assets" },
+      { href: "/assets", label: "Asset Register", icon: "fixed-assets" },
+      { href: "/assets/new", label: "New Asset", icon: "journal-new", perm: "journal.post" },
+      { href: "/assets/depreciation", label: "Monthly Depreciation", icon: "recurring" },
       { href: "/assets/stickers", label: "QR Stickers", icon: "asset-audit" },
       { href: "/assets/audits", label: "Asset Counts", icon: "audit" },
+      { href: "/assets/reports/schedule", label: "Depreciation Schedule", icon: "activity" },
+      { href: "/assets/reports/rollforward", label: "Asset Rollforward", icon: "balance-sheet" },
+      { href: "/assets/reports/disposals", label: "Disposal Report", icon: "cash-out" },
+      { href: "/masters/asset-categories", label: "Asset Categories", icon: "dimensions" },
     ],
   },
   {
@@ -173,7 +179,7 @@ export const NAV: NavSection[] = [
   },
   {
     title: "Master Lists",
-    items: MASTER_KINDS.filter((k) => k !== "assets").map((k) => ({ href: `/masters/${k}`, label: MASTERS[k].title, icon: MASTER_ICON[k] ?? "dimensions" })),
+    items: MASTER_KINDS.filter((k) => k !== "assets" && k !== "asset-categories").map((k) => ({ href: `/masters/${k}`, label: MASTERS[k].title, icon: MASTER_ICON[k] ?? "dimensions" })),
   },
   {
     title: "Settings",
@@ -189,7 +195,6 @@ export const NAV: NavSection[] = [
 ];
 
 export const COMING_NEXT: { label: string; icon: IconName }[] = [
-  { label: "Depreciation and disposals", icon: "fixed-assets" },
   { label: "Prepaid expenses", icon: "prepaid" },
 ];
 
