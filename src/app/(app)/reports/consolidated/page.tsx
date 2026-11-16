@@ -1,3 +1,4 @@
+import { CustomizeLink } from "@/components/reporting/CustomizeLink";
 import { requireCtx } from "@/lib/auth";
 import { consolidatedTrialBalance } from "@/lib/ledger/reports";
 import { groupOf } from "@/lib/group";
@@ -14,7 +15,7 @@ export default async function Consolidated({ searchParams }: { searchParams: SP 
   const r = await consolidatedTrialBalance(group.map((g) => g.id), new Date(asOf));
   return (
     <>
-      <div className="top"><h1>Consolidated Trial Balance</h1><span className="muted">{ctx.org.name} group · as of {asOf}</span></div>
+      <div className="top"><h1>Consolidated Trial Balance</h1><CustomizeLink template="balance_sheet_entity" to={asOf} /><span className="muted">{ctx.org.name} group · as of {asOf}</span></div>
       <p className="muted">Includes {group.map((g) => g.name).join(", ")}. Intercompany balances tagged with a counterparty in the group are eliminated. Switch to the parent entity to consolidate the whole group. Debit balances positive, credits in parentheses.</p>
       <form className="card row noprint"><div><label>As of</label><input type="date" name="asOf" defaultValue={asOf} /></div><div style={{ flex: 0 }}><button>Show</button></div></form>
       <div className="table-wrap"><table>
