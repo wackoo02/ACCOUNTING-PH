@@ -20,7 +20,8 @@ import type { Dims, LineInput } from "../ledger/validate";
 import { LedgerError, assertCanApprove, assertPeriodOpen, asDay, audit, nextNumber, recordJournalTx, voidOrReverseTx } from "../ledger/service";
 import { can } from "../permissions";
 import { addStock, averageCost, lockStock, removeStock, reverseMoves } from "./engine";
-import { cents, formatQty, fromQty, fromUnitCost, toQty, toUnitCost, valueOf } from "./qty";
+import { cents, formatQty, fromQty, fromUnitCost, toQty, toUnitCost, unitCostOf, valueOf } from "./qty";
+import { toCentavos } from "../money";
 
 type Tx = Prisma.TransactionClient;
 
@@ -37,6 +38,8 @@ export const needsApproval = (type: string) => type === "ADJUSTMENT";
 export type InvLineInput = {
   itemId: string; qty: string; unitCost?: string | null; locationId?: string | null; toLocationId?: string | null;
   lotNo?: string | null; accountId?: string | null; dims?: Dims; description?: string | null;
+  /** Receipts from another module only: the exact line value in pesos, so the GL matches the source to the centavo. */
+  value?: string | null;
 };
 export type InvInput = {
   organizationId: string; userId: string; type: InvType; date: Date; warehouseId: string; toWarehouseId?: string | null;
@@ -146,6 +149,12 @@ async function prepare(tx: Tx, input: InvInput) {
       if (unitCost !== null && unitCost < 0n) errors.push(`Line ${n}: unit cost cannot be negative`);
     }
     const inbound = isInbound(input.type, qty);
+    let presetValue: bigint | null = null;
+    if (input.type === "RECEIPT" && clean(l.value)) {
+      try { presetValue = toCentavos(String(l.value)); } catch { errors.push(`Line ${n}: invalid value`); }
+      if (presetValue !== null && presetValue < 0n) errors.push(`Line ${n}: value cannot be negative`);
+      if (presetValue !== null && presetValue >= 0n && qty > 0n) unitCost = unitCostOf(presetValue, qty);
+    }
     // Receipts default to the standard (or last purchase) cost; returns and gains to the current cost at posting.
     if (inbound && unitCost === null && input.type === "RECEIPT") unitCost = toUnitCost(item.standardCost.toString()) || toUnitCost(item.purchaseCost.toString());
     const defLoc = (whId: string) => (item.defaultLocationCode ? defaultLocs.find((x) => x.warehouseId === whId && x.code === item.defaultLocationCode)?.id ?? null : null);
@@ -163,7 +172,7 @@ async function prepare(tx: Tx, input: InvInput) {
     return {
       lineNo: n, itemId: item.id, qty: new Prisma.Decimal(fromQty(qty)), unitCost: unitCost === null ? null : new Prisma.Decimal(fromUnitCost(unitCost)),
       locationId, toLocationId, lotNo, accountId: l.accountId || null, dims: (cleanDims(l.dims) ?? undefined) as Prisma.InputJsonValue | undefined,
-      description: clean(l.description),
+      description: clean(l.description), ...(presetValue !== null ? { value: dec(presetValue) } : {}),
     };
   });
   const acctIds = [...new Set(input.lines.map((l) => l.accountId).filter(Boolean) as string[])];
@@ -237,7 +246,7 @@ async function postDoc(tx: Tx, t: Doc, userId: string) {
     } else if (isInbound(t.type, qty)) {
       const q = qty < 0n ? -qty : qty;
       const uc = l.unitCost !== null ? toUnitCost(l.unitCost) : await currentCost(tx, item, t.warehouseId);
-      value = valueOf(q, uc);
+      value = t.type === "RECEIPT" && cents(l.value) > 0n ? cents(l.value) : valueOf(q, uc);
       await addStock(tx, ref, { item, warehouseId: t.warehouseId, locationId: l.locationId, lotNo: l.lotNo, qty: q, value });
       if (l.unitCost === null) await tx.inventoryTransactionLine.update({ where: { id: l.id }, data: { unitCost: new Prisma.Decimal(fromUnitCost(uc)) } });
     } else {

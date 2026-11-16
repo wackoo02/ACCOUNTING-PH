@@ -13,50 +13,60 @@ datasource db {
 // ---------- Tenancy, users, access ----------
 
 model Organization {
-  id             String   @id @default(cuid())
-  code           String?  @unique // short company code, e.g. HOLDCO, SUB1 (unique across the system for now)
-  name           String
-  tin            String?  // BIR Taxpayer Identification Number, e.g. 000-000-000-00000
-  rdoCode        String?  // BIR Revenue District Office
-  registeredAddress String?
-  tradeName      String?  // business style / trade name printed on invoices
-  vatRegistered  Boolean  @default(true)
-  baseCurrency   String   @default("PHP")
-  fiscalYearStartMonth Int @default(1) // 1 = January (calendar year)
+  id                   String   @id @default(cuid())
+  code                 String?  @unique // short company code, e.g. HOLDCO, SUB1 (unique across the system for now)
+  name                 String
+  tin                  String? // BIR Taxpayer Identification Number, e.g. 000-000-000-00000
+  rdoCode              String? // BIR Revenue District Office
+  registeredAddress    String?
+  tradeName            String? // business style / trade name printed on invoices
+  vatRegistered        Boolean  @default(true)
+  baseCurrency         String   @default("PHP")
+  fiscalYearStartMonth Int      @default(1) // 1 = January (calendar year)
   // Controls
-  requireApproval      Boolean @default(true)  // manual entries need approval before posting
-  segregationOfDuties  Boolean @default(true)  // the preparer cannot approve/post their own entry
+  requireApproval      Boolean  @default(true) // manual entries need approval before posting
+  segregationOfDuties  Boolean  @default(true) // the preparer cannot approve/post their own entry
   // Petty cash: an item at or above this unit cost is a fixed asset and needs an approved PO.
-  fixedAssetThreshold  Decimal @db.Decimal(18, 2) @default(5000)
+  fixedAssetThreshold  Decimal  @default(5000) @db.Decimal(18, 2)
   // Entity hierarchy: a holding company is the root; subsidiaries/branches point to their parent.
   // A "group" is the root entity plus all its descendants (used for consolidation).
-  parentId       String?
-  entityType     String   @default("COMPANY") // COMPANY | SUBSIDIARY | BRANCH | DIVISION
-  ownershipPct   Decimal  @db.Decimal(5, 2) @default(100) // parent's % ownership
-  createdAt      DateTime @default(now())
+  parentId             String?
+  entityType           String   @default("COMPANY") // COMPANY | SUBSIDIARY | BRANCH | DIVISION
+  ownershipPct         Decimal  @default(100) @db.Decimal(5, 2) // parent's % ownership
+  createdAt            DateTime @default(now())
 
-  parent         Organization?  @relation("EntityTree", fields: [parentId], references: [id])
-  children       Organization[] @relation("EntityTree")
-  dimensions     DimensionValue[]
-  icLinks        IntercompanyLink[] @relation("IcFrom")
-  icLinksTo      IntercompanyLink[] @relation("IcTo")
+  parent     Organization?      @relation("EntityTree", fields: [parentId], references: [id])
+  children   Organization[]     @relation("EntityTree")
+  dimensions DimensionValue[]
+  icLinks    IntercompanyLink[] @relation("IcFrom")
+  icLinksTo  IntercompanyLink[] @relation("IcTo")
 
-  memberships    Membership[]
-  accounts       Account[]
-  journalEntries JournalEntry[]
-  periods        FiscalPeriod[]
-  sequences      DocumentSequence[]
-  auditLogs      AuditLog[]
-  currencies     Currency[]
-  products       Product[]
-  employees      Employee[]
-  vendors        Vendor[]
-  customers      Customer[]
+  memberships       Membership[]
+  accounts          Account[]
+  journalEntries    JournalEntry[]
+  periods           FiscalPeriod[]
+  sequences         DocumentSequence[]
+  auditLogs         AuditLog[]
+  currencies        Currency[]
+  products          Product[]
+  employees         Employee[]
+  vendors           Vendor[]
+  customers         Customer[]
   pettyCashFunds    PettyCashFund[]
   pettyCashVouchers PettyCashVoucher[]
   pettyCashBatches  PettyCashBatch[]
   purchaseOrders    PurchaseOrder[]
   receiptImages     ReceiptImage[]
+  // AP invoice inbox, managed by the company's own admin (Payables → AP Invoice Inbox → Email set-up).
+  // apInboxAlias: the company's own Veritus address <alias>@<AP_INBOX_DOMAIN>, routed by the shared webhook.
+  // apInboxAddress: the company's own AP address (e.g. ap@client.ph) that forwards to the Veritus address.
+  // apInboxSenders: optional allow-list of sender emails or @domains (comma separated); blank = anyone.
+  // apInboxToken: optional private webhook for a company that uses its own inbound-email service.
+  apInboxAlias      String?            @unique
+  apInboxEnabled    Boolean            @default(true)
+  apInboxSenders    String?
+  apInboxToken      String?            @unique
+  apInboxAddress    String?
 }
 
 model User {
@@ -66,16 +76,16 @@ model User {
   passwordHash String
   createdAt    DateTime @default(now())
 
-  memberships  Membership[]
-  sessions     Session[]
+  memberships Membership[]
+  sessions    Session[]
 }
 
 enum Role {
-  OWNER       // everything, incl. managing users
-  ADMIN       // everything except removing the owner
-  ACCOUNTANT  // chart of accounts, post/void entries, close periods
-  BOOKKEEPER  // create draft entries, view reports
-  VIEWER      // read-only reports
+  OWNER // everything, incl. managing users
+  ADMIN // everything except removing the owner
+  ACCOUNTANT // chart of accounts, post/void entries, close periods
+  BOOKKEEPER // create draft entries, view reports
+  VIEWER // read-only reports
 }
 
 model Membership {
@@ -119,34 +129,34 @@ enum NormalBalance {
 }
 
 model Account {
-  id             String        @id @default(cuid())
-  organizationId String
-  code           String
-  name           String
-  type           AccountType
+  id                 String        @id @default(cuid())
+  organizationId     String
+  code               String
+  name               String
+  type               AccountType
   // IFRS presentation line (e.g. "Cash and cash equivalents", "Trade and other receivables").
   // Drives Statement of Financial Position / Profit or Loss grouping later.
-  ifrsGroup      String
-  isCurrent      Boolean?      // current vs non-current (assets & liabilities)
-  normalBalance  NormalBalance
-  parentId       String?
-  isPostable     Boolean       @default(true)  // false = header/summary account
+  ifrsGroup          String
+  isCurrent          Boolean? // current vs non-current (assets & liabilities)
+  normalBalance      NormalBalance
+  parentId           String?
+  isPostable         Boolean       @default(true) // false = header/summary account
   // false = only sub-ledgers (AR, AP, payroll, bank) may post here, not manual journals
-  allowManualPosting Boolean   @default(true)
-  isActive       Boolean       @default(true)
+  allowManualPosting Boolean       @default(true)
+  isActive           Boolean       @default(true)
   // System role lets sub-ledgers find their control account without hard-coding codes,
   // e.g. AR_CONTROL, AP_CONTROL, OUTPUT_VAT, INPUT_VAT, EWT_PAYABLE, RETAINED_EARNINGS.
-  systemRole     String?
+  systemRole         String?
   // Set for accounts held in a foreign currency (e.g. a USD bank account); used for IAS 21 revaluation.
-  currencyCode   String?
-  description    String?
-  createdAt      DateTime      @default(now())
+  currencyCode       String?
+  description        String?
+  createdAt          DateTime      @default(now())
 
-  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  parent         Account?      @relation("AccountTree", fields: [parentId], references: [id])
-  children       Account[]     @relation("AccountTree")
-  lines          JournalLine[]
-  bankAccounts   BankAccount[]
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  parent       Account?      @relation("AccountTree", fields: [parentId], references: [id])
+  children     Account[]     @relation("AccountTree")
+  lines        JournalLine[]
+  bankAccounts BankAccount[]
 
   @@unique([organizationId, code])
   @@unique([organizationId, systemRole])
@@ -156,19 +166,19 @@ model Account {
 // ---------- Periods ----------
 
 enum PeriodStatus {
-  OPEN    // posting allowed
-  CLOSED  // month-end close; accountants/admins can reopen
-  LOCKED  // locked after year-end close; only the owner can unlock
+  OPEN // posting allowed
+  CLOSED // month-end close; accountants/admins can reopen
+  LOCKED // locked after year-end close; only the owner can unlock
 }
 
 model FiscalYear {
-  id             String       @id @default(cuid())
+  id             String    @id @default(cuid())
   organizationId String
   // Named by the calendar year in which the fiscal year ENDS (e.g. FY2026 = Jul 2025 - Jun 2026).
   year           Int
-  startDate      DateTime     @db.Date
-  endDate        DateTime     @db.Date
-  status         String       @default("OPEN") // OPEN | CLOSED
+  startDate      DateTime  @db.Date
+  endDate        DateTime  @db.Date
+  status         String    @default("OPEN") // OPEN | CLOSED
   closingEntryId String?
   closedAt       DateTime?
   closedById     String?
@@ -180,7 +190,7 @@ model FiscalPeriod {
   id             String       @id @default(cuid())
   organizationId String
   year           Int
-  month          Int          // 1-12
+  month          Int // 1-12
   status         PeriodStatus @default(OPEN)
   closedAt       DateTime?
   closedById     String?
@@ -202,9 +212,9 @@ enum JournalStatus {
 enum JournalSource {
   MANUAL
   OPENING_BALANCE
-  SALES        // AR invoices / collections
-  PURCHASES    // AP bills / payments
-  BANK         // cash receipts/disbursements, petty cash, fund transfers, bank reconciliation adjustments
+  SALES // AR invoices / collections
+  PURCHASES // AP bills / payments
+  BANK // cash receipts/disbursements, petty cash, fund transfers, bank reconciliation adjustments
   INVENTORY
   FIXED_ASSETS
   PREPAID
@@ -212,8 +222,8 @@ enum JournalSource {
   DEBT
   PAYROLL
   EXPENSE_CLAIM // employee/partner reimbursements, travel expenses
-  PETTY_CASH   // petty cash replenishment batches (mobile app)
-  TAX          // BIR filings / remittances
+  PETTY_CASH // petty cash replenishment batches (mobile app)
+  TAX // BIR filings / remittances
   CLOSING
   REVERSAL
   INTERCOMPANY
@@ -229,41 +239,41 @@ enum LedgerBook {
 }
 
 model JournalEntry {
-  id             String        @id @default(cuid())
-  organizationId String
-  number         String        // e.g. JV-2026-000001
+  id                  String        @id @default(cuid())
+  organizationId      String
+  number              String // e.g. JV-2026-000001
   // Posting date: the GL date that decides the accounting period.
-  date           DateTime      @db.Date
+  date                DateTime      @db.Date
   // Transaction (document) date, e.g. the invoice date. Defaults to the posting date.
-  transactionDate DateTime     @db.Date
-  memo           String
-  reference      String?       // external doc no. (OR, SI, CV, etc.)
-  status         JournalStatus @default(DRAFT)
-  book           LedgerBook    @default(STATUTORY)
-  source         JournalSource @default(MANUAL)
-  autoReverseOn  DateTime?     @db.Date // e.g. unrealized FX revaluation reverses on the 1st of next month
-  sourceId       String?       // id of the originating invoice/bill/payroll run
-  reversalOfId   String?       @unique
+  transactionDate     DateTime      @db.Date
+  memo                String
+  reference           String? // external doc no. (OR, SI, CV, etc.)
+  status              JournalStatus @default(DRAFT)
+  book                LedgerBook    @default(STATUTORY)
+  source              JournalSource @default(MANUAL)
+  autoReverseOn       DateTime?     @db.Date // e.g. unrealized FX revaluation reverses on the 1st of next month
+  sourceId            String? // id of the originating invoice/bill/payroll run
+  reversalOfId        String?       @unique
   // Both sides of an intercompany transaction share this id (one entry per entity).
   intercompanyGroupId String?
-  totalDebit     Decimal       @db.Decimal(18, 2) @default(0)
-  totalCredit    Decimal       @db.Decimal(18, 2) @default(0)
-  createdById    String
-  updatedById    String?
-  submittedById  String?
-  submittedAt    DateTime?
-  postedById     String?      // approver: the person who posted it
-  postedAt       DateTime?
-  voidedById     String?
-  voidedAt       DateTime?
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
+  totalDebit          Decimal       @default(0) @db.Decimal(18, 2)
+  totalCredit         Decimal       @default(0) @db.Decimal(18, 2)
+  createdById         String
+  updatedById         String?
+  submittedById       String?
+  submittedAt         DateTime?
+  postedById          String? // approver: the person who posted it
+  postedAt            DateTime?
+  voidedById          String?
+  voidedAt            DateTime?
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
 
-  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  lines          JournalLine[]
-  attachments    JournalAttachment[]
-  reversalOf     JournalEntry? @relation("Reversal", fields: [reversalOfId], references: [id])
-  reversedBy     JournalEntry? @relation("Reversal")
+  organization Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  lines        JournalLine[]
+  attachments  JournalAttachment[]
+  reversalOf   JournalEntry?       @relation("Reversal", fields: [reversalOfId], references: [id])
+  reversedBy   JournalEntry?       @relation("Reversal")
 
   @@unique([organizationId, number])
   @@index([organizationId, date])
@@ -272,51 +282,51 @@ model JournalEntry {
 }
 
 model JournalLine {
-  id             String       @id @default(cuid())
-  journalEntryId String
-  organizationId String
-  lineNo         Int
-  accountId      String
-  description    String?
+  id                String    @id @default(cuid())
+  journalEntryId    String
+  organizationId    String
+  lineNo            Int
+  accountId         String
+  description       String?
   // debit/credit are always in the entity's base (local reporting) currency, e.g. PHP.
-  debit          Decimal      @db.Decimal(18, 2) @default(0)
-  credit         Decimal      @db.Decimal(18, 2) @default(0)
+  debit             Decimal   @default(0) @db.Decimal(18, 2)
+  credit            Decimal   @default(0) @db.Decimal(18, 2)
   // Original transaction (forex) amount, currency and the rate used (1 unit = fxRate base).
-  currencyCode   String       @default("PHP")
-  fxRate         Decimal      @db.Decimal(18, 6) @default(1)
-  fxDebit        Decimal      @db.Decimal(18, 2) @default(0)
-  fxCredit       Decimal      @db.Decimal(18, 2) @default(0)
+  currencyCode      String    @default("PHP")
+  fxRate            Decimal   @default(1) @db.Decimal(18, 6)
+  fxDebit           Decimal   @default(0) @db.Decimal(18, 2)
+  fxCredit          Decimal   @default(0) @db.Decimal(18, 2)
   // Optional sub-ledger tags so later modules can report by party:
   // customer/vendor (AR/AP aging), employee/partner (expense summary).
-  partyType      String?      // CUSTOMER | VENDOR | EMPLOYEE | PARTNER
-  partyId        String?
+  partyType         String? // CUSTOMER | VENDOR | EMPLOYEE | PARTNER
+  partyId           String?
   // Dimensions for management reporting (all optional).
-  departmentId   String?
-  branchId       String?
-  businessUnitId String?
-  projectId      String?
-  costCenterId   String?
-  profitCenterId String?
-  locationId     String?
-  productLineId  String?
-  divisionId     String?
+  departmentId      String?
+  branchId          String?
+  businessUnitId    String?
+  projectId         String?
+  costCenterId      String?
+  profitCenterId    String?
+  locationId        String?
+  productLineId     String?
+  divisionId        String?
   // Counterparty entity for intercompany lines (drives consolidation eliminations).
   intercompanyOrgId String?
   // Bank reconciliation / transaction clearing.
-  clearedAt      DateTime?
-  clearingRef    String?
+  clearedAt         DateTime?
+  clearingRef       String?
 
-  journalEntry   JournalEntry @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
-  account        Account      @relation(fields: [accountId], references: [id])
-  department     DimensionValue? @relation("dDepartment", fields: [departmentId], references: [id])
-  branch         DimensionValue? @relation("dBranch", fields: [branchId], references: [id])
-  businessUnit   DimensionValue? @relation("dBusinessUnit", fields: [businessUnitId], references: [id])
-  project        DimensionValue? @relation("dProject", fields: [projectId], references: [id])
-  costCenter     DimensionValue? @relation("dCostCenter", fields: [costCenterId], references: [id])
-  profitCenter   DimensionValue? @relation("dProfitCenter", fields: [profitCenterId], references: [id])
-  location       DimensionValue? @relation("dLocation", fields: [locationId], references: [id])
-  productLine    DimensionValue? @relation("dProductLine", fields: [productLineId], references: [id])
-  division       DimensionValue? @relation("dDivision", fields: [divisionId], references: [id])
+  journalEntry JournalEntry    @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
+  account      Account         @relation(fields: [accountId], references: [id])
+  department   DimensionValue? @relation("dDepartment", fields: [departmentId], references: [id])
+  branch       DimensionValue? @relation("dBranch", fields: [branchId], references: [id])
+  businessUnit DimensionValue? @relation("dBusinessUnit", fields: [businessUnitId], references: [id])
+  project      DimensionValue? @relation("dProject", fields: [projectId], references: [id])
+  costCenter   DimensionValue? @relation("dCostCenter", fields: [costCenterId], references: [id])
+  profitCenter DimensionValue? @relation("dProfitCenter", fields: [profitCenterId], references: [id])
+  location     DimensionValue? @relation("dLocation", fields: [locationId], references: [id])
+  productLine  DimensionValue? @relation("dProductLine", fields: [productLineId], references: [id])
+  division     DimensionValue? @relation("dDivision", fields: [divisionId], references: [id])
 
   @@index([organizationId, accountId])
   @@index([organizationId, departmentId])
@@ -343,7 +353,7 @@ model JournalAttachment {
 model DocumentSequence {
   id             String       @id @default(cuid())
   organizationId String
-  key            String       // e.g. "JV-2026"
+  key            String // e.g. "JV-2026"
   next           Int          @default(1)
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
@@ -354,12 +364,12 @@ model AuditLog {
   id             String       @id @default(cuid())
   organizationId String
   userId         String?
-  action         String       // e.g. journal.post
+  action         String // e.g. journal.post
   entity         String
   entityId       String
-  details        Json?        // free-form context (e.g. reason, comment)
-  before         Json?        // record before the change
-  after          Json?        // record after the change
+  details        Json? // free-form context (e.g. reason, comment)
+  before         Json? // record before the change
+  after          Json? // record after the change
   createdAt      DateTime     @default(now())
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
@@ -372,10 +382,10 @@ model AuditLog {
 model Currency {
   id             String       @id @default(cuid())
   organizationId String
-  code           String       // ISO 4217, e.g. PHP, USD
+  code           String // ISO 4217, e.g. PHP, USD
   name           String
   symbol         String?
-  rateToBase     Decimal      @db.Decimal(18, 6) @default(1) // 1 unit = X PHP
+  rateToBase     Decimal      @default(1) @db.Decimal(18, 6) // 1 unit = X PHP
   isActive       Boolean      @default(true)
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
@@ -383,112 +393,112 @@ model Currency {
 }
 
 model Product {
-  id             String       @id @default(cuid())
-  organizationId String
-  code           String
-  name           String
-  kind           String       @default("GOODS") // GOODS | SERVICE
-  unit           String?      // pc, box, hr ...
-  sellingPrice   Decimal      @db.Decimal(18, 2) @default(0)
-  purchaseCost   Decimal      @db.Decimal(18, 2) @default(0)
-  currencyCode   String       @default("PHP")
-  vatType        String       @default("VATABLE") // VATABLE | ZERO_RATED | EXEMPT
-  salesAccountCode    String?
-  expenseAccountCode  String?
+  id                   String                     @id @default(cuid())
+  organizationId       String
+  code                 String
+  name                 String
+  kind                 String                     @default("GOODS") // GOODS | SERVICE
+  unit                 String? // pc, box, hr ...
+  sellingPrice         Decimal                    @default(0) @db.Decimal(18, 2)
+  purchaseCost         Decimal                    @default(0) @db.Decimal(18, 2)
+  currencyCode         String                     @default("PHP")
+  vatType              String                     @default("VATABLE") // VATABLE | ZERO_RATED | EXEMPT
+  salesAccountCode     String?
+  expenseAccountCode   String?
   // ---- Inventory (PAS 2). Only items with isStocked = true are tracked in the stock ledger. ----
-  isStocked      Boolean      @default(false)
-  category       String?
-  barcode        String?      // EAN/UPC or own code; scanners type it into any item field
-  costingMethod  String       @default("WEIGHTED_AVERAGE") // FIFO | WEIGHTED_AVERAGE | SPECIFIC (specific identification, needs lot/serial no.)
-  standardCost   Decimal      @db.Decimal(18, 6) @default(0) // reference cost: default for receipts/count gains when nothing else is known
-  reorderPoint   Decimal      @db.Decimal(18, 4) @default(0)
-  reorderQty     Decimal      @db.Decimal(18, 4) @default(0)
+  isStocked            Boolean                    @default(false)
+  category             String?
+  barcode              String? // EAN/UPC or own code; scanners type it into any item field
+  costingMethod        String                     @default("WEIGHTED_AVERAGE") // FIFO | WEIGHTED_AVERAGE | SPECIFIC (specific identification, needs lot/serial no.)
+  standardCost         Decimal                    @default(0) @db.Decimal(18, 6) // reference cost: default for receipts/count gains when nothing else is known
+  reorderPoint         Decimal                    @default(0) @db.Decimal(18, 4)
+  reorderQty           Decimal                    @default(0) @db.Decimal(18, 4)
   defaultWarehouseCode String?
   defaultLocationCode  String?
   defaultVendorCode    String?
   inventoryAccountCode String? // blank = account with role INVENTORY
   cogsAccountCode      String? // blank = expenseAccountCode, then role COGS
-  isActive       Boolean      @default(true)
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  inventoryLines InventoryTransactionLine[]
-  inventoryLayers InventoryLayer[]
-  inventoryMoves InventoryMove[]
-  countLines     InventoryCountLine[]
+  isActive             Boolean                    @default(true)
+  organization         Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  inventoryLines       InventoryTransactionLine[]
+  inventoryLayers      InventoryLayer[]
+  inventoryMoves       InventoryMove[]
+  countLines           InventoryCountLine[]
 
   @@unique([organizationId, code])
   @@index([organizationId, barcode])
 }
 
 model Employee {
-  id             String       @id @default(cuid())
-  organizationId String
-  code           String
-  firstName      String
-  lastName       String
-  middleName     String?
-  position       String?
-  department     String?
-  email          String?
-  tin            String?
-  sssNo          String?
-  philhealthNo   String?
-  pagibigNo      String?
-  dateHired      DateTime?    @db.Date
-  employmentStatus String?    // REGULAR | PROBATIONARY | CONTRACTUAL | PROJECT
-  payBasis       String?      // MONTHLY | DAILY
-  basicRate      Decimal      @db.Decimal(18, 2) @default(0)
-  isPartner      Boolean      @default(false) // owners/partners for expense summary
+  id               String       @id @default(cuid())
+  organizationId   String
+  code             String
+  firstName        String
+  lastName         String
+  middleName       String?
+  position         String?
+  department       String?
+  email            String?
+  tin              String?
+  sssNo            String?
+  philhealthNo     String?
+  pagibigNo        String?
+  dateHired        DateTime?    @db.Date
+  employmentStatus String? // REGULAR | PROBATIONARY | CONTRACTUAL | PROJECT
+  payBasis         String? // MONTHLY | DAILY
+  basicRate        Decimal      @default(0) @db.Decimal(18, 2)
+  isPartner        Boolean      @default(false) // owners/partners for expense summary
   // Expense & mobility: defaults for the employee's claims, by dimension code.
-  costCenter     String?
-  projectCode    String?
-  businessUnit   String?
-  supervisorCode String?      // employee no. of the manager who approves this person's claims
-  isActive       Boolean      @default(true)
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  costCenter       String?
+  projectCode      String?
+  businessUnit     String?
+  supervisorCode   String? // employee no. of the manager who approves this person's claims
+  isActive         Boolean      @default(true)
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@unique([organizationId, code])
 }
 
 model Vendor {
-  id             String       @id @default(cuid())
-  organizationId String
-  code           String
-  name           String
-  tin            String?
-  address        String?
-  contactPerson  String?
-  email          String?
-  phone          String?
-  paymentTermsDays Int        @default(30)
-  vatRegistered  Boolean      @default(true)
-  ewtRate        Decimal      @db.Decimal(5, 2) @default(0) // expanded withholding %, e.g. 1, 2, 5, 10
-  atcCode        String?      // BIR alphanumeric tax code, e.g. WC158
-  currencyCode   String       @default("PHP")
-  isActive       Boolean      @default(true)
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  id               String       @id @default(cuid())
+  organizationId   String
+  code             String
+  name             String
+  tin              String?
+  address          String?
+  contactPerson    String?
+  email            String?
+  phone            String?
+  paymentTermsDays Int          @default(30)
+  vatRegistered    Boolean      @default(true)
+  ewtRate          Decimal      @default(0) @db.Decimal(5, 2) // expanded withholding %, e.g. 1, 2, 5, 10
+  atcCode          String? // BIR alphanumeric tax code, e.g. WC158
+  currencyCode     String       @default("PHP")
+  isActive         Boolean      @default(true)
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@unique([organizationId, code])
 }
 
 model Customer {
-  id             String       @id @default(cuid())
-  organizationId String
-  code           String
-  name           String
-  tin            String?
-  address        String?
-  contactPerson  String?
-  email          String?
-  phone          String?
-  paymentTermsDays Int        @default(30)
-  creditLimit    Decimal      @db.Decimal(18, 2) @default(0)
-  vatRegistered  Boolean      @default(true)
-  withholdsTax   Boolean      @default(false) // customer deducts CWT and issues BIR 2307
-  currencyCode   String       @default("PHP")
-  businessStyle  String?      // trade name / business style printed on the invoice
-  invoiceEmails  String?      // where invoices and statements are emailed, separated by ; or ,
-  isActive       Boolean      @default(true)
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  id               String       @id @default(cuid())
+  organizationId   String
+  code             String
+  name             String
+  tin              String?
+  address          String?
+  contactPerson    String?
+  email            String?
+  phone            String?
+  paymentTermsDays Int          @default(30)
+  creditLimit      Decimal      @default(0) @db.Decimal(18, 2)
+  vatRegistered    Boolean      @default(true)
+  withholdsTax     Boolean      @default(false) // customer deducts CWT and issues BIR 2307
+  currencyCode     String       @default("PHP")
+  businessStyle    String? // trade name / business style printed on the invoice
+  invoiceEmails    String? // where invoices and statements are emailed, separated by ; or ,
+  isActive         Boolean      @default(true)
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@unique([organizationId, code])
 }
@@ -510,15 +520,15 @@ enum DimensionType {
 }
 
 model DimensionValue {
-  id             String        @id @default(cuid())
+  id             String           @id @default(cuid())
   organizationId String
   type           DimensionType
   code           String
   name           String
-  parentId       String?       // hierarchy within the same type (e.g. sub-departments)
+  parentId       String? // hierarchy within the same type (e.g. sub-departments)
   manager        String?
-  isActive       Boolean       @default(true)
-  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  isActive       Boolean          @default(true)
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   parent         DimensionValue?  @relation("DimTree", fields: [parentId], references: [id])
   children       DimensionValue[] @relation("DimTree")
 
@@ -539,24 +549,24 @@ model DimensionValue {
 // One row per account (optionally per dimension value) per fiscal year, with 12 monthly amounts
 // in base currency. Annual budget = sum of months.
 model Budget {
-  id               String       @id @default(cuid())
+  id               String   @id @default(cuid())
   organizationId   String
   fiscalYear       Int
   accountId        String
-  dimensionValueId String?      // optional: budget for one department/project/etc.
-  m1  Decimal @db.Decimal(18, 2) @default(0)
-  m2  Decimal @db.Decimal(18, 2) @default(0)
-  m3  Decimal @db.Decimal(18, 2) @default(0)
-  m4  Decimal @db.Decimal(18, 2) @default(0)
-  m5  Decimal @db.Decimal(18, 2) @default(0)
-  m6  Decimal @db.Decimal(18, 2) @default(0)
-  m7  Decimal @db.Decimal(18, 2) @default(0)
-  m8  Decimal @db.Decimal(18, 2) @default(0)
-  m9  Decimal @db.Decimal(18, 2) @default(0)
-  m10 Decimal @db.Decimal(18, 2) @default(0)
-  m11 Decimal @db.Decimal(18, 2) @default(0)
-  m12 Decimal @db.Decimal(18, 2) @default(0)
-  updatedAt        DateTime     @updatedAt
+  dimensionValueId String? // optional: budget for one department/project/etc.
+  m1               Decimal  @default(0) @db.Decimal(18, 2)
+  m2               Decimal  @default(0) @db.Decimal(18, 2)
+  m3               Decimal  @default(0) @db.Decimal(18, 2)
+  m4               Decimal  @default(0) @db.Decimal(18, 2)
+  m5               Decimal  @default(0) @db.Decimal(18, 2)
+  m6               Decimal  @default(0) @db.Decimal(18, 2)
+  m7               Decimal  @default(0) @db.Decimal(18, 2)
+  m8               Decimal  @default(0) @db.Decimal(18, 2)
+  m9               Decimal  @default(0) @db.Decimal(18, 2)
+  m10              Decimal  @default(0) @db.Decimal(18, 2)
+  m11              Decimal  @default(0) @db.Decimal(18, 2)
+  m12              Decimal  @default(0) @db.Decimal(18, 2)
+  updatedAt        DateTime @updatedAt
 
   @@unique([organizationId, fiscalYear, accountId, dimensionValueId])
 }
@@ -565,14 +575,14 @@ model Budget {
 // For entity A trading with entity B: which of A's accounts hold "Due from B" and "Due to B".
 // Configure one link in each direction (A->B in A's books, B->A in B's books).
 model IntercompanyLink {
-  id                 String       @id @default(cuid())
-  organizationId     String       // the entity whose books these accounts are in
-  counterpartyOrgId  String
-  dueFromAccountId   String       // receivable from counterparty (asset)
-  dueToAccountId     String       // payable to counterparty (liability)
-  createdAt          DateTime     @default(now())
-  organization       Organization @relation("IcFrom", fields: [organizationId], references: [id], onDelete: Cascade)
-  counterparty       Organization @relation("IcTo", fields: [counterpartyOrgId], references: [id], onDelete: Cascade)
+  id                String       @id @default(cuid())
+  organizationId    String // the entity whose books these accounts are in
+  counterpartyOrgId String
+  dueFromAccountId  String // receivable from counterparty (asset)
+  dueToAccountId    String // payable to counterparty (liability)
+  createdAt         DateTime     @default(now())
+  organization      Organization @relation("IcFrom", fields: [organizationId], references: [id], onDelete: Cascade)
+  counterparty      Organization @relation("IcTo", fields: [counterpartyOrgId], references: [id], onDelete: Cascade)
 
   @@unique([organizationId, counterpartyOrgId])
 }
@@ -580,16 +590,16 @@ model IntercompanyLink {
 // ---------- Tax setup ----------
 // VAT, expanded/final withholding and percentage tax codes with their BIR ATC and GL account.
 model TaxCode {
-  id             String   @id @default(cuid())
+  id             String  @id @default(cuid())
   organizationId String
-  code           String   // e.g. VAT12, WC158, WI160, FWT20
+  code           String // e.g. VAT12, WC158, WI160, FWT20
   name           String
-  taxType        String   // VAT_OUTPUT | VAT_INPUT | EWT | FWT | PERCENTAGE
-  rate           Decimal  @db.Decimal(7, 4) // percent, e.g. 12, 1, 2, 20
-  atcCode        String?  // BIR alphanumeric tax code
-  accountCode    String?  // GL account the tax posts to
+  taxType        String // VAT_OUTPUT | VAT_INPUT | EWT | FWT | PERCENTAGE
+  rate           Decimal @db.Decimal(7, 4) // percent, e.g. 12, 1, 2, 20
+  atcCode        String? // BIR alphanumeric tax code
+  accountCode    String? // GL account the tax posts to
   description    String?
-  isActive       Boolean  @default(true)
+  isActive       Boolean @default(true)
 
   @@unique([organizationId, code])
 }
@@ -599,12 +609,12 @@ model RecurringJournal {
   id             String    @id @default(cuid())
   organizationId String
   name           String
-  frequency      String    // MONTHLY | QUARTERLY | SEMI_ANNUAL | ANNUAL
+  frequency      String // MONTHLY | QUARTERLY | SEMI_ANNUAL | ANNUAL
   nextRunDate    DateTime  @db.Date
   endDate        DateTime? @db.Date
   memo           String
   reference      String?
-  lines          Json      // LineInput[] in transaction currency
+  lines          Json // LineInput[] in transaction currency
   autoSubmit     Boolean   @default(true) // create as "submitted for approval" (else draft)
   isActive       Boolean   @default(true)
   runCount       Int       @default(0)
@@ -619,16 +629,16 @@ model RecurringJournal {
 // Spread the period balance of a source account across dimension values by percentage,
 // e.g. allocate rent to departments 40/35/25.
 model AllocationRule {
-  id              String   @id @default(cuid())
+  id              String        @id @default(cuid())
   organizationId  String
   name            String
   sourceAccountId String
-  targetAccountId String?  // null = same account
+  targetAccountId String? // null = same account
   dimensionType   DimensionType
-  splits          Json     // [{ dimensionValueId, pct }]
-  isActive        Boolean  @default(true)
+  splits          Json // [{ dimensionValueId, pct }]
+  isActive        Boolean       @default(true)
   createdById     String
-  createdAt       DateTime @default(now())
+  createdAt       DateTime      @default(now())
 }
 
 // ---------- Cash and treasury ----------
@@ -636,7 +646,7 @@ model AllocationRule {
 model BankAccount {
   id             String   @id @default(cuid())
   organizationId String
-  code           String   // e.g. BDO-CA-001
+  code           String // e.g. BDO-CA-001
   name           String
   kind           String   @default("CURRENT") // CURRENT | SAVINGS | PETTY_CASH | CASH_ON_HAND | EWALLET | CREDIT_CARD
   bankName       String?
@@ -644,13 +654,13 @@ model BankAccount {
   accountNumber  String?
   currencyCode   String   @default("PHP")
   glAccountId    String
-  custodian      String?  // petty cash custodian
-  fundLimit      Decimal  @db.Decimal(18, 2) @default(0) // petty cash imprest amount
-  nextCheckNo    Int?     // next check number in the current checkbook
+  custodian      String? // petty cash custodian
+  fundLimit      Decimal  @default(0) @db.Decimal(18, 2) // petty cash imprest amount
+  nextCheckNo    Int? // next check number in the current checkbook
   isActive       Boolean  @default(true)
   createdAt      DateTime @default(now())
 
-  glAccount      Account  @relation(fields: [glAccountId], references: [id])
+  glAccount Account @relation(fields: [glAccountId], references: [id])
 
   @@unique([organizationId, code])
   @@unique([organizationId, glAccountId])
@@ -659,46 +669,46 @@ model BankAccount {
 // Cash receipt, cash/check disbursement, petty cash voucher or fund transfer.
 // Goes draft -> for approval -> posted, and posts to the GL with source BANK.
 model CashTransaction {
-  id               String    @id @default(cuid())
-  organizationId   String
-  number           String    // CR-2026-000001, CD-, PCV-, FT-
-  type             String    // RECEIPT | DISBURSEMENT | TRANSFER
-  bankAccountId    String    // receipt: deposited to; disbursement: paid from; transfer: from
-  toBankAccountId  String?   // transfer: to
-  date             DateTime  @db.Date
-  payee            String?   // payee (disbursement) or payor (receipt)
-  partyType        String?   // CUSTOMER | VENDOR | EMPLOYEE | PARTNER
-  partyId          String?   // code of the customer / vendor / employee
-  method           String    @default("CASH") // CASH | CHECK | BANK_TRANSFER | ONLINE | EWALLET
-  checkNo          String?
-  checkDate        DateTime? @db.Date
-  checkReleasedAt  DateTime? @db.Date // date the check was handed to the payee
-  reference        String?
-  memo             String
-  currencyCode     String    @default("PHP")
-  fxRate           Decimal   @db.Decimal(18, 6) @default(1)
-  amount           Decimal   @db.Decimal(18, 2) // net cash in the bank account's currency
-  toAmount         Decimal?  @db.Decimal(18, 2) // transfer: amount received, in the receiving account's currency
-  toFxRate         Decimal?  @db.Decimal(18, 6)
+  id                   String    @id @default(cuid())
+  organizationId       String
+  number               String // CR-2026-000001, CD-, PCV-, FT-
+  type                 String // RECEIPT | DISBURSEMENT | TRANSFER
+  bankAccountId        String // receipt: deposited to; disbursement: paid from; transfer: from
+  toBankAccountId      String? // transfer: to
+  date                 DateTime  @db.Date
+  payee                String? // payee (disbursement) or payor (receipt)
+  partyType            String? // CUSTOMER | VENDOR | EMPLOYEE | PARTNER
+  partyId              String? // code of the customer / vendor / employee
+  method               String    @default("CASH") // CASH | CHECK | BANK_TRANSFER | ONLINE | EWALLET
+  checkNo              String?
+  checkDate            DateTime? @db.Date
+  checkReleasedAt      DateTime? @db.Date // date the check was handed to the payee
+  reference            String?
+  memo                 String
+  currencyCode         String    @default("PHP")
+  fxRate               Decimal   @default(1) @db.Decimal(18, 6)
+  amount               Decimal   @db.Decimal(18, 2) // net cash in the bank account's currency
+  toAmount             Decimal?  @db.Decimal(18, 2) // transfer: amount received, in the receiving account's currency
+  toFxRate             Decimal?  @db.Decimal(18, 6)
   withholdingTaxCodeId String?
-  withholdingAmount Decimal  @db.Decimal(18, 2) @default(0)
-  lines            Json      // [{ accountId, amount, description, dims }] the other side of the cash entry
-  isReplenishment  Boolean   @default(false) // transfer that replenishes a petty cash fund
-  replenishedById  String?   // petty cash voucher: the replenishment that refilled it
-  status           String    @default("DRAFT") // DRAFT | PENDING_APPROVAL | POSTED | VOID
-  journalEntryId   String?
-  createdById      String
-  updatedById      String?
-  submittedById    String?
-  submittedAt      DateTime?
-  approvedById     String?
-  approvedAt       DateTime?
-  rejectReason     String?
-  voidedById       String?
-  voidedAt         DateTime?
-  voidReason       String?
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  withholdingAmount    Decimal   @default(0) @db.Decimal(18, 2)
+  lines                Json // [{ accountId, amount, description, dims }] the other side of the cash entry
+  isReplenishment      Boolean   @default(false) // transfer that replenishes a petty cash fund
+  replenishedById      String? // petty cash voucher: the replenishment that refilled it
+  status               String    @default("DRAFT") // DRAFT | PENDING_APPROVAL | POSTED | VOID
+  journalEntryId       String?
+  createdById          String
+  updatedById          String?
+  submittedById        String?
+  submittedAt          DateTime?
+  approvedById         String?
+  approvedAt           DateTime?
+  rejectReason         String?
+  voidedById           String?
+  voidedAt             DateTime?
+  voidReason           String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
   @@unique([organizationId, number])
   @@index([organizationId, bankAccountId])
@@ -707,19 +717,19 @@ model CashTransaction {
 
 // An uploaded bank statement (from the Excel template).
 model BankStatement {
-  id             String    @id @default(cuid())
+  id             String              @id @default(cuid())
   organizationId String
   bankAccountId  String
-  periodFrom     DateTime  @db.Date
-  periodTo       DateTime  @db.Date
-  openingBalance Decimal   @db.Decimal(18, 2)
-  closingBalance Decimal   @db.Decimal(18, 2)
+  periodFrom     DateTime            @db.Date
+  periodTo       DateTime            @db.Date
+  openingBalance Decimal             @db.Decimal(18, 2)
+  closingBalance Decimal             @db.Decimal(18, 2)
   fileName       String?
-  status         String    @default("OPEN") // OPEN | RECONCILED
+  status         String              @default("OPEN") // OPEN | RECONCILED
   reconciledById String?
   reconciledAt   DateTime?
   uploadedById   String
-  createdAt      DateTime  @default(now())
+  createdAt      DateTime            @default(now())
   lines          BankStatementLine[]
 
   @@index([organizationId, bankAccountId, periodTo])
@@ -737,7 +747,7 @@ model BankStatementLine {
   checkNo        String?
   amount         Decimal       @db.Decimal(18, 2) // + deposit / credit memo, - withdrawal / debit memo
   runningBalance Decimal?      @db.Decimal(18, 2)
-  fingerprint    String        // detects the same line uploaded twice
+  fingerprint    String // detects the same line uploaded twice
   matchId        String?
   statement      BankStatement @relation(fields: [statementId], references: [id], onDelete: Cascade)
   match          BankMatch?    @relation(fields: [matchId], references: [id])
@@ -748,32 +758,32 @@ model BankStatementLine {
 
 // Links bank statement lines to the GL cash lines they clear (JournalLine.clearingRef = match id).
 model BankMatch {
-  id             String   @id @default(cuid())
+  id             String              @id @default(cuid())
   organizationId String
   bankAccountId  String
-  method         String   // SUGGESTED | MANUAL | ADJUSTMENT | NO_STATEMENT
+  method         String // SUGGESTED | MANUAL | ADJUSTMENT | NO_STATEMENT
   note           String?
   createdById    String
-  createdAt      DateTime @default(now())
+  createdAt      DateTime            @default(now())
   statementLines BankStatementLine[]
 }
 
 // ---------- Petty cash (mobile app) ----------
 
 model PettyCashFund {
-  id                 String       @id @default(cuid())
+  id                 String             @id @default(cuid())
   organizationId     String
   code               String
   name               String
   custodianUserId    String?
-  accountId          String       // the fund's GL account, e.g. 1015 Petty Cash Fund
+  accountId          String // the fund's GL account, e.g. 1015 Petty Cash Fund
   // Account credited by the replenishment journal. Null = the fund account itself
   // (the disbursement that refills the fund then debits the fund and credits the bank).
   replenishAccountId String?
-  imprestAmount      Decimal      @db.Decimal(18, 2) @default(0)
-  isActive           Boolean      @default(true)
-  createdAt          DateTime     @default(now())
-  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  imprestAmount      Decimal            @default(0) @db.Decimal(18, 2)
+  isActive           Boolean            @default(true)
+  createdAt          DateTime           @default(now())
+  organization       Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   vouchers           PettyCashVoucher[]
   batches            PettyCashBatch[]
 
@@ -782,69 +792,91 @@ model PettyCashFund {
 
 enum PurchaseOrderStatus {
   DRAFT
+  PENDING_APPROVAL
   APPROVED
   CLOSED
   CANCELLED
 }
 
 model PurchaseOrder {
-  id             String              @id @default(cuid())
-  organizationId String
-  number         String
-  poDate         DateTime            @db.Date
-  vendorId       String?
-  vendorName     String?
-  description    String
-  amount         Decimal             @db.Decimal(18, 2)
-  status         PurchaseOrderStatus @default(DRAFT)
-  createdById    String
-  approvedById   String?
-  approvedAt     DateTime?
-  createdAt      DateTime            @default(now())
-  organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  vouchers       PettyCashVoucher[]
+  id               String              @id @default(cuid())
+  organizationId   String
+  number           String
+  poDate           DateTime            @db.Date
+  vendorId         String?
+  vendorName       String?
+  description      String
+  amount           Decimal             @db.Decimal(18, 2) // total incl. VAT
+  status           PurchaseOrderStatus @default(DRAFT)
+  createdById      String
+  approvedById     String?
+  approvedAt       DateTime?
+  createdAt        DateTime            @default(now())
+  // Purchasing module (petty cash POs leave these blank and have no lines)
+  requestId        String?
+  rfqId            String?
+  deliveryDate     DateTime?           @db.Date
+  deliverTo        String?
+  paymentTermsDays Int?
+  currencyCode     String              @default("PHP")
+  fxRate           Decimal             @default(1) @db.Decimal(18, 6)
+  vatInclusive     Boolean             @default(false) // unit prices include 12% VAT
+  subtotal         Decimal             @default(0) @db.Decimal(18, 2) // net of VAT
+  vatAmount        Decimal             @default(0) @db.Decimal(18, 2)
+  notes            String?
+  updatedById      String?
+  submittedById    String?
+  submittedAt      DateTime?
+  rejectReason     String?
+  closedAt         DateTime?
+  closeReason      String?
+  organization     Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  vouchers         PettyCashVoucher[]
+  lines            PurchaseOrderLine[]
+  receipts         GoodsReceipt[]
+  request          PurchaseRequest?    @relation(fields: [requestId], references: [id])
 
   @@unique([organizationId, number])
 }
 
 enum PettyCashStatus {
   DRAFT
-  SUBMITTED   // waiting for manager approval
-  APPROVED    // manager approved; waiting for finance review
-  RETURNED    // sent back to the preparer to fix (editable)
-  REJECTED    // declined for good (not editable)
-  CLEARED     // finance review passed; corporate / employee-paid claims are posted to the GL
-  HOLD        // finance review on hold (e.g. receipt or duplicate question)
-  BATCHED     // petty cash: in a replenishment batch whose journal is not yet posted
+  SUBMITTED // waiting for manager approval
+  APPROVED // manager approved; waiting for finance review
+  RETURNED // sent back to the preparer to fix (editable)
+  REJECTED // declined for good (not editable)
+  CLEARED // finance review passed; corporate / employee-paid claims are posted to the GL
+  HOLD // finance review on hold (e.g. receipt or duplicate question)
+  BATCHED // petty cash: in a replenishment batch whose journal is not yet posted
   REPLENISHED // petty cash: the batch journal is posted
-  REIMBURSED  // employee-paid: the reimbursement disbursement is posted
+  REIMBURSED // employee-paid: the reimbursement disbursement is posted
 }
 
 // Which app tile the voucher was captured under. All share one voucher table and one number series.
 enum ExpenseModule {
   PETTY_CASH
-  TRAVEL     // local and international travel
-  TRANSPORT  // Grab, inDrive, JoyRide, Angkas, taxi
-  DELIVERY   // Lalamove, Transportify, couriers ("Sent Package")
+  TRAVEL // local and international travel
+  TRANSPORT // Grab, inDrive, JoyRide, Angkas, taxi
+  DELIVERY // Lalamove, Transportify, couriers ("Sent Package")
 }
 
 // Who paid the provider.
 enum ExpensePayment {
-  PETTY_CASH_FUND  // custodian paid from the fund; replenished in a batch
-  EMPLOYEE         // employee paid personally; reimbursed later
-  GCASH            // corporate GCash wallet
-  MAYA             // corporate Maya Business wallet
-  CREDIT_CARD      // corporate credit card
-  DEBIT_CARD       // corporate debit card (draws on a bank account)
+  PETTY_CASH_FUND // custodian paid from the fund; replenished in a batch
+  EMPLOYEE // employee paid personally; reimbursed later
+  GCASH // corporate GCash wallet
+  MAYA // corporate Maya Business wallet
+  CREDIT_CARD // corporate credit card
+  DEBIT_CARD // corporate debit card (draws on a bank account)
   CORPORATE_WALLET // other corporate e-wallet / prepaid business wallet
-  COMPANY_ACCOUNT  // billed to the company by the provider (e.g. monthly business account invoice)
+  COMPANY_ACCOUNT // billed to the company by the provider (e.g. monthly business account invoice)
 }
 
 // Debit account for each mobility transaction type (Automatic GL Mapping), per company.
 model ExpenseMapping {
   id              String   @id @default(cuid())
   organizationId  String
-  transactionType String   // e.g. RIDE, CLIENT_VISIT, STAFF_SHUTTLE, DELIVERY, INVENTORY_DELIVERY
+  transactionType String // e.g. RIDE, CLIENT_VISIT, STAFF_SHUTTLE, DELIVERY, INVENTORY_DELIVERY
   accountId       String
   updatedAt       DateTime @updatedAt
 
@@ -852,71 +884,71 @@ model ExpenseMapping {
 }
 
 model PettyCashVoucher {
-  id                  String          @id @default(cuid())
+  id                  String                 @id @default(cuid())
   organizationId      String
-  fundId              String?         // required when paid from a petty cash fund
-  number              String          // e.g. PCV-2026-000001
-  module              ExpenseModule   @default(PETTY_CASH)
-  paymentMethod       ExpensePayment  @default(PETTY_CASH_FUND)
-  paymentAccountId    String?         // BankAccount for GCash / Maya / card / wallet payments
-  employeeId          String?         // who incurred the expense (employee or partner)
-  purpose             String?         // business purpose
-  transactionType     String?         // GL mapping key (see ExpenseMapping)
-  provider            String?         // GRAB, INDRIVE, JOYRIDE, ANGKAS, LALAMOVE, TRANSPORTIFY, ...
-  bookingNumber       String?         // booking / delivery number from the provider
-  tripAt              DateTime?       // trip or delivery date and time
-  details             Json?           // travel / trip / delivery fields (pickup, drop-off, distance, receiver, ...)
-  noReceipt           Boolean         @default(false)
+  fundId              String? // required when paid from a petty cash fund
+  number              String // e.g. PCV-2026-000001
+  module              ExpenseModule          @default(PETTY_CASH)
+  paymentMethod       ExpensePayment         @default(PETTY_CASH_FUND)
+  paymentAccountId    String? // BankAccount for GCash / Maya / card / wallet payments
+  employeeId          String? // who incurred the expense (employee or partner)
+  purpose             String? // business purpose
+  transactionType     String? // GL mapping key (see ExpenseMapping)
+  provider            String? // GRAB, INDRIVE, JOYRIDE, ANGKAS, LALAMOVE, TRANSPORTIFY, ...
+  bookingNumber       String? // booking / delivery number from the provider
+  tripAt              DateTime? // trip or delivery date and time
+  details             Json? // travel / trip / delivery fields (pickup, drop-off, distance, receiver, ...)
+  noReceipt           Boolean                @default(false)
   noReceiptReason     String?
-  currencyCode        String          @default("PHP") // receipt currency (international travel)
-  fxRate              Decimal         @db.Decimal(18, 6) @default(1)
-  foreignTotal        Decimal?        @db.Decimal(18, 2) // receipt total in its own currency
-  checks              Json?           // last approval / finance review checks
+  currencyCode        String                 @default("PHP") // receipt currency (international travel)
+  fxRate              Decimal                @default(1) @db.Decimal(18, 6)
+  foreignTotal        Decimal?               @db.Decimal(18, 2) // receipt total in its own currency
+  checks              Json? // last approval / finance review checks
   financeById         String?
   financeAt           DateTime?
   financeNote         String?
-  journalEntryId      String?         @unique // corporate / employee-paid claim journal
-  reimbursementId     String?         // CashTransaction that paid the employee back
-  statementLineId     String?         // corporate statement line this claim was created from
-  status              PettyCashStatus @default(DRAFT)
-  receiptDate         DateTime        @db.Date
-  docType             String          @default("OR") // OR | SI | CASH_INVOICE | AR | OTHER
+  journalEntryId      String?                @unique // corporate / employee-paid claim journal
+  reimbursementId     String? // CashTransaction that paid the employee back
+  statementLineId     String? // corporate statement line this claim was created from
+  status              PettyCashStatus        @default(DRAFT)
+  receiptDate         DateTime               @db.Date
+  docType             String                 @default("OR") // OR | SI | CASH_INVOICE | AR | OTHER
   docNumber           String?
   vendorId            String?
   vendorName          String
   vendorTin           String?
   vendorAddress       String?
-  vendorVatRegistered Boolean         @default(true)
+  vendorVatRegistered Boolean                @default(true)
   description         String
   // Amounts as printed on the receipt (VAT-inclusive), in base currency.
-  grossAmount         Decimal         @db.Decimal(18, 2) @default(0)
-  vatAmount           Decimal         @db.Decimal(18, 2) @default(0)
-  vatExemptAmount     Decimal         @db.Decimal(18, 2) @default(0)
-  zeroRatedAmount     Decimal         @db.Decimal(18, 2) @default(0)
+  grossAmount         Decimal                @default(0) @db.Decimal(18, 2)
+  vatAmount           Decimal                @default(0) @db.Decimal(18, 2)
+  vatExemptAmount     Decimal                @default(0) @db.Decimal(18, 2)
+  zeroRatedAmount     Decimal                @default(0) @db.Decimal(18, 2)
   ewtTaxCodeId        String?
-  ewtAmount           Decimal         @db.Decimal(18, 2) @default(0)
-  tipAmount           Decimal         @db.Decimal(18, 2) @default(0)
-  tipHandwritten      Boolean         @default(false)
-  totalPaid           Decimal         @db.Decimal(18, 2) @default(0) // gross + tip - EWT
+  ewtAmount           Decimal                @default(0) @db.Decimal(18, 2)
+  tipAmount           Decimal                @default(0) @db.Decimal(18, 2)
+  tipHandwritten      Boolean                @default(false)
+  totalPaid           Decimal                @default(0) @db.Decimal(18, 2) // gross + tip - EWT
   purchaseOrderId     String?
   departmentId        String?
   costCenterId        String?
   branchId            String?
   projectId           String?
   imageId             String?
-  extraction          Json?           // what the AI read from the photo, kept for audit
+  extraction          Json? // what the AI read from the photo, kept for audit
   createdById         String
   submittedAt         DateTime?
   approvedById        String?
   approvedAt          DateTime?
   rejectedReason      String?
   batchId             String?
-  createdAt           DateTime        @default(now())
-  updatedAt           DateTime        @updatedAt
-  organization        Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  fund                PettyCashFund?  @relation(fields: [fundId], references: [id])
-  purchaseOrder       PurchaseOrder?  @relation(fields: [purchaseOrderId], references: [id])
-  batch               PettyCashBatch? @relation(fields: [batchId], references: [id])
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
+  organization        Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  fund                PettyCashFund?         @relation(fields: [fundId], references: [id])
+  purchaseOrder       PurchaseOrder?         @relation(fields: [purchaseOrderId], references: [id])
+  batch               PettyCashBatch?        @relation(fields: [batchId], references: [id])
   lines               PettyCashVoucherLine[]
 
   @@unique([organizationId, number])
@@ -930,27 +962,27 @@ model PettyCashVoucherLine {
   voucherId          String
   lineNo             Int
   description        String
-  quantity           Decimal          @db.Decimal(18, 4) @default(1)
+  quantity           Decimal          @default(1) @db.Decimal(18, 4)
   unitPrice          Decimal          @db.Decimal(18, 2)
   amount             Decimal          @db.Decimal(18, 2) // VAT-inclusive, as on the receipt
   accountId          String
-  suggestedAccountId String?          // what the app proposed, to measure suggestion quality
+  suggestedAccountId String? // what the app proposed, to measure suggestion quality
   isFixedAsset       Boolean          @default(false)
   voucher            PettyCashVoucher @relation(fields: [voucherId], references: [id], onDelete: Cascade)
 }
 
 model PettyCashBatch {
-  id             String        @id @default(cuid())
+  id             String             @id @default(cuid())
   organizationId String
   fundId         String
-  number         String        // e.g. PCR-2026-000001
-  date           DateTime      @db.Date
-  totalPaid      Decimal       @db.Decimal(18, 2)
-  journalEntryId String?       @unique
+  number         String // e.g. PCR-2026-000001
+  date           DateTime           @db.Date
+  totalPaid      Decimal            @db.Decimal(18, 2)
+  journalEntryId String?            @unique
   createdById    String
-  createdAt      DateTime      @default(now())
-  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  fund           PettyCashFund @relation(fields: [fundId], references: [id])
+  createdAt      DateTime           @default(now())
+  organization   Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  fund           PettyCashFund      @relation(fields: [fundId], references: [id])
   vouchers       PettyCashVoucher[]
 
   @@unique([organizationId, number])
@@ -972,18 +1004,18 @@ model ReceiptImage {
 model FixedAsset {
   id               String    @id @default(cuid())
   organizationId   String
-  code             String    // asset number, printed as a QR sticker
+  code             String // asset number, printed as a QR sticker
   name             String
-  category         String?   // e.g. IT equipment, furniture, vehicles
-  location         String?   // where it should be
-  custodianCode    String?   // employee no. accountable for it
+  category         String? // e.g. IT equipment, furniture, vehicles
+  location         String? // where it should be
+  custodianCode    String? // employee no. accountable for it
   serialNo         String?
   acquisitionDate  DateTime? @db.Date
-  cost             Decimal   @db.Decimal(18, 2) @default(0)
-  accountCode      String?   // property and equipment GL account
-  tagCode          String?   // an older / supplier sticker mapped to this asset
+  cost             Decimal   @default(0) @db.Decimal(18, 2)
+  accountCode      String? // property and equipment GL account
+  tagCode          String? // an older / supplier sticker mapped to this asset
   status           String    @default("ACTIVE") // ACTIVE | FOR_REPAIR | MISSING | DISPOSED
-  condition        String?   // GOOD | FAIR | DAMAGED | FOR_REPAIR (last audit)
+  condition        String? // GOOD | FAIR | DAMAGED | FOR_REPAIR (last audit)
   taggedAt         DateTime? // when the sticker was first scanned / mapped
   lastSeenAt       DateTime?
   lastSeenLocation String?
@@ -996,14 +1028,14 @@ model FixedAsset {
 }
 
 model AssetAudit {
-  id             String    @id @default(cuid())
+  id             String      @id @default(cuid())
   organizationId String
-  number         String    // AA-2026-000001
+  number         String // AA-2026-000001
   name           String
-  location       String?   // blank = all locations
-  status         String    @default("OPEN") // OPEN | CLOSED
+  location       String? // blank = all locations
+  status         String      @default("OPEN") // OPEN | CLOSED
   createdById    String
-  createdAt      DateTime  @default(now())
+  createdAt      DateTime    @default(now())
   closedById     String?
   closedAt       DateTime?
   scans          AssetScan[]
@@ -1016,8 +1048,8 @@ model AssetScan {
   organizationId String
   auditId        String
   assetId        String?
-  tagText        String     // what the QR code said
-  result         String     // FOUND | WRONG_LOCATION | UNKNOWN
+  tagText        String // what the QR code said
+  result         String // FOUND | WRONG_LOCATION | UNKNOWN
   location       String?
   condition      String?
   note           String?
@@ -1034,83 +1066,83 @@ model AssetScan {
 // A BIR-registered serial range: the Authority to Print (ATP) for pre-printed or loose-leaf invoices,
 // or the CAS / CRM-POS / EIS permit for system-generated ones. Serials are assigned when a document is issued.
 model DocumentSeries {
-  id             String    @id @default(cuid())
-  organizationId String
-  docType        String    // SALES_INVOICE | CREDIT_MEMO | COLLECTION_RECEIPT | POS_INVOICE
-  name           String
-  prefix         String    @default("")
-  startNo        Int       @default(1)
-  endNo          Int?      // last serial allowed by the permit; null = open-ended (CAS)
-  nextNo         Int       @default(1)
-  padding        Int       @default(6)
-  branchCode     String    @default("00000") // BIR branch code shown after the TIN
-  authorityType  String    @default("ATP")   // ATP | CAS | CRM_POS | EIS
-  authorityNo    String?
-  authorityDate  DateTime? @db.Date
-  validUntil     DateTime? @db.Date
-  printerName    String?
-  printerTin     String?
-  printerAddress String?
+  id                       String    @id @default(cuid())
+  organizationId           String
+  docType                  String // SALES_INVOICE | CREDIT_MEMO | COLLECTION_RECEIPT | POS_INVOICE
+  name                     String
+  prefix                   String    @default("")
+  startNo                  Int       @default(1)
+  endNo                    Int? // last serial allowed by the permit; null = open-ended (CAS)
+  nextNo                   Int       @default(1)
+  padding                  Int       @default(6)
+  branchCode               String    @default("00000") // BIR branch code shown after the TIN
+  authorityType            String    @default("ATP") // ATP | CAS | CRM_POS | EIS
+  authorityNo              String?
+  authorityDate            DateTime? @db.Date
+  validUntil               DateTime? @db.Date
+  printerName              String?
+  printerTin               String?
+  printerAddress           String?
   printerAccreditationNo   String?
   printerAccreditationDate DateTime? @db.Date
-  isDefault      Boolean   @default(false)
-  isActive       Boolean   @default(true)
-  createdAt      DateTime  @default(now())
+  isDefault                Boolean   @default(false)
+  isActive                 Boolean   @default(true)
+  createdAt                DateTime  @default(now())
 
   @@index([organizationId, docType])
 }
 
 // Sales invoice or credit memo. Draft -> for approval -> posted (issued, gets its serial) -> void.
 model SalesInvoice {
-  id               String    @id @default(cuid())
-  organizationId   String
-  kind             String    @default("INVOICE") // INVOICE | CREDIT_MEMO
-  number           String?   // serial, assigned when issued
-  seriesId         String?
-  status           String    @default("DRAFT") // DRAFT | PENDING_APPROVAL | POSTED | VOID
-  customerId       String
-  customerName     String
-  customerTin      String?
-  customerAddress  String?
+  id                    String             @id @default(cuid())
+  organizationId        String
+  kind                  String             @default("INVOICE") // INVOICE | CREDIT_MEMO
+  number                String? // serial, assigned when issued
+  seriesId              String?
+  status                String             @default("DRAFT") // DRAFT | PENDING_APPROVAL | POSTED | VOID
+  customerId            String
+  customerName          String
+  customerTin           String?
+  customerAddress       String?
   customerBusinessStyle String?
-  date             DateTime  @db.Date
-  dueDate          DateTime  @db.Date
-  termsDays        Int       @default(0)
-  currencyCode     String    @default("PHP")
-  fxRate           Decimal   @db.Decimal(18, 6) @default(1)
-  pricesIncludeVat Boolean   @default(false)
-  reference        String?   // customer PO, delivery receipt, contract no.
-  memo             String?
-  vatableSales     Decimal   @db.Decimal(18, 2) @default(0)
-  vatAmount        Decimal   @db.Decimal(18, 2) @default(0)
-  zeroRatedSales   Decimal   @db.Decimal(18, 2) @default(0)
-  exemptSales      Decimal   @db.Decimal(18, 2) @default(0)
-  discountAmount   Decimal   @db.Decimal(18, 2) @default(0)
-  totalAmount      Decimal   @db.Decimal(18, 2) @default(0) // amount the customer owes, VAT included
-  ewtTaxCodeId     String?   // tax the customer is expected to withhold (BIR 2307)
-  ewtAmount        Decimal   @db.Decimal(18, 2) @default(0)
-  appliedAmount    Decimal   @db.Decimal(18, 2) @default(0) // invoice: collected + credited; credit memo: used against invoices
-  creditForId      String?   // credit memo: the invoice it adjusts
-  reason           String?   // credit memo: returns, price adjustment, discount
-  source           String    @default("MANUAL") // MANUAL | CONTRACT | SCAN | POS
-  sourceRef        String?
-  contractId       String?
-  warehouseId      String?   // stocked items ship from here (blank = each item's default warehouse)
-  journalEntryId   String?
-  createdById      String
-  updatedById      String?
-  submittedById    String?
-  submittedAt      DateTime?
-  approvedById     String?
-  approvedAt       DateTime?
-  rejectReason     String?
-  voidedById       String?
-  voidedAt         DateTime?
-  voidReason       String?
-  emailedAt        DateTime?
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
-  lines            SalesInvoiceLine[]
+  date                  DateTime           @db.Date
+  dueDate               DateTime           @db.Date
+  termsDays             Int                @default(0)
+  currencyCode          String             @default("PHP")
+  fxRate                Decimal            @default(1) @db.Decimal(18, 6)
+  pricesIncludeVat      Boolean            @default(false)
+  reference             String? // customer PO, delivery receipt, contract no.
+  memo                  String?
+  vatableSales          Decimal            @default(0) @db.Decimal(18, 2)
+  vatAmount             Decimal            @default(0) @db.Decimal(18, 2)
+  zeroRatedSales        Decimal            @default(0) @db.Decimal(18, 2)
+  exemptSales           Decimal            @default(0) @db.Decimal(18, 2)
+  discountAmount        Decimal            @default(0) @db.Decimal(18, 2)
+  totalAmount           Decimal            @default(0) @db.Decimal(18, 2) // amount the customer owes, VAT included
+  ewtTaxCodeId          String? // tax the customer is expected to withhold (BIR 2307)
+  ewtAmount             Decimal            @default(0) @db.Decimal(18, 2)
+  appliedAmount         Decimal            @default(0) @db.Decimal(18, 2) // invoice: collected + credited; credit memo: used against invoices
+  creditForId           String? // credit memo: the invoice it adjusts
+  reason                String? // credit memo: returns, price adjustment, discount
+  source                String             @default("MANUAL") // MANUAL | CONTRACT | SCAN | POS
+  sourceRef             String?
+  contractId            String?
+  warehouseId           String? // stocked items ship from here (blank = each item's default warehouse)
+  journalEntryId        String?
+  createdById           String
+  updatedById           String?
+  submittedById         String?
+  submittedAt           DateTime?
+  approvedById          String?
+  approvedAt            DateTime?
+  rejectReason          String?
+  voidedById            String?
+  voidedAt              DateTime?
+  voidReason            String?
+  emailedAt             DateTime?
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+  lines                 SalesInvoiceLine[]
 
   @@unique([organizationId, kind, number])
   @@index([organizationId, customerId, status])
@@ -1123,59 +1155,59 @@ model SalesInvoiceLine {
   lineNo      Int
   productId   String?
   description String
-  quantity    Decimal      @db.Decimal(18, 4) @default(1)
+  quantity    Decimal      @default(1) @db.Decimal(18, 4)
   unit        String?
   unitPrice   Decimal      @db.Decimal(18, 4)
-  discount    Decimal      @db.Decimal(18, 2) @default(0)
+  discount    Decimal      @default(0) @db.Decimal(18, 2)
   vatType     String       @default("VATABLE") // VATABLE | ZERO_RATED | EXEMPT
   accountId   String
   netAmount   Decimal      @db.Decimal(18, 2) // after discount, before VAT
-  vatAmount   Decimal      @db.Decimal(18, 2) @default(0)
+  vatAmount   Decimal      @default(0) @db.Decimal(18, 2)
   dims        Json?
-  lotNo       String?      // lot / serial for specific-identification inventory items
+  lotNo       String? // lot / serial for specific-identification inventory items
   invoice     SalesInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
 }
 
 // Collection (official receipt / collection receipt): cash received + tax withheld, applied to invoices.
 // Whatever is not applied is a customer advance until it is applied to a later invoice.
 model ArReceipt {
-  id               String    @id @default(cuid())
-  organizationId   String
-  number           String?   // receipt serial, assigned when posted
-  seriesId         String?
-  status           String    @default("DRAFT")
-  customerId       String
-  customerName     String
-  date             DateTime  @db.Date
-  bankAccountId    String
-  method           String    @default("CHECK")
-  checkNo          String?
-  checkDate        DateTime? @db.Date
-  checkBank        String?
-  reference        String?
-  memo             String?
-  currencyCode     String    @default("PHP")
-  fxRate           Decimal   @db.Decimal(18, 6) @default(1)
-  cashAmount       Decimal   @db.Decimal(18, 2)
+  id                   String          @id @default(cuid())
+  organizationId       String
+  number               String? // receipt serial, assigned when posted
+  seriesId             String?
+  status               String          @default("DRAFT")
+  customerId           String
+  customerName         String
+  date                 DateTime        @db.Date
+  bankAccountId        String
+  method               String          @default("CHECK")
+  checkNo              String?
+  checkDate            DateTime?       @db.Date
+  checkBank            String?
+  reference            String?
+  memo                 String?
+  currencyCode         String          @default("PHP")
+  fxRate               Decimal         @default(1) @db.Decimal(18, 6)
+  cashAmount           Decimal         @db.Decimal(18, 2)
   withholdingTaxCodeId String?
-  withholdingAmount Decimal  @db.Decimal(18, 2) @default(0)
-  plan             Json      // [{ invoiceId, amount }] what the draft will apply when posted
-  appliedAmount    Decimal   @db.Decimal(18, 2) @default(0)
-  journalEntryId   String?
-  createdById      String
-  updatedById      String?
-  submittedById    String?
-  submittedAt      DateTime?
-  approvedById     String?
-  approvedAt       DateTime?
-  rejectReason     String?
-  voidedById       String?
-  voidedAt         DateTime?
-  voidReason       String?
-  emailedAt        DateTime?
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
-  applications     ArApplication[]
+  withholdingAmount    Decimal         @default(0) @db.Decimal(18, 2)
+  plan                 Json // [{ invoiceId, amount }] what the draft will apply when posted
+  appliedAmount        Decimal         @default(0) @db.Decimal(18, 2)
+  journalEntryId       String?
+  createdById          String
+  updatedById          String?
+  submittedById        String?
+  submittedAt          DateTime?
+  approvedById         String?
+  approvedAt           DateTime?
+  rejectReason         String?
+  voidedById           String?
+  voidedAt             DateTime?
+  voidReason           String?
+  emailedAt            DateTime?
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
+  applications         ArApplication[]
 
   @@index([organizationId, customerId, status])
 }
@@ -1189,7 +1221,7 @@ model ArApplication {
   creditMemoId   String?
   amount         Decimal    @db.Decimal(18, 2) // in the invoice currency
   date           DateTime   @db.Date
-  journalEntryId String?    // applying a customer advance later moves it from Advances to AR
+  journalEntryId String? // applying a customer advance later moves it from Advances to AR
   createdById    String
   createdAt      DateTime   @default(now())
   receipt        ArReceipt? @relation(fields: [receiptId], references: [id])
@@ -1202,29 +1234,29 @@ model ArApplication {
 // Contract, subscription or project billing. Recurring kinds bill their lines every period;
 // project billing bills milestones (a % or amount of the contract value).
 model BillingContract {
-  id               String    @id @default(cuid())
+  id               String             @id @default(cuid())
   organizationId   String
   number           String
-  kind             String    // SUBSCRIPTION | CONTRACT | PROJECT
+  kind             String // SUBSCRIPTION | CONTRACT | PROJECT
   name             String
   customerId       String
-  startDate        DateTime  @db.Date
-  endDate          DateTime? @db.Date
-  frequency        String?   // MONTHLY | QUARTERLY | SEMI_ANNUAL | ANNUAL (recurring kinds)
-  nextBillDate     DateTime? @db.Date
+  startDate        DateTime           @db.Date
+  endDate          DateTime?          @db.Date
+  frequency        String? // MONTHLY | QUARTERLY | SEMI_ANNUAL | ANNUAL (recurring kinds)
+  nextBillDate     DateTime?          @db.Date
   termsDays        Int?
-  currencyCode     String    @default("PHP")
-  contractValue    Decimal   @db.Decimal(18, 2) @default(0)
-  pricesIncludeVat Boolean   @default(false)
+  currencyCode     String             @default("PHP")
+  contractValue    Decimal            @default(0) @db.Decimal(18, 2)
+  pricesIncludeVat Boolean            @default(false)
   ewtTaxCodeId     String?
-  lines            Json      // invoice lines billed every period
-  autoSubmit       Boolean   @default(true)
-  status           String    @default("ACTIVE") // ACTIVE | PAUSED | ENDED
-  invoiceCount     Int       @default(0)
+  lines            Json // invoice lines billed every period
+  autoSubmit       Boolean            @default(true)
+  status           String             @default("ACTIVE") // ACTIVE | PAUSED | ENDED
+  invoiceCount     Int                @default(0)
   lastBilledAt     DateTime?
   memo             String?
   createdById      String
-  createdAt        DateTime  @default(now())
+  createdAt        DateTime           @default(now())
   milestones       BillingMilestone[]
 
   @@unique([organizationId, number])
@@ -1249,16 +1281,330 @@ model BillingMilestone {
 model DocumentEmail {
   id             String   @id @default(cuid())
   organizationId String
-  docType        String   // INVOICE | CREDIT_MEMO | RECEIPT | STATEMENT
+  docType        String // INVOICE | CREDIT_MEMO | RECEIPT | STATEMENT
   docId          String
   to             String
   subject        String
-  status         String   // SENT | FAILED
+  status         String // SENT | FAILED
   error          String?
   sentById       String
   createdAt      DateTime @default(now())
 
   @@index([organizationId, docType, docId])
+}
+
+// ---------- Approval matrix ----------
+// Rules per document type (PR, PO, BILL, PAYMENT). A document needs every level whose minAmount
+// is at or below its total, in order. Each level is approved by a named person or anyone with a role.
+// No active rules for a type = one approval by an accountant/admin within their approval limit.
+model ApprovalRule {
+  id             String   @id @default(cuid())
+  organizationId String
+  docType        String // PR | PO | BILL | PAYMENT
+  level          Int // 1 = first approver
+  name           String? // e.g. "Department head", "CFO"
+  minAmount      Decimal  @default(0) @db.Decimal(18, 2)
+  approverRole   Role?
+  approverUserId String?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId, docType])
+}
+
+// Approval history of a document. Approvals in the current round are the APPROVED steps after the last SUBMITTED.
+model ApprovalStep {
+  id             String   @id @default(cuid())
+  organizationId String
+  docType        String
+  docId          String
+  level          Int      @default(0)
+  userId         String
+  decision       String // SUBMITTED | APPROVED | RETURNED
+  comment        String?
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId, docType, docId])
+}
+
+// ---------- Purchasing ----------
+model PurchaseRequest {
+  id             String                @id @default(cuid())
+  organizationId String
+  number         String // PR-2026-000001
+  date           DateTime              @db.Date
+  neededBy       DateTime?             @db.Date
+  purpose        String
+  requestedById  String
+  departmentId   String?
+  costCenterId   String?
+  projectId      String?
+  branchId       String?
+  estimatedTotal Decimal               @default(0) @db.Decimal(18, 2)
+  status         String                @default("DRAFT") // DRAFT | PENDING_APPROVAL | APPROVED | ORDERED | CLOSED | CANCELLED
+  submittedAt    DateTime?
+  approvedById   String?
+  approvedAt     DateTime?
+  rejectReason   String?
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+  lines          PurchaseRequestLine[]
+  rfqs           Rfq[]
+  orders         PurchaseOrder[]
+
+  @@unique([organizationId, number])
+  @@index([organizationId, status])
+}
+
+model PurchaseRequestLine {
+  id          String          @id @default(cuid())
+  requestId   String
+  lineNo      Int
+  productId   String?
+  description String
+  quantity    Decimal         @db.Decimal(18, 4)
+  unit        String?
+  estUnitCost Decimal         @default(0) @db.Decimal(18, 2)
+  category    String          @default("EXPENSE") // EXPENSE | INVENTORY | FIXED_ASSET | PREPAYMENT
+  accountId   String?
+  request     PurchaseRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+}
+
+// Request for quotation / canvass: the same items quoted by several suppliers, one is awarded the PO.
+model Rfq {
+  id              String           @id @default(cuid())
+  organizationId  String
+  number          String // RFQ-2026-000001
+  requestId       String?
+  date            DateTime         @db.Date
+  dueDate         DateTime?        @db.Date
+  notes           String?
+  lines           Json // [{ lineNo, description, quantity, unit, productId, category, accountId }]
+  status          String           @default("OPEN") // OPEN | AWARDED | CANCELLED
+  awardedQuoteId  String?
+  awardReason     String?
+  purchaseOrderId String?
+  createdById     String
+  createdAt       DateTime         @default(now())
+  request         PurchaseRequest? @relation(fields: [requestId], references: [id])
+  quotes          RfqQuote[]
+
+  @@unique([organizationId, number])
+}
+
+model RfqQuote {
+  id               String    @id @default(cuid())
+  rfqId            String
+  vendorId         String
+  quoteRef         String?
+  quoteDate        DateTime? @db.Date
+  validUntil       DateTime? @db.Date
+  leadTimeDays     Int?
+  paymentTermsDays Int?
+  vatInclusive     Boolean   @default(true)
+  prices           Json // [{ lineNo, unitPrice }] ; a missing line = not offered
+  total            Decimal   @db.Decimal(18, 2) // incl. VAT
+  remarks          String?
+  createdAt        DateTime  @default(now())
+  rfq              Rfq       @relation(fields: [rfqId], references: [id], onDelete: Cascade)
+
+  @@unique([rfqId, vendorId])
+}
+
+model PurchaseOrderLine {
+  id              String             @id @default(cuid())
+  purchaseOrderId String
+  lineNo          Int
+  productId       String?
+  description     String
+  quantity        Decimal            @db.Decimal(18, 4)
+  unit            String?
+  unitPrice       Decimal            @db.Decimal(18, 4) // as entered (VAT-inclusive if the PO says so)
+  vatType         String             @default("VATABLE") // VATABLE | ZERO_RATED | EXEMPT
+  netAmount       Decimal            @db.Decimal(18, 2) // net of VAT
+  vatAmount       Decimal            @default(0) @db.Decimal(18, 2)
+  category        String             @default("EXPENSE") // EXPENSE | INVENTORY | FIXED_ASSET | PREPAYMENT
+  accountId       String
+  dims            Json?
+  purchaseOrder   PurchaseOrder      @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  receiptLines    GoodsReceiptLine[]
+  billLines       ApBillLine[]
+}
+
+// Receiving report (goods) or service acceptance. Posts Dr expense/inventory/asset, Cr Goods Received Not Yet Invoiced.
+model GoodsReceipt {
+  id              String             @id @default(cuid())
+  organizationId  String
+  number          String // RR-2026-000001
+  purchaseOrderId String
+  date            DateTime           @db.Date
+  deliveryRef     String? // supplier's delivery receipt no.
+  notes           String?
+  status          String             @default("POSTED") // POSTED | VOID
+  journalEntryId  String?
+  receivedById    String
+  voidedById      String?
+  voidedAt        DateTime?
+  voidReason      String?
+  createdAt       DateTime           @default(now())
+  purchaseOrder   PurchaseOrder      @relation(fields: [purchaseOrderId], references: [id])
+  lines           GoodsReceiptLine[]
+
+  @@unique([organizationId, number])
+}
+
+model GoodsReceiptLine {
+  id        String            @id @default(cuid())
+  receiptId String
+  poLineId  String
+  quantity  Decimal           @db.Decimal(18, 4)
+  remarks   String?
+  receipt   GoodsReceipt      @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  poLine    PurchaseOrderLine @relation(fields: [poLineId], references: [id])
+}
+
+// ---------- Accounts payable ----------
+// Supplier invoice (AP voucher). Posts Dr expense / GRNI / Input VAT, Cr EWT payable and AP control (per vendor).
+model ApBill {
+  id                String          @id @default(cuid())
+  organizationId    String
+  number            String // APV-2026-000001
+  vendorId          String
+  supplierInvoiceNo String
+  invoiceDate       DateTime        @db.Date
+  date              DateTime        @db.Date // posting date
+  dueDate           DateTime        @db.Date
+  purchaseOrderId   String?
+  memo              String
+  currencyCode      String          @default("PHP")
+  fxRate            Decimal         @default(1) @db.Decimal(18, 6)
+  vatInclusive      Boolean         @default(false)
+  subtotal          Decimal         @default(0) @db.Decimal(18, 2) // net of VAT
+  vatAmount         Decimal         @default(0) @db.Decimal(18, 2)
+  total             Decimal         @default(0) @db.Decimal(18, 2) // invoice total = subtotal + VAT
+  ewtAmount         Decimal         @default(0) @db.Decimal(18, 2)
+  netPayable        Decimal         @default(0) @db.Decimal(18, 2) // total - EWT: what the supplier is paid
+  matchNotes        Json? // 3-way match warnings shown to approvers
+  status            String          @default("DRAFT") // DRAFT | PENDING_APPROVAL | POSTED | VOID
+  scheduledPayDate  DateTime?       @db.Date
+  onHold            Boolean         @default(false)
+  journalEntryId    String?
+  inboxDocumentId   String?         @unique
+  createdById       String
+  updatedById       String?
+  submittedById     String?
+  submittedAt       DateTime?
+  approvedById      String?
+  approvedAt        DateTime?
+  rejectReason      String?
+  voidedById        String?
+  voidedAt          DateTime?
+  voidReason        String?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  lines             ApBillLine[]
+  paymentLines      ApPaymentLine[]
+
+  @@unique([organizationId, number])
+  @@index([organizationId, vendorId, status])
+  @@index([organizationId, status, dueDate])
+}
+
+model ApBillLine {
+  id           String             @id @default(cuid())
+  billId       String
+  lineNo       Int
+  description  String
+  category     String             @default("EXPENSE") // EXPENSE | INVENTORY | FIXED_ASSET | PREPAYMENT
+  accountId    String
+  quantity     Decimal            @default(1) @db.Decimal(18, 4)
+  unitPrice    Decimal            @db.Decimal(18, 4)
+  vatType      String             @default("VATABLE") // VATABLE | ZERO_RATED | EXEMPT
+  netAmount    Decimal            @db.Decimal(18, 2)
+  vatAmount    Decimal            @default(0) @db.Decimal(18, 2)
+  ewtTaxCodeId String?
+  ewtAmount    Decimal            @default(0) @db.Decimal(18, 2)
+  poLineId     String?
+  dims         Json?
+  prepaidStart DateTime?          @db.Date // prepayment coverage, for the prepaid expenses module
+  prepaidEnd   DateTime?          @db.Date
+  bill         ApBill             @relation(fields: [billId], references: [id], onDelete: Cascade)
+  poLine       PurchaseOrderLine? @relation(fields: [poLineId], references: [id])
+}
+
+// Payment voucher to a supplier. When approved it creates a posted cash disbursement (check or transfer),
+// so it shows in check monitoring and bank reconciliation.
+model ApPayment {
+  id                String          @id @default(cuid())
+  organizationId    String
+  number            String // PV-2026-000001
+  vendorId          String
+  bankAccountId     String
+  date              DateTime        @db.Date
+  method            String          @default("CHECK") // CHECK | BANK_TRANSFER | ONLINE | EWALLET | CASH
+  checkNo           String?
+  checkDate         DateTime?       @db.Date
+  reference         String?
+  memo              String
+  currencyCode      String          @default("PHP")
+  fxRate            Decimal         @default(1) @db.Decimal(18, 6)
+  amount            Decimal         @db.Decimal(18, 2)
+  status            String          @default("DRAFT") // DRAFT | PENDING_APPROVAL | POSTED | VOID
+  cashTransactionId String?         @unique
+  createdById       String
+  updatedById       String?
+  submittedById     String?
+  submittedAt       DateTime?
+  approvedById      String?
+  approvedAt        DateTime?
+  rejectReason      String?
+  voidedById        String?
+  voidedAt          DateTime?
+  voidReason        String?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  lines             ApPaymentLine[]
+
+  @@unique([organizationId, number])
+  @@index([organizationId, vendorId, status])
+}
+
+model ApPaymentLine {
+  id        String    @id @default(cuid())
+  paymentId String
+  billId    String
+  amount    Decimal   @db.Decimal(18, 2) // part of the bill's net payable settled
+  payment   ApPayment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  bill      ApBill    @relation(fields: [billId], references: [id])
+}
+
+// A supplier invoice that arrived by email (or was uploaded) and is waiting to be read and reviewed.
+model ApInboxDocument {
+  id              String    @id @default(cuid())
+  organizationId  String
+  source          String // EMAIL | UPLOAD
+  fromEmail       String?
+  subject         String?
+  receivedAt      DateTime  @default(now())
+  fileName        String
+  mediaType       String
+  data            Bytes
+  sha256          String // detects the same file sent twice
+  status          String    @default("NEW") // NEW | READING | READY | FAILED | BILLED | REJECTED
+  extraction      Json? // what the AI read, kept for audit
+  vendorId        String?
+  purchaseOrderId String?
+  duplicateOfId   String? // bill or document already recorded for the same supplier invoice
+  error           String?
+  billId          String?
+  reviewedById    String?
+  reviewedAt      DateTime?
+  rejectReason    String?
+  uploadedById    String?
+  createdAt       DateTime  @default(now())
+
+  @@index([organizationId, status])
+  @@index([organizationId, sha256])
 }
 
 // ======================= Inventory and warehouse (PAS 2) =======================
@@ -1269,14 +1615,14 @@ model DocumentEmail {
 // InventoryBalance is the running total per item and warehouse. Quantities are 4 decimals.
 
 model Warehouse {
-  id             String   @id @default(cuid())
+  id             String              @id @default(cuid())
   organizationId String
   code           String
   name           String
   address        String?
-  branchCode     String?  // BRANCH dimension code, tagged on this warehouse's GL lines
-  isActive       Boolean  @default(true)
-  createdAt      DateTime @default(now())
+  branchCode     String? // BRANCH dimension code, tagged on this warehouse's GL lines
+  isActive       Boolean             @default(true)
+  createdAt      DateTime            @default(now())
   locations      WarehouseLocation[]
 
   @@unique([organizationId, code])
@@ -1297,38 +1643,38 @@ model WarehouseLocation {
 }
 
 model InventoryTransaction {
-  id             String    @id @default(cuid())
-  organizationId String
-  number         String    // RR- receipt, IS- issue, ST- transfer, IA- adjustment, CRT- customer return, VRT- return to vendor
-  type           String    // RECEIPT | ISSUE | TRANSFER | ADJUSTMENT | RETURN_IN | RETURN_OUT
-  date           DateTime  @db.Date
-  warehouseId    String
-  toWarehouseId  String?   // transfers
-  partyType      String?   // VENDOR | CUSTOMER | EMPLOYEE ...
-  partyId        String?   // party code
-  reference      String?
-  memo           String
-  offsetAccountId String?  // contra account for the whole document (lines may override)
-  status         String    @default("DRAFT") // DRAFT | PENDING_APPROVAL | POSTED | VOID
+  id              String                     @id @default(cuid())
+  organizationId  String
+  number          String // RR- receipt, IS- issue, ST- transfer, IA- adjustment, CRT- customer return, VRT- return to vendor
+  type            String // RECEIPT | ISSUE | TRANSFER | ADJUSTMENT | RETURN_IN | RETURN_OUT
+  date            DateTime                   @db.Date
+  warehouseId     String
+  toWarehouseId   String? // transfers
+  partyType       String? // VENDOR | CUSTOMER | EMPLOYEE ...
+  partyId         String? // party code
+  reference       String?
+  memo            String
+  offsetAccountId String? // contra account for the whole document (lines may override)
+  status          String                     @default("DRAFT") // DRAFT | PENDING_APPROVAL | POSTED | VOID
   // Set when another module created the document (PURCHASES goods receipt, SALES delivery, COUNT).
-  sourceModule   String?
-  sourceId       String?
-  countId        String?   @unique
-  totalValue     Decimal   @db.Decimal(18, 2) @default(0)
-  journalEntryId String?   @unique
-  createdById    String
-  createdAt      DateTime  @default(now())
-  updatedById    String?
-  submittedById  String?
-  submittedAt    DateTime?
-  postedById     String?
-  postedAt       DateTime?
-  rejectReason   String?
-  voidedById     String?
-  voidedAt       DateTime?
-  voidReason     String?
-  voidJournalId  String?
-  lines          InventoryTransactionLine[]
+  sourceModule    String?
+  sourceId        String?
+  countId         String?                    @unique
+  totalValue      Decimal                    @default(0) @db.Decimal(18, 2)
+  journalEntryId  String?                    @unique
+  createdById     String
+  createdAt       DateTime                   @default(now())
+  updatedById     String?
+  submittedById   String?
+  submittedAt     DateTime?
+  postedById      String?
+  postedAt        DateTime?
+  rejectReason    String?
+  voidedById      String?
+  voidedAt        DateTime?
+  voidReason      String?
+  voidJournalId   String?
+  lines           InventoryTransactionLine[]
 
   @@unique([organizationId, number])
   @@index([organizationId, type, date])
@@ -1336,21 +1682,21 @@ model InventoryTransaction {
 }
 
 model InventoryTransactionLine {
-  id             String   @id @default(cuid())
-  transactionId  String
-  lineNo         Int
-  itemId         String
-  qty            Decimal  @db.Decimal(18, 4) // positive; adjustments: + adds stock, - removes
-  unitCost       Decimal? @db.Decimal(18, 6) // stock coming in (receipts, customer returns, adjustments up)
-  locationId     String?
-  toLocationId   String?  // transfers
-  lotNo          String?  // lot / serial no. (required for specific identification)
-  accountId      String?  // overrides the document's offset account (e.g. expense account of an issue)
-  dims           Json?
-  description    String?
-  value          Decimal  @db.Decimal(18, 2) @default(0) // cost moved, computed when posted
-  transaction    InventoryTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
-  item           Product  @relation(fields: [itemId], references: [id])
+  id            String               @id @default(cuid())
+  transactionId String
+  lineNo        Int
+  itemId        String
+  qty           Decimal              @db.Decimal(18, 4) // positive; adjustments: + adds stock, - removes
+  unitCost      Decimal?             @db.Decimal(18, 6) // stock coming in (receipts, customer returns, adjustments up)
+  locationId    String?
+  toLocationId  String? // transfers
+  lotNo         String? // lot / serial no. (required for specific identification)
+  accountId     String? // overrides the document's offset account (e.g. expense account of an issue)
+  dims          Json?
+  description   String?
+  value         Decimal              @default(0) @db.Decimal(18, 2) // cost moved, computed when posted
+  transaction   InventoryTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  item          Product              @relation(fields: [itemId], references: [id])
 
   @@index([itemId])
 }
@@ -1387,7 +1733,7 @@ model InventoryMove {
   date           DateTime @db.Date
   qty            Decimal  @db.Decimal(18, 4) // + in, - out
   value          Decimal  @db.Decimal(18, 2) // + in, - out
-  type           String   // the document type, or VOID for the undo of a voided document
+  type           String // the document type, or VOID for the undo of a voided document
   transactionId  String
   lineId         String
   createdAt      DateTime @default(now())
@@ -1402,8 +1748,8 @@ model InventoryBalance {
   organizationId String
   itemId         String
   warehouseId    String
-  qty            Decimal  @db.Decimal(18, 4) @default(0)
-  value          Decimal  @db.Decimal(18, 2) @default(0)
+  qty            Decimal @default(0) @db.Decimal(18, 4)
+  value          Decimal @default(0) @db.Decimal(18, 2)
 
   @@id([itemId, warehouseId])
   @@index([organizationId])
@@ -1411,38 +1757,38 @@ model InventoryBalance {
 
 // Cycle count (selected items or a category) or full physical inventory count of one warehouse.
 model InventoryCount {
-  id             String    @id @default(cuid())
+  id             String               @id @default(cuid())
   organizationId String
-  number         String    // CNT-2026-000001
-  type           String    // CYCLE | PHYSICAL
+  number         String // CNT-2026-000001
+  type           String // CYCLE | PHYSICAL
   warehouseId    String
-  date           DateTime  @db.Date
+  date           DateTime             @db.Date
   memo           String?
-  status         String    @default("DRAFT") // DRAFT | PENDING_APPROVAL | POSTED | VOID
+  status         String               @default("DRAFT") // DRAFT | PENDING_APPROVAL | POSTED | VOID
   createdById    String
-  createdAt      DateTime  @default(now())
+  createdAt      DateTime             @default(now())
   submittedById  String?
   submittedAt    DateTime?
   postedById     String?
   postedAt       DateTime?
   rejectReason   String?
-  adjustmentId   String?   // the IA- adjustment that booked the variances
+  adjustmentId   String? // the IA- adjustment that booked the variances
   lines          InventoryCountLine[]
 
   @@unique([organizationId, number])
 }
 
 model InventoryCountLine {
-  id             String   @id @default(cuid())
-  countId        String
-  itemId         String
-  locationId     String?
-  lotNo          String?
-  systemQty      Decimal  @db.Decimal(18, 4) // on hand when the count sheet was made
-  countedQty     Decimal? @db.Decimal(18, 4) // blank = not counted yet
-  note           String?
-  count          InventoryCount @relation(fields: [countId], references: [id], onDelete: Cascade)
-  item           Product  @relation(fields: [itemId], references: [id])
+  id         String         @id @default(cuid())
+  countId    String
+  itemId     String
+  locationId String?
+  lotNo      String?
+  systemQty  Decimal        @db.Decimal(18, 4) // on hand when the count sheet was made
+  countedQty Decimal?       @db.Decimal(18, 4) // blank = not counted yet
+  note       String?
+  count      InventoryCount @relation(fields: [countId], references: [id], onDelete: Cascade)
+  item       Product        @relation(fields: [itemId], references: [id])
 
   @@index([countId])
 }
