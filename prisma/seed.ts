@@ -10,6 +10,7 @@ import { importStatement, statementTemplate } from "../src/lib/bank/recon";
 import ExcelJS from "exceljs";
 import { approveVoucher, createFund, createVoucher, financeClear } from "../src/lib/pettycash/service";
 import { scanAsset, startAudit } from "../src/lib/assets/audit";
+import { addAsset, disposeAsset, runDepreciation } from "../src/lib/assets/service";
 
 async function main() {
   if (await prisma.user.findUnique({ where: { email: "owner@demo.ph" } })) return console.log("Demo data already present.");
@@ -160,6 +161,13 @@ async function main() {
   const audit = await startAudit(P, bk.id, { name: "Q1 asset count", location: "Makati HQ" });
   await scanAsset(P, bk.id, audit.id, { tagText: "VFA:FA-000101", condition: "GOOD" });
   await scanAsset(P, bk.id, audit.id, { tagText: "VFA:FA-000102", condition: "FOR_REPAIR" });
+  // Fixed assets: a purchase posted through AP, three monthly depreciation runs and a sale.
+  const mac = await addAsset(P, owner.id, { name: "MacBook Pro 14 (design)", categoryCode: "IT", location: "Makati HQ", custodianCode: "E-003", costCenterCode: "CC-SALES",
+    acquisitionDate: new Date(`${y}-02-03`), cost: "128000", postToGl: true, offsetAccountCode: "2010", reference: "SI 88412" });
+  for (const m of [1, 2, 3]) await runDepreciation(P, owner.id, y, m);
+  await disposeAsset(P, owner.id, { assetId: (await prisma.fixedAsset.findFirstOrThrow({ where: { organizationId: P, code: "FA-000103" } })).id, type: "DISPOSAL", date: new Date(`${y}-04-20`),
+    proceeds: "15000", outputVat: "1800", proceedsAccountCode: "1010", buyer: "Staff sale - B. Bookkeeper", memo: "Replaced with sit-stand desk" });
+  void mac;
   console.log("Demo created. Sign in as owner@demo.ph / accountant@demo.ph / bookkeeper@demo.ph, password demo12345");
 }
 main().finally(() => prisma.$disconnect());
