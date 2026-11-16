@@ -20,8 +20,8 @@ const d = (s: string) => new Date(`${Y}-${s}`);
 const acctId = async (code: string) => (await prisma.account.findUniqueOrThrow({ where: { organizationId_code: { organizationId: org, code } } })).id;
 const bal = async (code: string, asOf = d("12-31")) => {
   const tb = await trialBalance(org, asOf);
-  const r = tb.rows.find((x) => x.code === code);
-  return r ? r.debit - r.credit : 0n;
+  const r = tb.rows.find((x) => x.account.code === code);
+  return r ? r.closing : 0n;
 };
 
 beforeAll(async () => {
