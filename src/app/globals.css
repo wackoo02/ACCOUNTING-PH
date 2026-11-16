@@ -1,6 +1,6 @@
 :root {
   --bg: #f6f7f9; --panel: #fff; --ink: #1b1f24; --muted: #5f6b7a; --line: #e2e6eb;
-  --brand: #6D28D9; --brand-ink: #fff; --danger: #b42318; --ok: #1a7f37; --warn: #9a6700;
+  --brand: #6D28D9; --accent: #FF6B1A; --brand-ink: #fff; --danger: #b42318; --ok: #1a7f37; --warn: #9a6700;
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   font-size: 14px; color: var(--ink); background: var(--bg);
 }
@@ -11,9 +11,9 @@ a:hover { text-decoration: underline; }
 .shell { display: grid; grid-template-columns: 220px 1fr; min-height: 100vh; }
 .side { background: #1E1338; color: #d9d2ea; padding: 16px 12px; }
 .side .brand { color: #fff; font-weight: 700; font-size: 16px; margin: 4px 8px 16px; }
-.side nav a { display: block; color: #d9d2ea; padding: 7px 10px; border-radius: 6px; }
-.side nav a:hover { background: #352258; color: #fff; text-decoration: none; }
-.side .sect { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: #a594c9; margin: 14px 10px 4px; }
+.side nav a { display: block; color: #d9d2ea; padding: 7px 10px; border-radius: 6px; border-left: 3px solid transparent; }
+.side nav a:hover { background: #352258; border-left-color: var(--accent); color: #fff; text-decoration: none; }
+.side .sect { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: #FF8A4C; margin: 14px 10px 4px; }
 .side .soon { color: #8574a8; padding: 4px 10px; font-size: 13px; }
 .main { padding: 20px 28px; min-width: 0; }
 .top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; gap: 12px; flex-wrap: wrap; }
@@ -62,3 +62,4 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 .logo { display: flex; align-items: center; gap: 10px; }
 .logo-name { font-weight: 700; font-size: 17px; letter-spacing: .01em; }
 .logo-tag { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+.stat { border-top: 3px solid var(--accent); }

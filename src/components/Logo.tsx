@@ -11,7 +11,7 @@ export function LogoMark({ size = 28 }: { size?: number }) {
       </defs>
       <rect width="64" height="64" rx="14" fill="url(#vg)" />
       <path d="M16 18 L32 48 L48 18" fill="none" stroke="#fff" strokeWidth="7" strokeLinecap="round" strokeLinejoin="round" />
-      <circle cx="48" cy="18" r="4.5" fill="#E9D5FF" />
+      <circle cx="48" cy="18" r="6" fill="#FF6B1A" />
     </svg>
   );
 }
@@ -21,7 +21,7 @@ export function Logo({ tagline = false, dark = false }: { tagline?: boolean; dar
     <div className="logo">
       <LogoMark />
       <div>
-        <div className="logo-name" style={{ color: dark ? "#fff" : "var(--ink)" }}>{BRAND.name}</div>
+        <div className="logo-name" style={{ color: dark ? "#fff" : "var(--ink)" }}>Veritus <span style={{ color: "var(--accent)" }}>ERP</span></div>
         {tagline && <div className="logo-tag">{BRAND.tagline}</div>}
       </div>
     </div>
