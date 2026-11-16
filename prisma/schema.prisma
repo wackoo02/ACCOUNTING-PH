@@ -394,10 +394,28 @@ model Product {
   vatType        String       @default("VATABLE") // VATABLE | ZERO_RATED | EXEMPT
   salesAccountCode    String?
   expenseAccountCode  String?
+  // ---- Inventory (PAS 2). Only items with isStocked = true are tracked in the stock ledger. ----
+  isStocked      Boolean      @default(false)
+  category       String?
+  barcode        String?      // EAN/UPC or own code; scanners type it into any item field
+  costingMethod  String       @default("WEIGHTED_AVERAGE") // FIFO | WEIGHTED_AVERAGE | SPECIFIC (specific identification, needs lot/serial no.)
+  standardCost   Decimal      @db.Decimal(18, 6) @default(0) // reference cost: default for receipts/count gains when nothing else is known
+  reorderPoint   Decimal      @db.Decimal(18, 4) @default(0)
+  reorderQty     Decimal      @db.Decimal(18, 4) @default(0)
+  defaultWarehouseCode String?
+  defaultLocationCode  String?
+  defaultVendorCode    String?
+  inventoryAccountCode String? // blank = account with role INVENTORY
+  cogsAccountCode      String? // blank = expenseAccountCode, then role COGS
   isActive       Boolean      @default(true)
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  inventoryLines InventoryTransactionLine[]
+  inventoryLayers InventoryLayer[]
+  inventoryMoves InventoryMove[]
+  countLines     InventoryCountLine[]
 
   @@unique([organizationId, code])
+  @@index([organizationId, barcode])
 }
 
 model Employee {
@@ -880,4 +898,190 @@ model ReceiptImage {
   uploadedById   String
   createdAt      DateTime     @default(now())
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+// ======================= Inventory and warehouse (PAS 2) =======================
+// Stock ledger: every posted inventory document writes InventoryMove rows (signed qty and value).
+// Cost layers (InventoryLayer) hold what is on hand by receipt date, location and lot:
+// FIFO consumes the oldest layers, specific identification consumes the chosen lot,
+// weighted average costs at the warehouse's running average (layers then only track quantity and age).
+// InventoryBalance is the running total per item and warehouse. Quantities are 4 decimals.
+
+model Warehouse {
+  id             String   @id @default(cuid())
+  organizationId String
+  code           String
+  name           String
+  address        String?
+  branchCode     String?  // BRANCH dimension code, tagged on this warehouse's GL lines
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  locations      WarehouseLocation[]
+
+  @@unique([organizationId, code])
+}
+
+// Bin / rack / shelf inside a warehouse.
+model WarehouseLocation {
+  id             String    @id @default(cuid())
+  organizationId String
+  warehouseId    String
+  code           String
+  name           String
+  isActive       Boolean   @default(true)
+  warehouse      Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+
+  @@unique([warehouseId, code])
+  @@index([organizationId])
+}
+
+model InventoryTransaction {
+  id             String    @id @default(cuid())
+  organizationId String
+  number         String    // RR- receipt, IS- issue, ST- transfer, IA- adjustment, CRT- customer return, VRT- return to vendor
+  type           String    // RECEIPT | ISSUE | TRANSFER | ADJUSTMENT | RETURN_IN | RETURN_OUT
+  date           DateTime  @db.Date
+  warehouseId    String
+  toWarehouseId  String?   // transfers
+  partyType      String?   // VENDOR | CUSTOMER | EMPLOYEE ...
+  partyId        String?   // party code
+  reference      String?
+  memo           String
+  offsetAccountId String?  // contra account for the whole document (lines may override)
+  status         String    @default("DRAFT") // DRAFT | PENDING_APPROVAL | POSTED | VOID
+  // Set when another module created the document (PURCHASES goods receipt, SALES delivery, COUNT).
+  sourceModule   String?
+  sourceId       String?
+  countId        String?   @unique
+  totalValue     Decimal   @db.Decimal(18, 2) @default(0)
+  journalEntryId String?   @unique
+  createdById    String
+  createdAt      DateTime  @default(now())
+  updatedById    String?
+  submittedById  String?
+  submittedAt    DateTime?
+  postedById     String?
+  postedAt       DateTime?
+  rejectReason   String?
+  voidedById     String?
+  voidedAt       DateTime?
+  voidReason     String?
+  voidJournalId  String?
+  lines          InventoryTransactionLine[]
+
+  @@unique([organizationId, number])
+  @@index([organizationId, type, date])
+  @@index([organizationId, sourceModule, sourceId])
+}
+
+model InventoryTransactionLine {
+  id             String   @id @default(cuid())
+  transactionId  String
+  lineNo         Int
+  itemId         String
+  qty            Decimal  @db.Decimal(18, 4) // positive; adjustments: + adds stock, - removes
+  unitCost       Decimal? @db.Decimal(18, 6) // stock coming in (receipts, customer returns, adjustments up)
+  locationId     String?
+  toLocationId   String?  // transfers
+  lotNo          String?  // lot / serial no. (required for specific identification)
+  accountId      String?  // overrides the document's offset account (e.g. expense account of an issue)
+  dims           Json?
+  description    String?
+  value          Decimal  @db.Decimal(18, 2) @default(0) // cost moved, computed when posted
+  transaction    InventoryTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  item           Product  @relation(fields: [itemId], references: [id])
+
+  @@index([itemId])
+}
+
+model InventoryLayer {
+  id             String   @id @default(cuid())
+  organizationId String
+  itemId         String
+  warehouseId    String
+  locationId     String?
+  lotNo          String?
+  receivedDate   DateTime @db.Date // age of the stock (kept through transfers)
+  unitCost       Decimal  @db.Decimal(18, 6)
+  qtyIn          Decimal  @db.Decimal(18, 4)
+  qtyRemaining   Decimal  @db.Decimal(18, 4)
+  valueIn        Decimal  @db.Decimal(18, 2)
+  valueRemaining Decimal  @db.Decimal(18, 2)
+  sourceLineId   String
+  createdAt      DateTime @default(now())
+  item           Product  @relation(fields: [itemId], references: [id])
+
+  @@index([organizationId, itemId, warehouseId])
+  @@index([sourceLineId])
+}
+
+model InventoryMove {
+  id             String   @id @default(cuid())
+  seq            Int      @default(autoincrement())
+  organizationId String
+  itemId         String
+  warehouseId    String
+  locationId     String?
+  layerId        String?
+  date           DateTime @db.Date
+  qty            Decimal  @db.Decimal(18, 4) // + in, - out
+  value          Decimal  @db.Decimal(18, 2) // + in, - out
+  type           String   // the document type, or VOID for the undo of a voided document
+  transactionId  String
+  lineId         String
+  createdAt      DateTime @default(now())
+  item           Product  @relation(fields: [itemId], references: [id])
+
+  @@index([organizationId, itemId, warehouseId, date])
+  @@index([organizationId, date])
+  @@index([transactionId])
+}
+
+model InventoryBalance {
+  organizationId String
+  itemId         String
+  warehouseId    String
+  qty            Decimal  @db.Decimal(18, 4) @default(0)
+  value          Decimal  @db.Decimal(18, 2) @default(0)
+
+  @@id([itemId, warehouseId])
+  @@index([organizationId])
+}
+
+// Cycle count (selected items or a category) or full physical inventory count of one warehouse.
+model InventoryCount {
+  id             String    @id @default(cuid())
+  organizationId String
+  number         String    // CNT-2026-000001
+  type           String    // CYCLE | PHYSICAL
+  warehouseId    String
+  date           DateTime  @db.Date
+  memo           String?
+  status         String    @default("DRAFT") // DRAFT | PENDING_APPROVAL | POSTED | VOID
+  createdById    String
+  createdAt      DateTime  @default(now())
+  submittedById  String?
+  submittedAt    DateTime?
+  postedById     String?
+  postedAt       DateTime?
+  rejectReason   String?
+  adjustmentId   String?   // the IA- adjustment that booked the variances
+  lines          InventoryCountLine[]
+
+  @@unique([organizationId, number])
+}
+
+model InventoryCountLine {
+  id             String   @id @default(cuid())
+  countId        String
+  itemId         String
+  locationId     String?
+  lotNo          String?
+  systemQty      Decimal  @db.Decimal(18, 4) // on hand when the count sheet was made
+  countedQty     Decimal? @db.Decimal(18, 4) // blank = not counted yet
+  note           String?
+  count          InventoryCount @relation(fields: [countId], references: [id], onDelete: Cascade)
+  item           Product  @relation(fields: [itemId], references: [id])
+
+  @@index([countId])
 }

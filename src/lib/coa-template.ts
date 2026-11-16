@@ -59,6 +59,7 @@ export const PH_IFRS_TEMPLATE: TemplateAccount[] = [
   { code: "2015", name: "Corporate Credit Card Payable", type: L, ifrsGroup: "Trade and other payables", isCurrent: true, parent: "2000", systemRole: "CORPORATE_CARD" },
   { code: "2018", name: "Employee Reimbursements Payable", type: L, ifrsGroup: "Trade and other payables", isCurrent: true, parent: "2000", systemRole: "EMPLOYEE_REIMB_PAYABLE" },
   { code: "2020", name: "Accrued Expenses", type: L, ifrsGroup: "Trade and other payables", isCurrent: true, parent: "2000" },
+  { code: "2022", name: "Goods Received Not Yet Invoiced", type: L, ifrsGroup: "Trade and other payables", isCurrent: true, parent: "2000", systemRole: "GRNI" },
   { code: "2030", name: "Output VAT", type: L, ifrsGroup: "Trade and other payables", isCurrent: true, parent: "2000", systemRole: "OUTPUT_VAT" },
   { code: "2035", name: "VAT Payable", type: L, ifrsGroup: "Trade and other payables", isCurrent: true, parent: "2000", systemRole: "VAT_PAYABLE" },
   { code: "2040", name: "Withholding Tax Payable - Compensation (1601-C)", type: L, ifrsGroup: "Trade and other payables", isCurrent: true, parent: "2000", systemRole: "WTC_PAYABLE" },
@@ -100,6 +101,7 @@ export const PH_IFRS_TEMPLATE: TemplateAccount[] = [
   { code: "5000", name: "Cost of Sales", type: X, ifrsGroup: "Cost of sales", header: true },
   { code: "5010", name: "Cost of Goods Sold", type: X, ifrsGroup: "Cost of sales", parent: "5000", systemRole: "COGS" },
   { code: "5020", name: "Cost of Services", type: X, ifrsGroup: "Cost of sales", parent: "5000" },
+  { code: "5030", name: "Inventory Losses and Count Adjustments", type: X, ifrsGroup: "Cost of sales", parent: "5000", systemRole: "INVENTORY_ADJUSTMENT" },
 
   // ---- OPERATING EXPENSES ----
   { code: "6000", name: "Operating Expenses", type: X, ifrsGroup: "Operating expenses", header: true },

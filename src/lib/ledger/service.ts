@@ -89,7 +89,7 @@ export async function nextNumber(tx: Tx, organizationId: string, prefix: string,
   return `${key}-${String(seq.next - 1).padStart(6, "0")}`;
 }
 
-async function assertPeriodOpen(tx: Tx, organizationId: string, date: Date) {
+export async function assertPeriodOpen(tx: Tx, organizationId: string, date: Date) {
   const year = date.getUTCFullYear();
   const month = date.getUTCMonth() + 1;
   const p = await tx.fiscalPeriod.findUnique({ where: { organizationId_year_month: { organizationId, year, month } } });
@@ -321,6 +321,9 @@ export async function voidOrReverseTx(tx: Tx, organizationId: string, userId: st
     if (!e) throw new LedgerError(["Entry not found"]);
     if (e.source === "BANK" && e.sourceId && !fromSubledger) {
       throw new LedgerError(["This entry came from Cash and Bank. Void the cash voucher, or undo the bank adjustment on the reconciliation screen, instead."]);
+    }
+    if (e.source === "INVENTORY" && e.sourceId && !fromSubledger) {
+      throw new LedgerError(["This entry came from Inventory. Void the inventory document instead, so the stock ledger and the GL stay in agreement."]);
     }
     if (e.lines.some((l) => l.clearedAt)) {
       throw new LedgerError(["This entry is already cleared against the bank statement. Undo the match on the bank reconciliation screen first."]);

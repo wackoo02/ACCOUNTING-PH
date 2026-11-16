@@ -8,7 +8,7 @@ export type { NavItem, NavSection };
 
 const MASTER_ICON: Record<string, IconName> = {
   accounts: "accounts", dimensions: "dimensions", taxes: "taxes", banks: "banks", products: "products",
-  employees: "employees", vendors: "vendors", customers: "customers", currencies: "currencies",
+  employees: "employees", vendors: "vendors", customers: "customers", currencies: "currencies", warehouses: "inventory", locations: "inventory",
 };
 
 export const NAV: NavSection[] = [
