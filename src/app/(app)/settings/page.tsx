@@ -28,6 +28,10 @@ export default async function Settings() {
         <h2>Controls</h2>
         <label style={{ display: "flex", gap: 6, color: "var(--ink)" }}><input type="checkbox" name="requireApproval" defaultChecked={o.requireApproval} style={{ width: "auto" }} /> Posting approval workflow: manual journal entries must be submitted and approved before they post</label>
         <label style={{ display: "flex", gap: 6, marginTop: 6, color: "var(--ink)" }}><input type="checkbox" name="segregationOfDuties" defaultChecked={o.segregationOfDuties} style={{ width: "auto" }} /> Segregation of duties: the person who prepared or edited an entry cannot approve it</label>
+        <div className="row" style={{ marginTop: 10 }}>
+          <div style={{ maxWidth: 260 }}><label>Fixed asset threshold (PHP)</label><input name="fixedAssetThreshold" className="num" defaultValue={o.fixedAssetThreshold.toString()} /></div>
+        </div>
+        <p className="muted">Petty cash: an item with a unit cost at or above this amount is treated as a fixed asset. It must be charged to a property and equipment account and needs an approved purchase order.</p>
         <p className="muted">Approval limits per person are set in Users and Roles. Restrict accounts to sub-ledger postings with &quot;Allow Manual Journals&quot; in the Chart of Accounts. Month and year locks are under Fiscal Periods.</p>
         <button>Save settings</button>
       </ActionForm>

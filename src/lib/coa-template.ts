@@ -19,7 +19,7 @@ export const PH_IFRS_TEMPLATE: TemplateAccount[] = [
   // ---- ASSETS ----
   { code: "1000", name: "Current Assets", type: A, ifrsGroup: "Current assets", isCurrent: true, header: true },
   { code: "1010", name: "Cash on Hand", type: A, ifrsGroup: "Cash and cash equivalents", isCurrent: true, parent: "1000", systemRole: "CASH_ON_HAND" },
-  { code: "1015", name: "Petty Cash Fund", type: A, ifrsGroup: "Cash and cash equivalents", isCurrent: true, parent: "1000" },
+  { code: "1015", name: "Petty Cash Fund", type: A, ifrsGroup: "Cash and cash equivalents", isCurrent: true, parent: "1000", systemRole: "PETTY_CASH_FUND" },
   { code: "1020", name: "Cash in Bank - Current Account", type: A, ifrsGroup: "Cash and cash equivalents", isCurrent: true, parent: "1000" },
   { code: "1025", name: "Cash in Bank - Savings Account", type: A, ifrsGroup: "Cash and cash equivalents", isCurrent: true, parent: "1000" },
   { code: "1030", name: "Cash in GCash Wallet (Corporate)", type: A, ifrsGroup: "Cash and cash equivalents", isCurrent: true, parent: "1000", systemRole: "GCASH_WALLET" },
