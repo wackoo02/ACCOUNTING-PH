@@ -9,6 +9,7 @@ import { LedgerError, assertCanApprove, asDay, audit, nextNumber, recordJournalT
 import { assertNotReconciled } from "../bank/cash";
 import { can } from "../permissions";
 import { addDays, computeInvoice, type VatType, VAT_TYPES } from "./compute";
+import { issueGoodsTx, voidBySourceTx } from "../inventory/hooks";
 
 type Tx = Prisma.TransactionClient;
 export type Action = "draft" | "submit" | "post";
@@ -94,13 +95,15 @@ export async function saveSeries(organizationId: string, userId: string, input: 
 
 export type InvoiceLineInput = {
   productId?: string | null; description: string; quantity: string; unit?: string | null; unitPrice: string; discount?: string | null;
-  vatType: VatType; accountId?: string | null; dims?: Dims;
+  vatType: VatType; accountId?: string | null; dims?: Dims; lotNo?: string | null;
 };
 export type InvoiceInput = {
   organizationId: string; userId: string; kind?: DocKind; customerId: string; date: Date; termsDays?: number | null; dueDate?: Date | null;
   fxRate?: string | null; pricesIncludeVat?: boolean; reference?: string | null; memo?: string | null; ewtTaxCodeId?: string | null;
   lines: InvoiceLineInput[]; creditForId?: string | null; reason?: string | null;
   source?: string; sourceRef?: string | null; contractId?: string | null; action?: Action;
+  /** Warehouse that stocked items ship from; blank uses each item's default warehouse. */
+  warehouseId?: string | null;
 };
 
 type Invoice = Prisma.SalesInvoiceGetPayload<{ include: { lines: true } }>;
@@ -148,6 +151,16 @@ async function prepareInvoice(tx: Tx, input: InvoiceInput) {
     if (!acct) errors.push(`Line ${i + 1}: choose the revenue account`);
     accountIds.push(acct ?? "");
   }
+  const warehouse = input.warehouseId ? await tx.warehouse.findFirst({ where: { id: input.warehouseId, organizationId: input.organizationId } }) : null;
+  if (input.warehouseId && !warehouse) errors.push("Warehouse not found");
+  if (kind === "INVOICE") {
+    for (const [i, l] of rows.entries()) {
+      const p = products.find((x) => x.id === l.productId);
+      if (!p?.isStocked) continue;
+      if (!warehouse && !p.defaultWarehouseCode) errors.push(`Line ${i + 1}: ${p.code} is an inventory item; choose the warehouse it ships from`);
+      if (p.costingMethod === "SPECIFIC" && !l.lotNo?.trim()) errors.push(`Line ${i + 1}: ${p.code} uses specific identification; enter the lot or serial number`);
+    }
+  }
   let calc: ReturnType<typeof computeInvoice> | null = null;
   let ewtRate: string | null = null;
   if (input.ewtTaxCodeId) {
@@ -178,6 +191,7 @@ async function prepareInvoice(tx: Tx, input: InvoiceInput) {
       discountAmount: dec(c.discount), totalAmount: dec(c.total), ewtTaxCodeId: input.ewtTaxCodeId || null, ewtAmount: dec(c.ewt),
       creditForId: creditFor?.id ?? null, reason: input.reason?.trim() || null,
       source: input.source ?? "MANUAL", sourceRef: input.sourceRef ?? null, contractId: input.contractId ?? null,
+      warehouseId: warehouse?.id ?? null,
     },
     lines: rows.map((l, i) => {
       const p = products.find((x) => x.id === l.productId);
@@ -185,7 +199,7 @@ async function prepareInvoice(tx: Tx, input: InvoiceInput) {
         lineNo: i + 1, productId: p?.id ?? null, description: l.description?.trim() || p?.name || "", quantity: new Prisma.Decimal(String(l.quantity).replace(/,/g, "")),
         unit: l.unit?.trim() || p?.unit || null, unitPrice: new Prisma.Decimal(String(l.unitPrice).replace(/,/g, "")), discount: dec(toCentavos(l.discount ?? "0")),
         vatType: org.vatRegistered ? l.vatType : "EXEMPT", accountId: accountIds[i], netAmount: dec(c.lines[i].net), vatAmount: dec(c.lines[i].vat),
-        dims: (l.dims ?? {}) as Prisma.InputJsonValue,
+        dims: (l.dims ?? {}) as Prisma.InputJsonValue, lotNo: l.lotNo?.trim() || null,
       };
     }),
   };
@@ -293,6 +307,7 @@ async function postInvoiceTx(tx: Tx, inv: Invoice, userId: string) {
   });
   if (r.count !== 1) throw new LedgerError(["This document was changed by someone else; refresh and try again"]);
   await audit(tx, inv.organizationId, userId, "ar.post", inv.id, { number: serial.number, journal: e.number }, null, null, "sales_invoice");
+  if (!cm) await issueInvoiceStockTx(tx, inv, serial.number, userId);
   if (cm && inv.creditForId) {
     const target = await tx.salesInvoice.findUniqueOrThrow({ where: { id: inv.creditForId } });
     const open = cents(target.totalAmount) - cents(target.appliedAmount);
@@ -300,6 +315,36 @@ async function postInvoiceTx(tx: Tx, inv: Invoice, userId: string) {
     if (amt > 0n && target.status === "POSTED") await applyTx(tx, inv.organizationId, userId, { creditMemoId: inv.id }, [{ invoiceId: target.id, amount: amt }], inv.date);
   }
   return tx.salesInvoice.findUniqueOrThrow({ where: { id: inv.id }, include: { lines: true } });
+}
+
+/**
+ * Stocked items leave the warehouse when the invoice is issued: one inventory issue per warehouse,
+ * Dr COGS / Cr Inventory at FIFO, weighted average or specific cost (PAS 2). Credit memos do not
+ * move stock; returned goods are recorded as a Customer Return in Inventory.
+ */
+async function issueInvoiceStockTx(tx: Tx, inv: Invoice, number: string, userId: string) {
+  const ids = inv.lines.map((l) => l.productId).filter(Boolean) as string[];
+  if (!ids.length) return;
+  const stocked = await tx.product.findMany({ where: { organizationId: inv.organizationId, id: { in: ids }, isStocked: true } });
+  if (!stocked.length) return;
+  const whs = await tx.warehouse.findMany({ where: { organizationId: inv.organizationId } });
+  const byWh = new Map<string, Invoice["lines"]>();
+  for (const l of inv.lines) {
+    const p = stocked.find((x) => x.id === l.productId);
+    if (!p) continue;
+    const wh = inv.warehouseId ?? whs.find((w) => w.code === p.defaultWarehouseCode)?.id;
+    if (!wh) throw new LedgerError([`Line ${l.lineNo}: ${p.code} is an inventory item; choose the warehouse it ships from`]);
+    byWh.set(wh, [...(byWh.get(wh) ?? []), l]);
+  }
+  const customer = await tx.customer.findUniqueOrThrow({ where: { id: inv.customerId } });
+  for (const [warehouseId, lines] of byWh) {
+    await issueGoodsTx(tx, {
+      organizationId: inv.organizationId, userId, date: inv.date, warehouseId, reference: `SI ${number}`,
+      memo: `Cost of goods sold - SI ${number} - ${inv.customerName}`.slice(0, 500), partyType: "CUSTOMER", partyId: customer.code,
+      sourceModule: "SALES", sourceId: inv.id,
+      lines: lines.map((l) => ({ itemId: l.productId!, qty: l.quantity.toString(), lotNo: l.lotNo, dims: (l.dims ?? {}) as Dims, description: l.description })),
+    });
+  }
 }
 
 export async function approveInvoice(organizationId: string, userId: string, id: string) {
@@ -351,6 +396,7 @@ export async function voidInvoice(organizationId: string, userId: string, id: st
         await tx.salesInvoice.update({ where: { id }, data: { appliedAmount: 0 } });
       }
       if (inv.journalEntryId) await voidOrReverseTx(tx, organizationId, userId, inv.journalEntryId, reversalDate ?? inv.date, true);
+      await voidBySourceTx(tx, organizationId, userId, "SALES", id, `Sales invoice ${inv.number ?? ""} void: ${reason.trim()}`.slice(0, 500), reversalDate ?? inv.date);
     }
     await tx.salesInvoice.update({ where: { id }, data: { status: "VOID", voidedById: userId, voidedAt: new Date(), voidReason: reason.trim() } });
     await tx.billingMilestone.updateMany({ where: { invoiceId: id }, data: { invoiceId: null, billedAt: null } });

@@ -111,10 +111,62 @@ async function saveBankAccount(tx: Tx, organizationId: string, d: Record<string,
   return tx.bankAccount.upsert({ where: { organizationId_code: { organizationId, code } }, create: { ...data, organizationId, code }, update: data });
 }
 
+const COSTING = new Set(["WEIGHTED_AVERAGE", "FIFO", "SPECIFIC"]);
+
+/** Inventory checks on the product master: GL accounts exist, costing method fixed once stock moved. */
+async function checkProduct(tx: Tx, organizationId: string, d: Record<string, unknown>) {
+  const code = d.code as string;
+  const errs: string[] = [];
+  const acct = async (field: string, label: string, types: string[]) => {
+    const c = d[field] ? String(d[field]).trim() : "";
+    if (!c) return;
+    const a = await tx.account.findUnique({ where: { organizationId_code: { organizationId, code: c } } });
+    if (!a) errs.push(`${code}: ${label} ${c} not found in the chart of accounts`);
+    else if (!a.isPostable || !types.includes(a.type)) errs.push(`${code}: ${label} ${c} must be a postable ${types.join(" or ").toLowerCase()} account`);
+  };
+  await acct("inventoryAccountCode", "Inventory GL Account", ["ASSET"]);
+  await acct("cogsAccountCode", "COGS Account", ["EXPENSE"]);
+  if (d.costingMethod && !COSTING.has(String(d.costingMethod))) errs.push(`${code}: costing method must be WEIGHTED_AVERAGE, FIFO or SPECIFIC`);
+  if (d.defaultWarehouseCode) {
+    d.defaultWarehouseCode = String(d.defaultWarehouseCode).toUpperCase();
+    if (!(await tx.warehouse.findUnique({ where: { organizationId_code: { organizationId, code: d.defaultWarehouseCode as string } } }))) errs.push(`${code}: warehouse ${d.defaultWarehouseCode} not found`);
+  }
+  if (d.defaultLocationCode) d.defaultLocationCode = String(d.defaultLocationCode).toUpperCase();
+  if (d.isStocked && d.kind === "SERVICE") errs.push(`${code}: a service cannot be an inventory item`);
+  const existing = await tx.product.findUnique({ where: { organizationId_code: { organizationId, code } } });
+  if (existing) {
+    const moved = await tx.inventoryMove.count({ where: { itemId: existing.id } });
+    if (moved) {
+      if ((d.costingMethod ?? "WEIGHTED_AVERAGE") !== existing.costingMethod) errs.push(`${code}: the costing method cannot change because the item already has stock movements (PAS 2 requires consistency)`);
+      if (d.isStocked === false) errs.push(`${code}: cannot stop tracking inventory because the item has stock movements`);
+      if ((d.inventoryAccountCode ?? null) !== existing.inventoryAccountCode) {
+        const onHand = await tx.inventoryBalance.findFirst({ where: { itemId: existing.id, NOT: { qty: 0 } } });
+        if (onHand) errs.push(`${code}: the inventory GL account cannot change while the item has stock on hand`);
+      }
+    }
+  }
+  if (errs.length) throw new MasterError(errs);
+}
+
+async function saveLocation(tx: Tx, organizationId: string, d: Record<string, unknown>) {
+  const whCode = String(d.warehouseCode ?? "").toUpperCase();
+  const wh = await tx.warehouse.findUnique({ where: { organizationId_code: { organizationId, code: whCode } } });
+  if (!wh) throw new MasterError([`${whCode}/${d.code}: warehouse ${whCode} not found. Add the warehouse first.`]);
+  const data = { name: d.name as string, isActive: (d.isActive as boolean | undefined) ?? true };
+  return tx.warehouseLocation.upsert({
+    where: { warehouseId_code: { warehouseId: wh.id, code: d.code as string } },
+    create: { ...data, organizationId, warehouseId: wh.id, code: d.code as string },
+    update: data,
+  });
+}
+
 async function saveOne(tx: Tx, kind: MasterKind, organizationId: string, d: Record<string, unknown>, codeToId: Map<string, string>) {
   if (kind === "accounts") return saveAccount(tx, organizationId, d, codeToId);
   if (kind === "dimensions") return saveDimension(tx, organizationId, d, codeToId);
   if (kind === "banks") return saveBankAccount(tx, organizationId, d);
+  if (kind === "locations") return saveLocation(tx, organizationId, d);
+  if (kind === "products") await checkProduct(tx, organizationId, d);
+  if (kind === "warehouses" && d.branchCode) d.branchCode = String(d.branchCode).toUpperCase();
   const code = d.code as string;
   const data = blanksToNull(kind, d);
   delete data.code;
@@ -154,7 +206,9 @@ export async function importMasters(kind: MasterKind, organizationId: string, us
     let created = 0, updated = 0;
     const codeToId = new Map<string, string>();
     const model = MASTERS[kind].model;
-    const existing = await (tx as unknown as Record<string, { findMany: (a: unknown) => Promise<Record<string, unknown>[]> }>)[model].findMany({ where: { organizationId } });
+    const existing = kind === "locations"
+      ? (await tx.warehouseLocation.findMany({ where: { organizationId }, include: { warehouse: { select: { code: true } } } })).map((l) => ({ ...l, warehouseCode: l.warehouse.code }))
+      : await (tx as unknown as Record<string, { findMany: (a: unknown) => Promise<Record<string, unknown>[]> }>)[model].findMany({ where: { organizationId } });
     const byKey = new Map(existing.map((x) => [keyOf(kind, x), x]));
     for (const r of ordered) {
       const after = await saveOne(tx, kind, organizationId, r, codeToId);
@@ -171,11 +225,13 @@ export async function importMasters(kind: MasterKind, organizationId: string, us
 }
 
 function keyOf(kind: MasterKind, r: Record<string, unknown>) {
+  if (kind === "locations") return `${String(r.warehouseCode ?? "").toUpperCase()}:${r.code}`;
   return kind === "dimensions" ? `${r.type}:${r.code}` : String(r.code);
 }
 
 async function findExisting(tx: Tx, kind: MasterKind, organizationId: string, d: Record<string, unknown>) {
   if (kind === "dimensions") return tx.dimensionValue.findUnique({ where: { organizationId_type_code: { organizationId, type: d.type as DimensionType, code: d.code as string } } });
+  if (kind === "locations") return tx.warehouseLocation.findFirst({ where: { organizationId, code: d.code as string, warehouse: { code: String(d.warehouseCode ?? "").toUpperCase() } } });
   const delegate = (tx as unknown as Record<string, { findUnique: (a: unknown) => Promise<unknown> }>)[MASTERS[kind].model];
   return delegate.findUnique({ where: { organizationId_code: { organizationId, code: d.code } } });
 }

@@ -27,12 +27,13 @@ const optDay = z.string().optional().transform((s) => (s ? new Date(s) : null));
 const dims = z.record(z.string(), z.string().nullable()).optional().transform((d) => Object.fromEntries(Object.entries(d ?? {}).map(([k, v]) => [k, v || null])));
 const Line = z.object({
   productId: z.string().optional(), description: z.string(), quantity: z.string(), unit: z.string().optional(), unitPrice: z.string(),
-  discount: z.string().optional(), vatType: z.enum(["VATABLE", "ZERO_RATED", "EXEMPT"]), accountId: z.string().optional(), dims,
+  discount: z.string().optional(), vatType: z.enum(["VATABLE", "ZERO_RATED", "EXEMPT"]), accountId: z.string().optional(), dims, lotNo: z.string().optional(),
 });
 const InvoiceSchema = z.object({
   id: z.string().optional(), kind: z.enum(["INVOICE", "CREDIT_MEMO"]), customerId: z.string(), date: day, termsDays: z.string().optional(), dueDate: z.string().optional(),
   fxRate: z.string().optional(), pricesIncludeVat: z.boolean(), reference: z.string().optional(), memo: z.string().optional(), ewtTaxCodeId: z.string().optional(),
   creditForId: z.string().optional(), reason: z.string().optional(), lines: z.array(Line), intent: z.enum(["draft", "submit", "post"]),
+  warehouseId: z.string().optional(),
 });
 
 export async function saveInvoiceAction(_: FormState, fd: FormData): Promise<FormState> {
@@ -46,7 +47,7 @@ export async function saveInvoiceAction(_: FormState, fd: FormData): Promise<For
       organizationId: ctx.org.id, userId: ctx.user.id, kind: v.kind, customerId: v.customerId, date: new Date(v.date),
       termsDays: v.termsDays?.trim() ? Number(v.termsDays) : null, dueDate: v.dueDate ? new Date(v.dueDate) : null, fxRate: v.fxRate,
       pricesIncludeVat: v.pricesIncludeVat, reference: v.reference, memo: v.memo, ewtTaxCodeId: v.ewtTaxCodeId || null,
-      creditForId: v.creditForId || null, reason: v.reason, action: v.intent,
+      creditForId: v.creditForId || null, reason: v.reason, action: v.intent, warehouseId: v.warehouseId || null,
       lines: v.lines.map((l) => ({ ...l, productId: l.productId || null, accountId: l.accountId || null, vatType: l.vatType as VatType })),
     }, v.id);
     id = inv.id;
