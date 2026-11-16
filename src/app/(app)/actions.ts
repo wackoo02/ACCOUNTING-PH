@@ -256,13 +256,18 @@ export async function saveMasterRecord(_: FormState, fd: FormData): Promise<Form
   const kind = String(fd.get("_kind"));
   if (!isMasterKind(kind)) return { errors: ["Unknown list"] };
   const def = MASTERS[kind];
+  let savedCode = "", savedType = "";
   try {
     const ctx = await requireCtx("masters.manage");
     const r = parseRow(def, (f) => (f.type === "bool" ? (fd.get(f.key) ? "TRUE" : "FALSE") : fd.get(f.key)));
     if (!r.ok) return { errors: r.errors };
     await saveMaster(kind, ctx.org.id, ctx.user.id, r.data, (fd.get("_original") as string) || undefined);
+    savedCode = String(r.data.code);
+    savedType = kind === "dimensions" ? String(r.data.type ?? "") : "";
   } catch (e) { return fail(e); }
   revalidatePath(`/masters/${kind}`);
+  // Opened from a form's "Add new": hand the record back to that form instead of leaving it.
+  if (fd.get("_embed")) redirect(`/embed/masters/${kind}/saved?${new URLSearchParams({ code: savedCode, ...(savedType ? { type: savedType } : {}) })}`);
   redirect(`/masters/${kind}?saved=1`);
 }
 
