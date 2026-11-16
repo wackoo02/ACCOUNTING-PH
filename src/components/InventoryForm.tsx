@@ -11,12 +11,12 @@ export type InvInitial = { id?: string; date: string; warehouseId: string; toWar
 export const blankInvLine = (): Line => ({ itemId: "", qty: "", unitCost: "", locationId: "", toLocationId: "", lotNo: "", accountId: "", description: "", dims: {} });
 
 const OFFSET_HELP: Record<InvMode, string> = {
-  RECEIPT: "Credit account (blank = 2022 Goods Received Not Yet Invoiced)",
+  RECEIPT: "Credit account (blank = Goods Received Not Yet Invoiced)",
   ISSUE: "Charge to (blank = the item's COGS account)",
   TRANSFER: "",
   ADJUSTMENT: "Adjustment account (blank = 5030 Inventory Losses and Count Adjustments)",
   RETURN_IN: "Credit account (blank = the item's COGS account)",
-  RETURN_OUT: "Debit account (blank = 2022 GRNI; use Accounts Payable if already billed)",
+  RETURN_OUT: "Debit account (blank = Goods Received Not Yet Invoiced; use Accounts Payable if already billed)",
 };
 const MEMO_HINT: Record<InvMode, string> = {
   RECEIPT: "e.g. Delivery from ABC Trading, DR 1234", ISSUE: "e.g. Issued to Production / Sales delivery", TRANSFER: "e.g. Replenish Cebu branch stock",

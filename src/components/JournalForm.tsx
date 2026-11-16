@@ -2,6 +2,8 @@
 import { Fragment, useActionState, useMemo, useState } from "react";
 import { saveJournal } from "@/app/(app)/actions";
 import { Errors } from "./Errors";
+import { MasterLookup, type LookupOption } from "./MasterLookup";
+import { DIMENSIONS } from "@/lib/ledger/dimensions";
 
 type Acct = { id: string; code: string; name: string; type: string; currencyCode: string | null };
 type DimOpt = { key: string; label: string; values: { id: string; code: string; name: string }[] };
@@ -18,6 +20,10 @@ const cents = (s: string) => {
 };
 const money = (c: number) => (c / 100).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const TYPES = ["ASSET", "LIABILITY", "EQUITY", "INCOME", "EXPENSE"];
+const dimAdd = (key: string) => {
+  const type = DIMENSIONS.find((d) => d.key === key)?.type;
+  return type ? { kind: "dimensions" as const, type, prefill: { type } } : undefined;
+};
 
 export function JournalForm(props: {
   accounts: Acct[]; dims: DimOpt[]; currencies: { code: string; rate: string }[]; baseCurrency: string;
@@ -54,6 +60,8 @@ export function JournalForm(props: {
 
   const available = accounts.filter((a) => !a.currencyCode || a.currencyCode === h.currencyCode);
   const balanced = totals.diff === 0 && totals.d > 0;
+  const accountOptions: LookupOption[] = TYPES.flatMap((t) => available.filter((a) => a.type === t)
+    .map((a) => ({ value: a.id, code: a.code, label: a.name, group: t, hint: a.currencyCode ?? undefined })));
 
   return (
     <form action={action}>
@@ -64,13 +72,16 @@ export function JournalForm(props: {
           <div><label>Transaction / document date</label><input type="date" value={h.transactionDate} onChange={(e) => setH({ ...h, transactionDate: e.target.value })} required /></div>
           <div><label>Reference no. (OR, SI, CV, etc.)</label><input value={h.reference} onChange={(e) => setH({ ...h, reference: e.target.value })} /></div>
           <div><label>Currency</label>
-            <select value={h.currencyCode} onChange={(e) => {
-              const c = currencies.find((x) => x.code === e.target.value);
-              setH({ ...h, currencyCode: e.target.value, fxRate: c?.rate ?? "1" });
-            }}>
-              <option value={baseCurrency}>{baseCurrency} (base)</option>
-              {currencies.filter((c) => c.code !== baseCurrency).map((c) => <option key={c.code} value={c.code}>{c.code}</option>)}
-            </select></div>
+            <MasterLookup
+              ariaLabel="Currency"
+              value={h.currencyCode}
+              options={[{ value: baseCurrency, code: baseCurrency, label: "base currency" }, ...currencies.filter((c) => c.code !== baseCurrency).map((c) => ({ value: c.code, code: c.code, label: `rate ${c.rate}` }))]}
+              add={{ kind: "currencies", toValue: (r) => r.code }}
+              onChange={(v, rec) => {
+                const c = currencies.find((x) => x.code === v);
+                setH({ ...h, currencyCode: v || baseCurrency, fxRate: c?.rate ?? (rec?.rateToBase ? String(rec.rateToBase) : "1") });
+              }}
+            /></div>
           {foreign && <div><label>Exchange rate (1 {h.currencyCode} = ? {baseCurrency})</label><input className="num" value={h.fxRate} onChange={(e) => setH({ ...h, fxRate: e.target.value })} /></div>}
         </div>
         {props.hasGroup && (
@@ -95,14 +106,8 @@ export function JournalForm(props: {
             <Fragment key={i}>
               <tr>
                 <td>
-                  <select value={l.accountId} onChange={(e) => set(i, { accountId: e.target.value })} aria-label={`Account line ${i + 1}`}>
-                    <option value="">Choose account…</option>
-                    {TYPES.map((t) => (
-                      <optgroup key={t} label={t}>
-                        {available.filter((a) => a.type === t).map((a) => <option key={a.id} value={a.id}>{a.code} · {a.name}{a.currencyCode ? ` (${a.currencyCode})` : ""}</option>)}
-                      </optgroup>
-                    ))}
-                  </select>
+                  <MasterLookup ariaLabel={`Account line ${i + 1}`} placeholder="Type account code or name…" value={l.accountId}
+                    options={accountOptions} add={{ kind: "accounts" }} onChange={(v) => set(i, { accountId: v })} />
                 </td>
                 <td><input value={l.description} onChange={(e) => set(i, { description: e.target.value })} /></td>
                 <td><input className="num" inputMode="decimal" value={l.debit} onChange={(e) => set(i, { debit: e.target.value, credit: e.target.value ? "" : l.credit })} aria-label={`Debit line ${i + 1}`} /></td>
@@ -119,10 +124,9 @@ export function JournalForm(props: {
                     {dims.map((d) => (
                       <div key={d.key} style={{ minWidth: 130 }}>
                         <label>{d.label}</label>
-                        <select value={l.dims[d.key] ?? ""} onChange={(e) => setDim(i, d.key, e.target.value)}>
-                          <option value="">—</option>
-                          {d.values.map((v) => <option key={v.id} value={v.id}>{v.code} · {v.name}</option>)}
-                        </select>
+                        <MasterLookup ariaLabel={`${d.label} line ${i + 1}`} placeholder="—" emptyLabel="— None" value={l.dims[d.key] ?? ""}
+                          options={d.values.map((v) => ({ value: v.id, code: v.code, label: v.name }))}
+                          add={dimAdd(d.key)} onChange={(v) => setDim(i, d.key, v)} />
                       </div>
                     ))}
                   </div>

@@ -69,6 +69,45 @@ Turn `SEED_DEMO` off and change or remove the demo users before real company dat
 - Reconciliation report: balance per bank + deposits in transit − outstanding checks = balance per books ± bank items not yet booked; finalize when the difference is zero (locks its matches; owner/admin can reopen); nothing can be dated inside a finalized reconciliation
 **Petty cash (mobile app API)**: funds, vouchers from receipt photos (AI reads supplier, TIN, items, VAT, tips and proposes the account), VAT/EWT computation, fixed asset threshold with approved PO, approvals, and replenishment batches that post a Petty Cash journal. See [docs/MOBILE_API.md](docs/MOBILE_API.md).
 
+## What's in Phase 6: Inventory and warehouse (PAS 2)
+**Master data** (Master Lists, Excel upload): Products and Prices gains Track Inventory, category, barcode, costing method, standard cost, reorder point and quantity, default warehouse / bin / vendor, inventory GL account and COGS account. New lists: Warehouses (optionally tagged to a branch) and Warehouse Locations (bins).
+
+**Costing** (`src/lib/inventory/engine.ts`): FIFO, moving weighted average per warehouse, and specific identification by lot / serial no. (no LIFO). Every inbound quantity is a cost layer keeping its receipt date through transfers; taking the last unit always takes the exact remaining value; stock can never go negative.
+
+**Documents** (draft → post; adjustments need approval with segregation of duties), each posting to the GL as source INVENTORY:
+- Receipt RR: Dr Inventory / Cr Goods Received Not Yet Invoiced (or a chosen account)
+- Issue IS: Dr COGS (item's account, or a chosen expense account with dimensions) / Cr Inventory
+- Transfer ST between warehouses or bins: no GL, cost and age move with the stock
+- Adjustment IA (+/−): against 5030 Inventory Losses and Count Adjustments
+- Customer return CRT (Dr Inventory / Cr COGS) and return to vendor VRT (Dr GRNI or AP / Cr Inventory)
+- Void restores the stock and reverses the GL entry (a receipt only while its stock is unused); inventory GL entries cannot be reversed from the journal screen.
+
+**Counts**: cycle counts (by category, bin or items) and full physical counts with a printable, optionally blind count sheet; items found can be added; variances post as one approved adjustment.
+
+**Reports**: stock status with bins/lots and reorder flags, inventory valuation as of any date reconciled to the inventory GL accounts, aging by receipt date, slow-moving / non-moving, turnover and days on hand, and a stock card per item. **Barcodes**: scan box on every document (USB/Bluetooth scanners), printable Code 128 labels.
+
+**Hooks for Purchasing and Sales** (`src/lib/inventory/hooks.ts`): `receiveGoodsTx`, `issueGoodsTx`, `returnFromCustomerTx`, `returnToVendorTx`, `voidBySourceTx`, `onHand`. Call them inside your own transaction; documents they create can only be voided from the source document.
+
+## Veritus Mobility app and Expense & Mobility (Phase 7, part)
+**Mobile app** at `/m`: an installable web app (PWA). On iPhone open it in Safari → Share → Add to Home Screen; on Android Chrome offers "Install app". Same login as the web ERP. Tiles: Petty Cash, Travel (local and international, foreign receipts translated to English and converted at the day's rate), Transport (Grab, inDrive, JoyRide, Angkas, taxi), Sent Package (Lalamove, Transportify, couriers), Sales Invoice (scan an issued invoice and post the sale) and Asset Audit (scan QR stickers).
+
+**One record per receipt**: every module and payer uses the same voucher table, so petty cash is never recorded twice. Receipts are read by AI or entered by hand when there is none; no VAT TIN on the receipt (or no receipt, or a foreign receipt) means non-VAT automatically.
+
+**Workflow**: Draft → Submitted → Manager (business purpose, budget, cost center; the employee's supervisor or an approver) → Approved / Returned / Rejected → Finance (receipt, tax compliance, duplicates) → Cleared / Hold. Clearing posts the journal (source EXPENSE_CLAIM):
+- Paid with corporate GCash / Maya / card: Dr expense / Cr the wallet or card account
+- Paid by the employee: Dr expense / Cr Employee Reimbursements Payable; Reimbursements creates one disbursement voucher per employee to pay them back
+- Petty cash fund: replenished in a batch as before
+
+**GL mapping** (Mobility Settings, editable): business ride 6050 Transportation, client visit 6051 (selling), staff shuttle 6053 (admin), delivery 6052, inventory delivery 1205 Inventory in Transit, local / international travel 6050 / 6056.
+
+**Reconciliation**: import the GCash, Maya or card statement in Bank Statements; Wallet and Card Recon auto-matches posted claims by amount and booking number; a charge with no claim is an exception that finance sends to the employee as a claim to complete.
+
+**Reports**: Mobility Dashboard (transport, delivery, by department / employee / project / provider / payment, top travelers and delivery users, unapproved, unreconciled, travel budget vs actual) and the Employee Expense Report.
+
+**Fixed assets (start)**: Fixed Asset Register master list, printable QR stickers, and asset counts scanned from the app (found / wrong location / unknown / missing, by location and category; closing marks unscanned assets missing). Depreciation and disposals come with the fixed asset module.
+
+**What needs provider partnerships**: see Mobility Settings → Provider connections. Today Veritus works with statement / report imports and receipt capture. Pulling trips and orders automatically, booking from Veritus, or auto-paying needs a business account and API agreement with Grab for Business, Lalamove Business, Transportify, GCash for Business (Mynt) and Maya Business; direct card feeds need an agreement with the bank.
+
 ## Design notes for later modules
 - **One entry point:** `src/lib/ledger/service.ts` → `recordJournal({ source, sourceId, lines, action })`. Sub-ledgers pass their own `source` (SALES, PURCHASES, BANK, PAYROLL, EXPENSE_CLAIM, FIXED_ASSETS, …) and skip the manual approval controls.
 - Find control accounts with `accountByRole(org, "AR_CONTROL")` etc., never hard-coded codes.

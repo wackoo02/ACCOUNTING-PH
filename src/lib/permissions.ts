@@ -12,14 +12,16 @@ export type Permission =
   | "pettycash.capture" // record petty cash receipts from the mobile app
   | "pettycash.approve" // approve petty cash vouchers and purchase orders
   | "pettycash.replenish" // create replenishment batches
+  | "expense.finance" // finance review of expense & mobility claims, reimbursements, reconciliation
+  | "assets.audit" // scan asset QR stickers and run asset counts
   | "inventory.transact" // receive, issue, transfer and return stock; prepare adjustments and counts
   | "inventory.approve"; // approve stock adjustments and count variances
 
 const MATRIX: Record<Role, Permission[]> = {
-  OWNER: ["masters.manage", "journal.create", "journal.post", "journal.void", "period.close", "reports.view", "users.manage", "org.manage", "pettycash.capture", "pettycash.approve", "pettycash.replenish", "inventory.transact", "inventory.approve"],
-  ADMIN: ["masters.manage", "journal.create", "journal.post", "journal.void", "period.close", "reports.view", "users.manage", "org.manage", "pettycash.capture", "pettycash.approve", "pettycash.replenish", "inventory.transact", "inventory.approve"],
-  ACCOUNTANT: ["journal.create", "journal.post", "journal.void", "period.close", "reports.view", "pettycash.capture", "pettycash.replenish", "inventory.transact", "inventory.approve"],
-  BOOKKEEPER: ["journal.create", "reports.view", "pettycash.capture", "pettycash.replenish", "inventory.transact"],
+  OWNER: ["masters.manage", "journal.create", "journal.post", "journal.void", "period.close", "reports.view", "users.manage", "org.manage", "pettycash.capture", "pettycash.approve", "pettycash.replenish", "expense.finance", "assets.audit", "inventory.transact", "inventory.approve"],
+  ADMIN: ["masters.manage", "journal.create", "journal.post", "journal.void", "period.close", "reports.view", "users.manage", "org.manage", "pettycash.capture", "pettycash.approve", "pettycash.replenish", "expense.finance", "assets.audit", "inventory.transact", "inventory.approve"],
+  ACCOUNTANT: ["journal.create", "journal.post", "journal.void", "period.close", "reports.view", "pettycash.capture", "pettycash.replenish", "expense.finance", "assets.audit", "inventory.transact", "inventory.approve"],
+  BOOKKEEPER: ["journal.create", "reports.view", "pettycash.capture", "pettycash.replenish", "assets.audit", "inventory.transact"],
   VIEWER: ["reports.view"],
 };
 

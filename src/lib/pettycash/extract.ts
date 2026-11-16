@@ -26,8 +26,23 @@ export const ReceiptSchema = z.object({
     address: z.string().describe("Supplier business address as printed"),
     vatRegistered: z.boolean().describe("true if the receipt shows VAT REG TIN, VATable sales or 12% VAT; false for NON-VAT"),
   }),
+  language: z.string().describe("Main language of the receipt, e.g. English, Filipino, Japanese"),
+  currency: z.string().describe("ISO currency code of the amounts, e.g. PHP, USD, JPY, SGD"),
+  country: z.string().describe("Country where the receipt was issued, e.g. Philippines"),
+  englishTranslation: z.string().describe("If the receipt is not in English: a short English translation of what it says; else empty"),
+  mobility: z.object({
+    provider: z.string().describe("Ride or delivery app if this is one: GRAB, INDRIVE, JOYRIDE, ANGKAS, MOVEIT, TAXI, LALAMOVE, TRANSPORTIFY, GRAB_EXPRESS, BORZO, LBC, JNT; else empty"),
+    bookingNumber: z.string().describe("Booking ID / order / delivery / tracking number; empty if none"),
+    tripDateTime: z.string().describe("Trip or delivery date and time as YYYY-MM-DDTHH:MM; empty if none"),
+    pickup: z.string(), dropoff: z.string(),
+    distanceKm: z.string().describe("Distance in km as digits; empty if not shown"),
+    passenger: z.string(), sender: z.string(), receiver: z.string(),
+    fare: money.describe("Base fare / ride fare / delivery fee"), tolls: money, parking: money, additionalCharges: money.describe("Surcharges, waiting time, extra stops, insurance"),
+    packageType: z.string(), weightKg: z.string(),
+  }).describe("Ride / delivery details; empty strings and 0.00 when this is not a ride or delivery receipt"),
   items: z.array(z.object({
-    description: z.string(),
+    description: z.string().describe("In English; translate if the receipt is in another language"),
+    originalDescription: z.string().describe("The item text exactly as printed, if not English; else empty"),
     quantity: z.string().describe("Quantity as digits, 1 if not shown"),
     unitPrice: money,
     amount: money.describe("Line amount as printed (VAT-inclusive)"),
@@ -57,7 +72,7 @@ export async function saveReceiptImage(organizationId: string, userId: string, b
 }
 
 /** Read a saved photo and propose voucher fields. Needs ANTHROPIC_API_KEY on the server. */
-export async function extractReceipt(organizationId: string, imageId: string) {
+export async function extractReceipt(organizationId: string, imageId: string, module?: string | null) {
   const img = await prisma.receiptImage.findFirst({ where: { id: imageId, organizationId } });
   if (!img) throw new LedgerError(["Receipt photo not found"]);
   if (!process.env.ANTHROPIC_API_KEY && !process.env.ANTHROPIC_AUTH_TOKEN) {
@@ -78,6 +93,9 @@ export async function extractReceipt(organizationId: string, imageId: string) {
     "Copy what is printed or handwritten; never invent a TIN, serial number or amount. Leave a field empty when you cannot read it and say so in notes.",
     "Philippine VAT is 12% and is included in printed prices: VAT = VATable sales x 12%, and VATable sales + VAT = the VAT-inclusive total.",
     "Tips are often handwritten on the slip or added to a card charge; report them separately from the printed total.",
+    "Receipts may be in any language (e.g. travel abroad). Keep names, numbers and TINs as printed, write item descriptions in English, keep the original text in originalDescription, and give a short English translation. Report amounts in the receipt's own currency.",
+    "Ride-hailing and delivery app receipts (Grab, inDrive, JoyRide, Angkas, Lalamove, Transportify, ...) often have no TIN: leave TIN empty and set vatRegistered to false unless a VAT REG TIN is printed. Fill the mobility details from the trip or delivery summary.",
+    module ? `The employee captured this under the ${module.replace("_", " ").toLowerCase()} module.` : "",
     `Choose each item's account only from this chart of accounts. Use a fixed asset account only for a durable item whose unit price is at least PHP ${org.fixedAssetThreshold.toString()}.`,
     chart,
   ].join("\n\n");
@@ -94,7 +112,7 @@ export async function extractReceipt(organizationId: string, imageId: string) {
       role: "user",
       content: [
         { type: "image", source: { type: "base64", media_type: img.mediaType as Media, data: Buffer.from(img.data).toString("base64") } },
-        { type: "text", text: "Extract this receipt for the petty cash voucher." },
+        { type: "text", text: "Extract this receipt for the expense voucher." },
       ],
     }],
   });

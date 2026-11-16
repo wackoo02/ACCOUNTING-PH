@@ -194,13 +194,14 @@ describe("counts", () => {
 
 describe("hooks for purchasing and sales", () => {
   it("receives against GRNI and issues to COGS, and voids by source", async () => {
-    const grni = await glBalance("2022");
+    const grniCode = (await prisma.account.findUniqueOrThrow({ where: { organizationId_systemRole: { organizationId: org, systemRole: "GRNI" } } })).code;
+    const grni = await glBalance(grniCode);
     const res = await prisma.$transaction((tx) => receiveGoodsTx(tx, {
       organizationId: org, userId: clerk, date: d("11-02"), warehouseId: wh2, memo: "PO-1 goods receipt", reference: "PO-1",
       partyType: "VENDOR", partyId: "V-1", sourceModule: "PURCHASES", sourceId: "gr-1", lines: [{ itemId: items.AVG, qty: "10", unitCost: "90" }],
     }));
     expect(res.total).toBe(90000n);
-    expect(await glBalance("2022")).toBe(grni - 900);
+    expect(await glBalance(grniCode)).toBe(grni - 900);
     const sale = await prisma.$transaction((tx) => issueGoodsTx(tx, {
       organizationId: org, userId: clerk, date: d("11-03"), warehouseId: wh2, memo: "SI-1", sourceModule: "SALES", sourceId: "si-1", lines: [{ itemId: items.AVG, qty: "4" }],
     }));

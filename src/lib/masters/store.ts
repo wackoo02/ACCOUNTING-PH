@@ -84,7 +84,9 @@ async function saveBankAccount(tx: Tx, organizationId: string, d: Record<string,
   const errs: string[] = [];
   if (!gl) errs.push(`${code}: GL account ${glCode} not found`);
   else {
-    if (gl.type !== "ASSET" || !gl.isPostable) errs.push(`${code}: GL account ${glCode} must be a postable asset account (cash and cash equivalents)`);
+    if (d.kind === "CREDIT_CARD") {
+      if (gl.type !== "LIABILITY" || !gl.isPostable) errs.push(`${code}: a credit card needs a postable liability account (e.g. 2015 Corporate Credit Card Payable)`);
+    } else if (gl.type !== "ASSET" || !gl.isPostable) errs.push(`${code}: GL account ${glCode} must be a postable asset account (cash and cash equivalents)`);
     const other = await tx.bankAccount.findFirst({ where: { organizationId, glAccountId: gl.id, code: { not: code } } });
     if (other) errs.push(`${code}: GL account ${glCode} is already used by ${other.code}. Give each bank account its own GL account.`);
   }

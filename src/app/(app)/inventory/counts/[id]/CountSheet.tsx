@@ -9,6 +9,7 @@ type Props = { id: string; status: string; canEdit: boolean; canApprove: boolean
 export function CountSheet({ id, status, canEdit, canApprove, canReject, lines, items, locations }: Props) {
   const [blind, setBlind] = useState(false);
   const [rejecting, setRejecting] = useState(false);
+  const setOp = (e: React.MouseEvent<HTMLButtonElement>, v: string) => { (e.currentTarget.form!.elements.namedItem("op") as HTMLInputElement).value = v; };
   const op = (o: string, label: string, cls = "") => (
     <ActionForm action={countWorkflow}><input type="hidden" name="id" value={id} /><input type="hidden" name="op" value={o} /><button className={cls}>{label}</button></ActionForm>
   );
@@ -28,7 +29,7 @@ export function CountSheet({ id, status, canEdit, canApprove, canReject, lines, 
         </ActionForm>
       )}
       <ActionForm action={countWorkflow}>
-        <input type="hidden" name="id" value={id} />
+        <input type="hidden" name="id" value={id} /><input type="hidden" name="op" defaultValue="save" />
         <div className="table-wrap"><table>
           <thead><tr><th>Bin</th><th>Item</th><th>Unit</th><th>Lot / serial</th>{!blind && <th className="num">System qty</th>}<th className="num" style={{ width: 120 }}>Counted</th>{!blind && <th className="num">Variance</th>}<th>Note</th></tr></thead>
           <tbody>
@@ -52,8 +53,8 @@ export function CountSheet({ id, status, canEdit, canApprove, canReject, lines, 
           </tbody>
         </table></div>
         {canEdit && <div className="row noprint" style={{ gap: 8 }}>
-          <button name="op" value="save" className="secondary">Save counts</button>
-          <button name="op" value="save-submit">Save and submit for approval</button>
+          <button className="secondary" onClick={(e) => setOp(e, "save")}>Save counts</button>
+          <button onClick={(e) => setOp(e, "save-submit")}>Save and submit for approval</button>
         </div>}
       </ActionForm>
       <div className="print-only card grid sign"><div><label>Counted by</label><br />______________________</div><div><label>Checked by</label><br />______________________</div></div>

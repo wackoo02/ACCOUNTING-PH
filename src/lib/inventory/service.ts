@@ -14,7 +14,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "../db";
 import { fromCentavos } from "../money";
-import { PH_IFRS_TEMPLATE, normalBalanceFor } from "../coa-template";
+import { PH_IFRS_TEMPLATE, normalBalanceFor, type TemplateAccount } from "../coa-template";
 import { DIM_KEYS, type DimKey } from "../ledger/dimensions";
 import type { Dims, LineInput } from "../ledger/validate";
 import { LedgerError, assertCanApprove, assertPeriodOpen, asDay, audit, nextNumber, recordJournalTx, voidOrReverseTx } from "../ledger/service";
@@ -54,15 +54,21 @@ const cleanDims = (d?: Dims) => {
 
 // ---------- GL accounts ----------
 
+const FALLBACK_ROLES: TemplateAccount[] = [
+  { code: "2012", name: "Goods Received Not Yet Invoiced", type: "LIABILITY", ifrsGroup: "Trade and other payables", isCurrent: true, parent: "2000", systemRole: "GRNI" },
+];
+
 /** The account with a system role; creates it from the PH template if an older company lacks it. */
 export async function ensureRoleAccount(tx: Tx, organizationId: string, role: string) {
   const found = await tx.account.findUnique({ where: { organizationId_systemRole: { organizationId, systemRole: role } } });
   if (found) return found;
-  const t = PH_IFRS_TEMPLATE.find((a) => a.systemRole === role);
+  // GRNI: same definition as the Purchasing module (2012), used until/unless the template carries it.
+  const t = PH_IFRS_TEMPLATE.find((a) => a.systemRole === role) ?? FALLBACK_ROLES.find((a) => a.systemRole === role);
   if (!t) throw new LedgerError([`No account is assigned the role ${role}`]);
   const byCode = await tx.account.findUnique({ where: { organizationId_code: { organizationId, code: t.code } } });
   if (byCode) {
-    if (byCode.systemRole) throw new LedgerError([`Assign an account to the role ${role} in the chart of accounts first`]);
+    // Only adopt an existing account if it is clearly the same account; never repurpose another one.
+    if (byCode.systemRole || byCode.name !== t.name) throw new LedgerError([`Assign an account to the role ${role} in the chart of accounts first`]);
     return tx.account.update({ where: { id: byCode.id }, data: { systemRole: role } });
   }
   const parent = t.parent ? await tx.account.findUnique({ where: { organizationId_code: { organizationId, code: t.parent } } }) : null;
