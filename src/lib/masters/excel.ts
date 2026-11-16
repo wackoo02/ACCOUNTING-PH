@@ -6,7 +6,7 @@ import { parseRow } from "./rows";
 export async function buildWorkbook(kind: MasterKind, records: Record<string, unknown>[] = []) {
   const def = MASTERS[kind];
   const wb = new ExcelJS.Workbook();
-  wb.creator = "PH Accounting";
+  wb.creator = "Veritus ERP";
   const ws = wb.addWorksheet("Data", { views: [{ state: "frozen", ySplit: 1 }] });
   ws.columns = def.fields.map((f) => ({ header: f.required ? `${f.header} *` : f.header, key: f.key, width: Math.max(14, f.header.length + 4) }));
   const head = ws.getRow(1);

@@ -25,6 +25,8 @@ model Organization {
   // Controls
   requireApproval      Boolean @default(true)  // manual entries need approval before posting
   segregationOfDuties  Boolean @default(true)  // the preparer cannot approve/post their own entry
+  // Petty cash: an item at or above this unit cost is a fixed asset and needs an approved PO.
+  fixedAssetThreshold  Decimal @db.Decimal(18, 2) @default(5000)
   // Entity hierarchy: a holding company is the root; subsidiaries/branches point to their parent.
   // A "group" is the root entity plus all its descendants (used for consolidation).
   parentId       String?
@@ -49,6 +51,11 @@ model Organization {
   employees      Employee[]
   vendors        Vendor[]
   customers      Customer[]
+  pettyCashFunds    PettyCashFund[]
+  pettyCashVouchers PettyCashVoucher[]
+  pettyCashBatches  PettyCashBatch[]
+  purchaseOrders    PurchaseOrder[]
+  receiptImages     ReceiptImage[]
 }
 
 model User {
@@ -204,6 +211,7 @@ enum JournalSource {
   DEBT
   PAYROLL
   EXPENSE_CLAIM // employee/partner reimbursements, travel expenses
+  PETTY_CASH   // petty cash replenishment batches (mobile app)
   TAX          // BIR filings / remittances
   CLOSING
   REVERSAL
@@ -722,4 +730,154 @@ model BankMatch {
   createdById    String
   createdAt      DateTime @default(now())
   statementLines BankStatementLine[]
+}
+
+// ---------- Petty cash (mobile app) ----------
+
+model PettyCashFund {
+  id                 String       @id @default(cuid())
+  organizationId     String
+  code               String
+  name               String
+  custodianUserId    String?
+  accountId          String       // the fund's GL account, e.g. 1015 Petty Cash Fund
+  // Account credited by the replenishment journal. Null = the fund account itself
+  // (the disbursement that refills the fund then debits the fund and credits the bank).
+  replenishAccountId String?
+  imprestAmount      Decimal      @db.Decimal(18, 2) @default(0)
+  isActive           Boolean      @default(true)
+  createdAt          DateTime     @default(now())
+  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  vouchers           PettyCashVoucher[]
+  batches            PettyCashBatch[]
+
+  @@unique([organizationId, code])
+}
+
+enum PurchaseOrderStatus {
+  DRAFT
+  APPROVED
+  CLOSED
+  CANCELLED
+}
+
+model PurchaseOrder {
+  id             String              @id @default(cuid())
+  organizationId String
+  number         String
+  poDate         DateTime            @db.Date
+  vendorId       String?
+  vendorName     String?
+  description    String
+  amount         Decimal             @db.Decimal(18, 2)
+  status         PurchaseOrderStatus @default(DRAFT)
+  createdById    String
+  approvedById   String?
+  approvedAt     DateTime?
+  createdAt      DateTime            @default(now())
+  organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  vouchers       PettyCashVoucher[]
+
+  @@unique([organizationId, number])
+}
+
+enum PettyCashStatus {
+  DRAFT
+  SUBMITTED   // waiting for approval
+  APPROVED    // ready to include in a replenishment batch
+  REJECTED    // returned to the preparer with a reason
+  BATCHED     // in a replenishment batch whose journal is not yet posted
+  REPLENISHED // the batch journal is posted
+}
+
+model PettyCashVoucher {
+  id                  String          @id @default(cuid())
+  organizationId      String
+  fundId              String
+  number              String          // e.g. PCV-2026-000001
+  status              PettyCashStatus @default(DRAFT)
+  receiptDate         DateTime        @db.Date
+  docType             String          @default("OR") // OR | SI | CASH_INVOICE | AR | OTHER
+  docNumber           String?
+  vendorId            String?
+  vendorName          String
+  vendorTin           String?
+  vendorAddress       String?
+  vendorVatRegistered Boolean         @default(true)
+  description         String
+  // Amounts as printed on the receipt (VAT-inclusive), in base currency.
+  grossAmount         Decimal         @db.Decimal(18, 2) @default(0)
+  vatAmount           Decimal         @db.Decimal(18, 2) @default(0)
+  vatExemptAmount     Decimal         @db.Decimal(18, 2) @default(0)
+  zeroRatedAmount     Decimal         @db.Decimal(18, 2) @default(0)
+  ewtTaxCodeId        String?
+  ewtAmount           Decimal         @db.Decimal(18, 2) @default(0)
+  tipAmount           Decimal         @db.Decimal(18, 2) @default(0)
+  tipHandwritten      Boolean         @default(false)
+  totalPaid           Decimal         @db.Decimal(18, 2) @default(0) // gross + tip - EWT
+  purchaseOrderId     String?
+  departmentId        String?
+  costCenterId        String?
+  branchId            String?
+  projectId           String?
+  imageId             String?
+  extraction          Json?           // what the AI read from the photo, kept for audit
+  createdById         String
+  submittedAt         DateTime?
+  approvedById        String?
+  approvedAt          DateTime?
+  rejectedReason      String?
+  batchId             String?
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+  organization        Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  fund                PettyCashFund   @relation(fields: [fundId], references: [id])
+  purchaseOrder       PurchaseOrder?  @relation(fields: [purchaseOrderId], references: [id])
+  batch               PettyCashBatch? @relation(fields: [batchId], references: [id])
+  lines               PettyCashVoucherLine[]
+
+  @@unique([organizationId, number])
+  @@index([organizationId, status])
+}
+
+model PettyCashVoucherLine {
+  id                 String           @id @default(cuid())
+  voucherId          String
+  lineNo             Int
+  description        String
+  quantity           Decimal          @db.Decimal(18, 4) @default(1)
+  unitPrice          Decimal          @db.Decimal(18, 2)
+  amount             Decimal          @db.Decimal(18, 2) // VAT-inclusive, as on the receipt
+  accountId          String
+  suggestedAccountId String?          // what the app proposed, to measure suggestion quality
+  isFixedAsset       Boolean          @default(false)
+  voucher            PettyCashVoucher @relation(fields: [voucherId], references: [id], onDelete: Cascade)
+}
+
+model PettyCashBatch {
+  id             String        @id @default(cuid())
+  organizationId String
+  fundId         String
+  number         String        // e.g. PCR-2026-000001
+  date           DateTime      @db.Date
+  totalPaid      Decimal       @db.Decimal(18, 2)
+  journalEntryId String?       @unique
+  createdById    String
+  createdAt      DateTime      @default(now())
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  fund           PettyCashFund @relation(fields: [fundId], references: [id])
+  vouchers       PettyCashVoucher[]
+
+  @@unique([organizationId, number])
+}
+
+// Receipt photos. Kept in the database for now; move to object storage when volume grows.
+model ReceiptImage {
+  id             String       @id @default(cuid())
+  organizationId String
+  mediaType      String
+  data           Bytes
+  uploadedById   String
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 }

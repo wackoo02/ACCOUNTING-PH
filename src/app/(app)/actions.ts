@@ -180,6 +180,13 @@ export async function createEntity(_: FormState, fd: FormData): Promise<FormStat
   return { message: `${p.data.name} created. Switch to it from the company menu to set it up.` };
 }
 
+function thresholdOf(v: FormDataEntryValue | null, fallback: string) {
+  const s = String(v ?? "").replace(/,/g, "").trim();
+  if (!s) return fallback;
+  if (!/^\d+(\.\d{0,2})?$/.test(s)) throw new LedgerError(["Fixed asset threshold: enter an amount like 5000 or 5000.00"]);
+  return s;
+}
+
 export async function updateEntity(_: FormState, fd: FormData): Promise<FormState> {
   try {
     const ctx = await requireCtx("org.manage");
@@ -198,6 +205,7 @@ export async function updateEntity(_: FormState, fd: FormData): Promise<FormStat
       fiscalYearStartMonth: Math.min(12, Math.max(1, Number(fd.get("fiscalYearStartMonth")) || 1)),
       requireApproval: fd.get("requireApproval") === "on",
       segregationOfDuties: fd.get("segregationOfDuties") === "on",
+      fixedAssetThreshold: thresholdOf(fd.get("fixedAssetThreshold"), before.fixedAssetThreshold.toString()),
     } });
     await prisma.auditLog.create({ data: { organizationId: ctx.org.id, userId: ctx.user.id, action: "company.update", entity: "company", entityId: ctx.org.id,
       before: JSON.parse(JSON.stringify(before)), after: JSON.parse(JSON.stringify(after)) } });

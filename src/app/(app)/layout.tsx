@@ -1,3 +1,4 @@
+import { Logo } from "@/components/Logo";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { requireCtx } from "@/lib/auth";
@@ -12,7 +13,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   return (
     <div className="shell">
       <aside className="side">
-        <div className="brand">PH Accounting</div>
+        <div className="brand"><Logo dark /></div>
         {ctx.memberships.length > 1 ? (
           <form action={changeCompany} style={{ margin: "0 8px 8px" }}>
             <select name="organizationId" defaultValue={ctx.org.id}>

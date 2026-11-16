@@ -724,7 +724,7 @@ export async function seedChartOfAccounts(tx: Tx, organizationId: string) {
 
 function prefixFor(source: JournalSource) {
   const map: Partial<Record<JournalSource, string>> = {
-    SALES: "SJ", PURCHASES: "PJ", BANK: "BK", INVENTORY: "IN", FIXED_ASSETS: "FA", PREPAID: "PP", LEASE: "LS", DEBT: "DB", PAYROLL: "PY", EXPENSE_CLAIM: "EC", TAX: "TX",
+    SALES: "SJ", PURCHASES: "PJ", BANK: "BK", INVENTORY: "IN", FIXED_ASSETS: "FA", PREPAID: "PP", LEASE: "LS", DEBT: "DB", PAYROLL: "PY", EXPENSE_CLAIM: "EC", PETTY_CASH: "PC", TAX: "TX",
     OPENING_BALANCE: "OB", CLOSING: "CL", REVERSAL: "RV", INTERCOMPANY: "IC", CONSOLIDATION: "CA", FX_REVALUATION: "FX",
   };
   return map[source] ?? "JV";

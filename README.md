@@ -1,4 +1,6 @@
-# PH Accounting — General Ledger, Cash and Bank (Phase 1–3)
+# Veritus ERP
+
+_Intelligent. Integrated. Compliant._
 
 Multi-company, web-based accounting for Philippine businesses. PFRS/IFRS-aligned general ledger that every later module (AR, AP, bank reconciliation, payroll, expense claims, fixed assets, leases, inventory, BIR) posts into.
 
@@ -65,6 +67,7 @@ Turn `SEED_DEMO` off and change or remove the demo users before real company dat
 - Manual many-to-many matching with live totals; clear book lines without a statement line (opening balance, pre-go-live items) with a reason
 - Record bank-initiated items (service charges, interest, final tax, returned checks) in the books with suggested accounts, cleared automatically
 - Reconciliation report: balance per bank + deposits in transit − outstanding checks = balance per books ± bank items not yet booked; finalize when the difference is zero (locks its matches; owner/admin can reopen); nothing can be dated inside a finalized reconciliation
+**Petty cash (mobile app API)**: funds, vouchers from receipt photos (AI reads supplier, TIN, items, VAT, tips and proposes the account), VAT/EWT computation, fixed asset threshold with approved PO, approvals, and replenishment batches that post a Petty Cash journal. See [docs/MOBILE_API.md](docs/MOBILE_API.md).
 
 ## Design notes for later modules
 - **One entry point:** `src/lib/ledger/service.ts` → `recordJournal({ source, sourceId, lines, action })`. Sub-ledgers pass their own `source` (SALES, PURCHASES, BANK, PAYROLL, EXPENSE_CLAIM, FIXED_ASSETS, …) and skip the manual approval controls.
