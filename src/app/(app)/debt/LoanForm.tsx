@@ -1,17 +1,14 @@
 import type { Account, BankAccount, Loan, Vendor } from "@prisma/client";
 import { ActionForm } from "@/components/ActionForm";
+import { Picker } from "./Picker";
 import { saveLoanAction } from "../debt-actions";
 import { LOAN_TYPES } from "@/lib/debt/service";
 import { DAY_COUNT_LABELS, FREQUENCY_LABELS, REPAYMENT_LABELS } from "@/lib/debt/schedule";
 import { fmtDate } from "@/lib/format";
 
 export function AccountSelect({ name, accounts, value, types, blank }: { name: string; accounts: Account[]; value?: string | null; types: string[]; blank?: string }) {
-  return (
-    <select name={name} defaultValue={value ?? ""} required={!blank}>
-      <option value="">{blank ?? "Choose…"}</option>
-      {accounts.filter((a) => types.includes(a.type) && a.isPostable && a.isActive).map((a) => <option key={a.id} value={a.id}>{a.code} · {a.name}</option>)}
-    </select>
-  );
+  const options = accounts.filter((a) => types.includes(a.type) && a.isPostable && a.isActive).map((a) => ({ value: a.id, code: a.code, label: a.name, hint: a.ifrsGroup }));
+  return <Picker name={name} options={options} defaultValue={value} required={!blank} emptyLabel={blank} placeholder="Type account code or name…" add={{ kind: "accounts" }} />;
 }
 
 const byCode = (accounts: Account[], code: string) => accounts.find((a) => a.code === code)?.id;
@@ -27,7 +24,8 @@ export function LoanForm({ loan, accounts, banks, vendors, locked }: { loan?: Lo
         <div><label>Loan number</label><input name="number" defaultValue={loan?.number} required placeholder="e.g. BDO-TL-2026-001" /></div>
         <div style={{ flex: 2 }}><label>Lender</label><input name="lender" defaultValue={loan?.lender} required placeholder="Bank or lender name" /></div>
         <div><label>Lender in Vendors list (optional)</label>
-          <select name="lenderVendorCode" defaultValue={loan?.lenderVendorCode ?? ""}><option value="">None</option>{vendors.map((x) => <option key={x.id} value={x.code}>{x.code} · {x.name}</option>)}</select></div>
+          <Picker name="lenderVendorCode" defaultValue={loan?.lenderVendorCode} emptyLabel="None" valueIsCode add={{ kind: "vendors" }}
+            options={vendors.map((x) => ({ value: x.code, code: x.code, label: x.name, hint: x.tin ?? undefined }))} /></div>
         <div><label>Loan type</label><select name="loanType" defaultValue={loan?.loanType ?? "TERM_LOAN"}>{Object.entries(LOAN_TYPES).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></div>
       </div>
       <h2>Amount and interest</h2>
@@ -65,7 +63,8 @@ export function LoanForm({ loan, accounts, banks, vendors, locked }: { loan?: Lo
       </>}
       <div className="card row">
         <div><label>Default bank account (drawdowns and payments)</label>
-          <select name="bankAccountId" defaultValue={loan?.bankAccountId ?? ""}><option value="">None</option>{banks.map((b) => <option key={b.id} value={b.id}>{b.code} · {b.name}</option>)}</select></div>
+          <Picker name="bankAccountId" defaultValue={loan?.bankAccountId} emptyLabel="None" add={{ kind: "banks" }}
+            options={banks.map((b) => ({ value: b.id, code: b.code, label: b.name, hint: b.accountNumber ?? undefined }))} /></div>
         <div style={{ flex: 3 }}><label>Notes (security, guarantees, purpose)</label><input name="notes" defaultValue={loan?.notes ?? ""} /></div>
       </div>
       <p className="muted">Transaction costs (bank fees, documentary stamp tax on the loan, legal fees) are entered at drawdown and amortized at the effective interest rate (PFRS 9).</p>
