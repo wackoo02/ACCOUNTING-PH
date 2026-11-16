@@ -14,15 +14,19 @@ export type Permission =
   | "pettycash.replenish" // create replenishment batches
   | "expense.finance" // finance review of expense & mobility claims, reimbursements, reconciliation
   | "assets.audit" // scan asset QR stickers and run asset counts
+  | "payroll.process" // prepare and compute payroll runs, employee pay items
+  | "payroll.approve" // review, finalize (post to GL), release payslips and BIR 2316, record salary payment
+  | "hr.manage" // shifts, holidays, leave types and credits, attendance corrections, portal logins, all requests
   | "inventory.transact" // receive, issue, transfer and return stock; prepare adjustments and counts
   | "inventory.approve"; // approve stock adjustments and count variances
 
 const MATRIX: Record<Role, Permission[]> = {
-  OWNER: ["masters.manage", "journal.create", "journal.post", "journal.void", "period.close", "reports.view", "users.manage", "org.manage", "pettycash.capture", "pettycash.approve", "pettycash.replenish", "expense.finance", "assets.audit", "inventory.transact", "inventory.approve"],
-  ADMIN: ["masters.manage", "journal.create", "journal.post", "journal.void", "period.close", "reports.view", "users.manage", "org.manage", "pettycash.capture", "pettycash.approve", "pettycash.replenish", "expense.finance", "assets.audit", "inventory.transact", "inventory.approve"],
-  ACCOUNTANT: ["journal.create", "journal.post", "journal.void", "period.close", "reports.view", "pettycash.capture", "pettycash.replenish", "expense.finance", "assets.audit", "inventory.transact", "inventory.approve"],
+  OWNER: ["masters.manage", "journal.create", "journal.post", "journal.void", "period.close", "reports.view", "users.manage", "org.manage", "pettycash.capture", "pettycash.approve", "pettycash.replenish", "expense.finance", "assets.audit", "payroll.process", "payroll.approve", "hr.manage", "inventory.transact", "inventory.approve"],
+  ADMIN: ["masters.manage", "journal.create", "journal.post", "journal.void", "period.close", "reports.view", "users.manage", "org.manage", "pettycash.capture", "pettycash.approve", "pettycash.replenish", "expense.finance", "assets.audit", "payroll.process", "payroll.approve", "hr.manage", "inventory.transact", "inventory.approve"],
+  ACCOUNTANT: ["journal.create", "journal.post", "journal.void", "period.close", "reports.view", "pettycash.capture", "pettycash.replenish", "expense.finance", "assets.audit", "payroll.process", "payroll.approve", "inventory.transact", "inventory.approve"],
   BOOKKEEPER: ["journal.create", "reports.view", "pettycash.capture", "pettycash.replenish", "assets.audit", "inventory.transact"],
   VIEWER: ["reports.view"],
+  EMPLOYEE: [], // self-service portal only (/portal)
 };
 
 export function can(role: Role, permission: Permission): boolean {
@@ -35,4 +39,5 @@ export const ROLE_LABELS: Record<Role, string> = {
   ACCOUNTANT: "Accountant",
   BOOKKEEPER: "Bookkeeper",
   VIEWER: "Viewer (read-only)",
+  EMPLOYEE: "Employee (self-service portal)",
 };

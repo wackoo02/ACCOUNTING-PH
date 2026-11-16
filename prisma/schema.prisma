@@ -81,11 +81,12 @@ model User {
 }
 
 enum Role {
-  OWNER // everything, incl. managing users
-  ADMIN // everything except removing the owner
-  ACCOUNTANT // chart of accounts, post/void entries, close periods
-  BOOKKEEPER // create draft entries, view reports
-  VIEWER // read-only reports
+  OWNER       // everything, incl. managing users
+  ADMIN       // everything except removing the owner
+  ACCOUNTANT  // chart of accounts, post/void entries, close periods
+  BOOKKEEPER  // create draft entries, view reports
+  VIEWER      // read-only reports
+  EMPLOYEE    // employee self-service portal only (time, leave, requests, payslips)
 }
 
 model Membership {
@@ -449,14 +450,267 @@ model Employee {
   basicRate        Decimal      @default(0) @db.Decimal(18, 2)
   isPartner        Boolean      @default(false) // owners/partners for expense summary
   // Expense & mobility: defaults for the employee's claims, by dimension code.
-  costCenter       String?
-  projectCode      String?
-  businessUnit     String?
-  supervisorCode   String? // employee no. of the manager who approves this person's claims
-  isActive         Boolean      @default(true)
-  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  costCenter     String?
+  projectCode    String?
+  businessUnit   String?
+  supervisorCode String?      // employee no. of the manager who approves this person's claims
+  isActive       Boolean      @default(true)
+  // ---- Payroll and HR ----
+  birthDate         DateTime?         @db.Date
+  address           String?
+  workDaysPerYear   Int               @default(261) // daily-rate factor: 261 Mon-Fri, 313 Mon-Sat, 365 incl. rest days
+  minimumWageEarner Boolean           @default(false) // MWE: basic, holiday, OT and night differential pay are tax-exempt
+  shiftId           String? // default work schedule
+  managerId         String? // reporting manager / supervisor (approves OT, leave, time requests)
+  userId            String? // portal login
+  bankAccountNo     String? // payroll account for salary credit
+  separationDate    DateTime?         @db.Date
+  organization      Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  shift             Shift?            @relation(fields: [shiftId], references: [id])
+  manager           Employee?         @relation("ReportsTo", fields: [managerId], references: [id])
+  reports           Employee[]        @relation("ReportsTo")
+  timeLogs          TimeLog[]
+  requests          HrRequest[]       @relation("RequestEmployee")
+  leaveCredits      LeaveCredit[]
+  payItems          EmployeePayItem[]
+  payslips          Payslip[]
 
   @@unique([organizationId, code])
+  @@unique([organizationId, userId])
+  @@index([organizationId, managerId])
+}
+
+// ---------- HR: schedules, holidays, time and leave ----------
+
+model Shift {
+  id             String     @id @default(cuid())
+  organizationId String
+  code           String
+  name           String
+  startTime      String // "08:00" (Philippine time)
+  endTime        String // "17:00"; earlier than start = ends the next day (night shift)
+  breakMinutes   Int        @default(60)
+  graceMinutes   Int        @default(0) // late allowance before tardiness is counted
+  restDays       String     @default("0,6") // weekdays off: 0 = Sunday ... 6 = Saturday
+  isActive       Boolean    @default(true)
+  employees      Employee[]
+
+  @@unique([organizationId, code])
+}
+
+model Holiday {
+  id             String   @id @default(cuid())
+  organizationId String
+  date           DateTime @db.Date
+  name           String
+  type           String // REGULAR | SPECIAL (non-working) | SPECIAL_WORKING (ordinary pay)
+  source         String   @default("MANUAL") // AUTO (national list) | MANUAL (local / company added)
+  createdAt      DateTime @default(now())
+
+  @@unique([organizationId, date, name])
+  @@index([organizationId, date])
+}
+
+model TimeLog {
+  id             String    @id @default(cuid())
+  organizationId String
+  employeeId     String
+  date           DateTime  @db.Date // the day the shift starts
+  timeIn         DateTime?
+  timeOut        DateTime?
+  source         String    @default("PORTAL") // PORTAL | MANUAL (HR) | AMENDED (approved time amendment)
+  note           String?
+  updatedById    String?
+  updatedAt      DateTime  @updatedAt
+  employee       Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, date])
+  @@index([organizationId, date])
+}
+
+model LeaveType {
+  id              String        @id @default(cuid())
+  organizationId  String
+  code            String // SL, VL, EL, SIL, ML, PL, SPL, VAWC, SLW, BL ...
+  name            String
+  paid            Boolean       @default(true)
+  annualCredits   Decimal       @default(0) @db.Decimal(6, 2) // default days granted per year (0 = no balance tracking)
+  requiresBalance Boolean       @default(true)
+  description     String?
+  isActive        Boolean       @default(true)
+  credits         LeaveCredit[]
+
+  @@unique([organizationId, code])
+}
+
+model LeaveCredit {
+  id             String    @id @default(cuid())
+  organizationId String
+  employeeId     String
+  leaveTypeId    String
+  year           Int
+  days           Decimal   @db.Decimal(6, 2) // credits granted for the year (incl. carry-over)
+  employee       Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  leaveType      LeaveType @relation(fields: [leaveTypeId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, leaveTypeId, year])
+}
+
+// Employee requests routed to the reporting manager: leave, overtime, time amendment, schedule change.
+model HrRequest {
+  id             String    @id @default(cuid())
+  organizationId String
+  number         String // HR-2026-000001
+  employeeId     String
+  type           String // LEAVE | OVERTIME | TIME_AMENDMENT | SCHEDULE_CHANGE
+  status         String    @default("PENDING") // PENDING | APPROVED | REJECTED | CANCELLED
+  dateFrom       DateTime  @db.Date
+  dateTo         DateTime  @db.Date
+  leaveTypeId    String?
+  halfDay        Boolean   @default(false)
+  days           Decimal?  @db.Decimal(6, 2) // leave days requested (excl. rest days and holidays)
+  minutes        Int? // overtime minutes
+  timeIn         DateTime? // time amendment: corrected time in / out
+  timeOut        DateTime?
+  shiftId        String? // schedule change: shift to use on these dates
+  restDay        Boolean   @default(false) // schedule change: make these dates rest days
+  reason         String
+  approverId     String? // Employee id of the manager it was routed to
+  decidedById    String? // User who approved / rejected
+  decidedAt      DateTime?
+  remarks        String?
+  createdById    String
+  createdAt      DateTime  @default(now())
+  employee       Employee  @relation("RequestEmployee", fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, number])
+  @@index([organizationId, status])
+  @@index([employeeId, dateFrom])
+  @@index([approverId, status])
+}
+
+// ---------- Payroll ----------
+
+// Recurring allowances, loans and employer benefits (runId null), or one-off adjustments for one run.
+model EmployeePayItem {
+  id             String    @id @default(cuid())
+  organizationId String
+  employeeId     String
+  runId          String? // set = applies to this payroll run only
+  kind           String // EARNING | DEDUCTION | EMPLOYER
+  category       String // see ITEM_CATEGORIES in src/lib/payroll/compute.ts
+  name           String
+  amount         Decimal   @db.Decimal(18, 2) // per payroll
+  deMinimisCode  String? // RICE, UNIFORM, LAUNDRY ... (ceilings per RR 29-2025)
+  balance        Decimal?  @db.Decimal(18, 2) // loans: remaining balance; reduced when a run is finalized
+  startDate      DateTime? @db.Date
+  endDate        DateTime? @db.Date
+  isActive       Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  employee       Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, employeeId])
+  @@index([runId])
+}
+
+model PayrollRun {
+  id                   String    @id @default(cuid())
+  organizationId       String
+  number               String // PR-2026-000001
+  kind                 String    @default("REGULAR") // REGULAR | THIRTEENTH_MONTH | SPECIAL
+  frequency            String    @default("SEMI_MONTHLY") // SEMI_MONTHLY | MONTHLY
+  periodStart          DateTime  @db.Date
+  periodEnd            DateTime  @db.Date
+  payDate              DateTime  @db.Date
+  deductContributions  Boolean   @default(true) // SSS / PhilHealth / Pag-IBIG deducted in this run
+  yearEndAdjustment    Boolean   @default(false) // annualized withholding tax
+  status               String    @default("DRAFT") // DRAFT | FOR_REVIEW | FINALIZED | VOID
+  memo                 String?
+  computedAt           DateTime?
+  preparedById         String
+  submittedById        String?
+  submittedAt          DateTime?
+  finalizedById        String?
+  finalizedAt          DateTime?
+  journalEntryId       String? // payroll accrual posted to the GL on finalize
+  releasedAt           DateTime? // payslips visible to employees
+  releasedById         String?
+  paidAt               DateTime?
+  paymentEntryId       String? // salary payment posted to the GL
+  paymentBankAccountId String?
+  returnReason         String?
+  createdAt            DateTime  @default(now())
+  payslips             Payslip[]
+
+  @@unique([organizationId, number])
+  @@index([organizationId, periodEnd])
+}
+
+model Payslip {
+  id                String     @id @default(cuid())
+  organizationId    String
+  runId             String
+  employeeId        String
+  // Snapshot of the employee at computation time (for the payslip and registers).
+  employeeCode      String
+  employeeName      String
+  department        String?
+  costCenter        String?
+  position          String?
+  payBasis          String
+  basicRate         Decimal    @db.Decimal(18, 2)
+  dailyRate         Decimal    @db.Decimal(18, 2)
+  hourlyRate        Decimal    @db.Decimal(18, 4)
+  minimumWageEarner Boolean    @default(false)
+  attendance        Json // summary + per-day results
+  earnings          Json // lines
+  deductions        Json
+  employer          Json
+  gross             Decimal    @db.Decimal(18, 2)
+  basicPay          Decimal    @db.Decimal(18, 2)
+  sssCompensation   Decimal    @db.Decimal(18, 2)
+  taxableEarnings   Decimal    @db.Decimal(18, 2)
+  nonTaxable        Decimal    @db.Decimal(18, 2)
+  exemptBenefits    Decimal    @default(0) @db.Decimal(18, 2)
+  thirteenthPay     Decimal    @default(0) @db.Decimal(18, 2)
+  sssEE             Decimal    @db.Decimal(18, 2)
+  sssER             Decimal    @db.Decimal(18, 2)
+  sssEC             Decimal    @db.Decimal(18, 2)
+  mpfEE             Decimal    @db.Decimal(18, 2)
+  mpfER             Decimal    @db.Decimal(18, 2)
+  phicEE            Decimal    @db.Decimal(18, 2)
+  phicER            Decimal    @db.Decimal(18, 2)
+  hdmfEE            Decimal    @db.Decimal(18, 2)
+  hdmfER            Decimal    @db.Decimal(18, 2)
+  taxableIncome     Decimal    @db.Decimal(18, 2)
+  withholdingTax    Decimal    @db.Decimal(18, 2)
+  otherDeductions   Decimal    @db.Decimal(18, 2)
+  netPay            Decimal    @db.Decimal(18, 2)
+  employerCost      Decimal    @db.Decimal(18, 2)
+  warnings          Json?
+  reviewed          Boolean    @default(false) // ticked by the reviewer
+  run               PayrollRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  employee          Employee   @relation(fields: [employeeId], references: [id])
+
+  @@unique([runId, employeeId])
+  @@index([organizationId, employeeId])
+}
+
+// BIR Form 2316 (Certificate of Compensation Payment / Tax Withheld) per employee per year.
+model Form2316 {
+  id             String    @id @default(cuid())
+  organizationId String
+  employeeId     String
+  year           Int
+  status         String    @default("DRAFT") // DRAFT | FINALIZED (reviewed) | RELEASED (visible to employee)
+  data           Json // figures as finalized
+  finalizedById  String?
+  finalizedAt    DateTime?
+  releasedAt     DateTime?
+  updatedAt      DateTime  @updatedAt
+
+  @@unique([employeeId, year])
+  @@index([organizationId, year])
 }
 
 model Vendor {

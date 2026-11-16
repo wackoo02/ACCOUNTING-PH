@@ -55,7 +55,7 @@ export type Ctx = {
 };
 
 /** Resolve the signed-in user + active company. Redirects to /login if missing. */
-export async function requireCtx(permission?: Permission): Promise<Ctx> {
+export async function requireCtx(permission?: Permission, opts: { portal?: boolean } = {}): Promise<Ctx> {
   const s = await currentSession();
   if (!s) redirect("/login");
   const memberships = await prisma.membership.findMany({
@@ -65,6 +65,8 @@ export async function requireCtx(permission?: Permission): Promise<Ctx> {
   });
   if (memberships.length === 0) redirect("/login?error=nocompany");
   const m = memberships.find((x) => x.organizationId === s.activeOrganizationId) ?? memberships[0];
+  // Employee logins only reach the self-service portal.
+  if (m.role === "EMPLOYEE" && !opts.portal) redirect("/portal");
   if (permission && !can(m.role, permission)) {
     throw new Error("You do not have permission to do this. Ask your company's owner or administrator.");
   }
