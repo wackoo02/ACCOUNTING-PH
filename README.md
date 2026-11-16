@@ -120,6 +120,20 @@ One-time setup for the whole Veritus service (platform operator only):
 
 **Contract billing**: subscriptions and retainer contracts invoice every month/quarter/half/year (catching up missed periods, never billing a period twice); project contracts bill milestones by % or amount of the contract value. Hooks for POS (series type POS_INVOICE, invoice source POS) and scanned invoices (source SCAN) are in place.
 
+## Debt: loans and borrowings
+**Loan master** (Debt → Loans and Borrowings): loan number, lender (optionally linked to a vendor), loan type (term loan, revolving line, notes payable, related party), original principal or credit limit, rate (fixed or floating) and day count (Actual/365, Actual/360, 30/360), start, first payment and maturity dates, payment terms (monthly to annual or single payment; equal installments, equal principal, or bullet; principal grace months), and the current portion, non-current portion, interest expense, accrued interest and (optional) unamortized transaction cost accounts.
+
+**Transactions** (all post to the GL as source DEBT; undo is only from the loan page):
+- Drawdown: bank receives the proceeds net of transaction costs; the loan is credited and split into current / non-current; the repayment schedule and effective interest rate are computed from the drawdown date. Revolving lines can be drawn again up to the limit.
+- Interest accrual by the effective interest method (PFRS 9): expense at the EIR on the carrying amount, payable at the contract rate, the difference amortizes the transaction costs.
+- Principal and interest payments create a **cash disbursement voucher** (approval workflow, checks, bank reconciliation). Interest is accrued to the payment date first; principal settles the current portion first; the loan updates when the voucher is posted or voided. Fully repaid loans are settled and leftover costs written off.
+- Period-end run: accrues every loan to the date, then moves principal due within 12 months from non-current to current (PAS 1). An unwaived covenant breach at the date makes the whole loan current.
+- Modification: PFRS 9 10% test. Non-substantial: carrying amount adjusted to the new cash flows at the original EIR, gain or loss recognized, fees amortized. Substantial: old loan derecognized, unamortized costs and fees expensed. Floating-rate resets and re-amortization after a prepayment change the EIR going forward with no gain or loss.
+
+**Reports**: debt schedule with GL agreement per account, debt aging (contractual maturity buckets with undiscounted interest per PFRS 7, and past-due installments by days), amortization table per loan (contract and EIR columns, paid / overdue status), covenant monitoring (current ratio, debt to equity, liabilities to equity, interest coverage, DSCR, net debt to EBITDA, minimum net worth, or a manual value; pass / watch / breach / waived).
+
+Loans are in the company's base currency for now. Code: `src/lib/debt/schedule.ts` (pure schedule and EIR math), `src/lib/debt/service.ts`.
+
 ## Design notes for later modules
 - **One entry point:** `src/lib/ledger/service.ts` → `recordJournal({ source, sourceId, lines, action })`. Sub-ledgers pass their own `source` (SALES, PURCHASES, BANK, PAYROLL, EXPENSE_CLAIM, FIXED_ASSETS, …) and skip the manual approval controls.
 - Find control accounts with `accountByRole(org, "AR_CONTROL")` etc., never hard-coded codes.
