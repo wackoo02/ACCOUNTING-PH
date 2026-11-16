@@ -56,8 +56,14 @@ model Organization {
   pettyCashBatches  PettyCashBatch[]
   purchaseOrders    PurchaseOrder[]
   receiptImages     ReceiptImage[]
-  // AP invoice inbox: suppliers' invoices emailed to the company's AP address arrive at
-  // /api/inbound/ap-email/<apInboxToken>. apInboxAddress is the address shown to suppliers.
+  // AP invoice inbox, managed by the company's own admin (Payables → AP Invoice Inbox → Email set-up).
+  // apInboxAlias: the company's own Veritus address <alias>@<AP_INBOX_DOMAIN>, routed by the shared webhook.
+  // apInboxAddress: the company's own AP address (e.g. ap@client.ph) that forwards to the Veritus address.
+  // apInboxSenders: optional allow-list of sender emails or @domains (comma separated); blank = anyone.
+  // apInboxToken: optional private webhook for a company that uses its own inbound-email service.
+  apInboxAlias      String?            @unique
+  apInboxEnabled    Boolean            @default(true)
+  apInboxSenders    String?
   apInboxToken      String?            @unique
   apInboxAddress    String?
 }

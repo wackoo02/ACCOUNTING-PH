@@ -2,7 +2,7 @@ import Link from "next/link";
 import { requireCtx } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { can } from "@/lib/permissions";
-import { aiConfigured, type InvoiceExtraction } from "@/lib/ap/inbox";
+import { aiConfigured, inboxAddressOf, type InvoiceExtraction } from "@/lib/ap/inbox";
 import { ActionForm } from "@/components/ActionForm";
 import { inboxUpload } from "../../ap-actions";
 
@@ -23,9 +23,9 @@ export default async function Inbox({ searchParams }: { searchParams: Promise<{ 
   const n = (s: string[]) => counts.filter((c) => s.includes(c.status)).reduce((a, c) => a + c._count, 0);
   return (
     <>
-      <div className="top"><h1>AP Invoice Inbox</h1>{can(ctx.role, "org.manage") && <Link className="btn secondary" href="/ap/inbox/setup">Email address set-up</Link>}</div>
-      <p className="muted">Supplier invoices {org.apInboxAddress ? <>emailed to <strong>{org.apInboxAddress}</strong> or </> : ""}uploaded here are read automatically: supplier, TIN, invoice number, VAT, withholding tax, and whether each line is an expense, prepayment, fixed asset or inventory. Accounting staff review and correct the details, then create the bill, which goes through the AP approval matrix.</p>
-      {!aiConfigured() && <div className="notice">Automatic reading needs ANTHROPIC_API_KEY on the server. Until then, open each document and enter the details by hand.</div>}
+      <div className="top"><h1>AP Invoice Inbox</h1>{can(ctx.role, "org.manage") && <Link className="btn secondary" href="/ap/inbox/setup">Email settings</Link>}</div>
+      <p className="muted">Supplier invoices {inboxAddressOf(org.apInboxAlias) && org.apInboxEnabled ? <>emailed to <strong>{org.apInboxAddress || inboxAddressOf(org.apInboxAlias)}</strong> or </> : ""}uploaded here are read automatically: supplier, TIN, invoice number, VAT, withholding tax, and whether each line is an expense, prepayment, fixed asset or inventory. Accounting staff review and correct the details, then create the bill, which goes through the AP approval matrix.</p>
+      {!aiConfigured() && <div className="notice">Automatic reading is not switched on for this Veritus service yet. Until then, open each document and enter the details by hand.</div>}
       {can(ctx.role, "journal.create") && <ActionForm action={inboxUpload} className="card row noprint">
         <div style={{ flex: 3 }}><label>Upload supplier invoices (PDF, JPG, PNG; several at once)</label><input type="file" name="files" multiple accept="application/pdf,image/jpeg,image/png,image/webp" /></div>
         <div style={{ flex: 0 }}><button>Upload and read</button></div>

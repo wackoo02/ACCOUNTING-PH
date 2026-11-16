@@ -11,7 +11,8 @@ import {
 import { approveBill, saveBill, voidBill } from "@/lib/ap/bills";
 import { approvePayment, certificatesForPayment, createPaymentRun, savePayment, voidPayment } from "@/lib/ap/payments";
 import { apAging } from "@/lib/ap/aging";
-import { addInboxDocument, matchExtraction, parseInboundEmail } from "@/lib/ap/inbox";
+import { addInboxDocument, ensureInboxAlias, matchExtraction, organizationForRecipients, parseInboundEmail, saveInboxSettings, senderAllowed } from "@/lib/ap/inbox";
+import { receiveInboundEmail } from "@/lib/ap/inbound";
 import { voidCash } from "@/lib/bank/cash";
 
 let org = "", owner = "", clerk = "", accountant = "", head = "";
@@ -186,5 +187,32 @@ describe("procure to pay", () => {
     expect(m.vendorId).toBe(vendorA);
     expect(m.purchaseOrderId).toBe(poId);
     expect(m.duplicateBill?.id).toBe(billId);
+  });
+
+  it("inbox: each company has its own address, set by its admin, and email is routed by recipient", async () => {
+    process.env.AP_INBOX_DOMAIN = "inbox.veritus.test";
+    const alias = await ensureInboxAlias(org);
+    expect(alias).toMatch(/-ap-[0-9a-f]{4}$/);
+    expect(await ensureInboxAlias(org)).toBe(alias); // stable once made
+    await expect(saveInboxSettings(org, owner, { alias: "x", address: "", senders: "", enabled: true })).rejects.toThrow(/4 to 40/);
+    await expect(saveInboxSettings(org, owner, { alias: "postmaster", address: "", senders: "", enabled: true })).rejects.toThrow(/reserved/);
+    await expect(saveInboxSettings(org, owner, { alias: "acme-ap", address: "", senders: "not an email", enabled: true })).rejects.toThrow(/Not an email/);
+    await saveInboxSettings(org, owner, { alias: "Acme-AP", address: "AP@acme.ph", senders: "@abc.ph, billing@techhub.ph", enabled: true });
+    const o = await prisma.organization.findUniqueOrThrow({ where: { id: org } });
+    expect([o.apInboxAlias, o.apInboxAddress]).toEqual(["acme-ap", "ap@acme.ph"]);
+    // Forwarded from the company's own mailbox: Postmark reports the Veritus address as OriginalRecipient.
+    const pdf = Buffer.concat([Buffer.from("%PDF-1.4 "), Buffer.alloc(21000, 7)]);
+    const mail = parseInboundEmail({ From: "Sales <sales@abc.ph>", FromFull: { Email: "sales@abc.ph" }, To: "ap@acme.ph", OriginalRecipient: "acme-ap@inbox.veritus.test", Attachments: [{ Name: "inv.pdf", Content: pdf.toString("base64"), ContentType: "application/pdf" }] });
+    expect(mail.to).toEqual(expect.arrayContaining(["acme-ap@inbox.veritus.test", "ap@acme.ph"]));
+    expect((await organizationForRecipients(mail.to))?.id).toBe(org);
+    expect((await organizationForRecipients(["ap@acme.ph"]))?.id).toBe(org); // own address registered
+    expect(await organizationForRecipients(["someone-else@inbox.veritus.test"])).toBeNull();
+    expect((await receiveInboundEmail(o, mail)).ids).toHaveLength(1);
+    expect(senderAllowed(o.apInboxSenders, "x@mail.abc.ph")).toBe(true);
+    expect(senderAllowed(o.apInboxSenders, "spam@other.ph")).toBe(false);
+    expect((await receiveInboundEmail(o, { ...mail, from: "spam@other.ph" })).ids).toHaveLength(0);
+    await saveInboxSettings(org, owner, { alias: "acme-ap", address: "", senders: "", enabled: false });
+    const off = await prisma.organization.findUniqueOrThrow({ where: { id: org } });
+    expect((await receiveInboundEmail(off, mail)).ids).toHaveLength(0);
   });
 });

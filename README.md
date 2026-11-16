@@ -80,10 +80,12 @@ Turn `SEED_DEMO` off and change or remove the demo users before real company dat
 
 **AP invoice inbox**: suppliers email PDF/JPG/PNG invoices to the company's inbox address (or staff upload them). AI reads the supplier, TIN, invoice number, dates, VAT, withholding and each line, classifies the lines, matches the supplier and an approved PO, and flags duplicates. Accounting staff review the document side by side with the proposed bill; nothing reaches the AP ledger until they save it and it passes the approval matrix.
 
-Inbox email setup (once per deployment):
-1. Create a free [Postmark](https://postmarkapp.com) account and an inbound stream. Set its webhook URL to `https://<your-app>/api/inbound/ap-email/<token>`; the token is shown on Payables → AP Invoice Inbox → Setup (rotate it there if it leaks).
-2. Forward the company's AP address (e.g. ap@yourcompany.com) to the Postmark inbound address, and record that address on the setup page.
-3. Set `ANTHROPIC_API_KEY` in Vercel. Optional: `AP_INVOICE_MODEL` to choose the model. Without a key, documents still arrive and are keyed in by hand.
+Inbox email, per company: each company gets its own address, e.g. `demo-holdings-ap-7k2q@inbox.veritus.ph`. The company's own admin manages it in Settings → AP Invoice Email: change the inbox name, register their own AP mailbox (e.g. ap@client.ph, which they forward to the Veritus address), limit which senders are accepted, or turn email off. No developer steps are needed per company. A company with its own inbound-email service can use a private webhook instead (Advanced on the same page).
+
+One-time setup for the whole Veritus service (platform operator only):
+1. Pick a mail domain, e.g. `inbox.veritus.ph`, and point its MX record to Postmark (Postmark → Inbound → domain forwarding). Every address on it then reaches one Postmark inbound stream.
+2. Set the stream's webhook URL to `https://veritus:<secret>@<your-app>/api/inbound/ap-email`. Emails are routed to the company by recipient address.
+3. In Vercel set `AP_INBOX_DOMAIN` (e.g. inbox.veritus.ph), `INBOUND_WEBHOOK_SECRET` (the same random secret, 16+ characters) and `ANTHROPIC_API_KEY` (optional `AP_INVOICE_MODEL`). Without a key, documents still arrive and are keyed in by hand.
 
 ## Veritus Mobility app and Expense & Mobility (Phase 7, part)
 **Mobile app** at `/m`: an installable web app (PWA). On iPhone open it in Safari → Share → Add to Home Screen; on Android Chrome offers "Install app". Same login as the web ERP. Tiles: Petty Cash, Travel (local and international, foreign receipts translated to English and converted at the day's rate), Transport (Grab, inDrive, JoyRide, Angkas, taxi), Sent Package (Lalamove, Transportify, couriers), Sales Invoice (scan an issued invoice and post the sale) and Asset Audit (scan QR stickers).

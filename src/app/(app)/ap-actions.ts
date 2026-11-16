@@ -11,7 +11,7 @@ import {
 } from "@/lib/purchasing/service";
 import { approveBill, returnBill, saveBill, scheduleBills, submitBill, voidBill } from "@/lib/ap/bills";
 import { approvePayment, createPaymentRun, returnPayment, savePayment, submitPayment, voidPayment } from "@/lib/ap/payments";
-import { addInboxDocument, extractInboxDocument, rejectInboxDocument, rotateInboxToken } from "@/lib/ap/inbox";
+import { addInboxDocument, extractInboxDocument, rejectInboxDocument, rotateInboxToken, saveInboxSettings } from "@/lib/ap/inbox";
 import { deleteApprovalRule, saveApprovalRule } from "@/lib/approvals";
 import { prisma } from "@/lib/db";
 
@@ -250,7 +250,8 @@ export async function inboxSettings(_: FormState, fd: FormData): Promise<FormSta
   try {
     const c = await requireCtx("org.manage");
     if (s(fd, "op") === "rotate") await rotateInboxToken(c.org.id, c.user.id);
-    else await prisma.organization.update({ where: { id: c.org.id }, data: { apInboxAddress: s(fd, "address") || null } });
+    else if (s(fd, "op") === "token-off") await prisma.organization.update({ where: { id: c.org.id }, data: { apInboxToken: null } });
+    else await saveInboxSettings(c.org.id, c.user.id, { alias: s(fd, "alias"), address: s(fd, "address"), senders: s(fd, "senders"), enabled: fd.get("enabled") === "on" });
   } catch (e) { return fail(e); }
   revalidatePath("/ap/inbox/setup");
   return { message: "Saved." };

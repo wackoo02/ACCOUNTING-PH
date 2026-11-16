@@ -101,7 +101,7 @@ export async function extractInboxDocument(organizationId: string, id: string) {
   if (!doc) throw new LedgerError(["Document not found"]);
   if (doc.status === "BILLED") throw new LedgerError(["A bill was already created from this document"]);
   if (!aiConfigured()) {
-    await prisma.apInboxDocument.update({ where: { id }, data: { status: "READY", error: "Automatic reading is not set up on the server (ANTHROPIC_API_KEY). Enter the details by hand." } });
+    await prisma.apInboxDocument.update({ where: { id }, data: { status: "READY", error: "Automatic reading is not switched on for this Veritus service. Enter the details by hand." } });
     return null;
   }
   await prisma.apInboxDocument.update({ where: { id }, data: { status: "READING", error: null } });
@@ -243,5 +243,90 @@ export function parseInboundEmail(body: unknown) {
     const type = String(x.ContentType ?? x.contentType ?? x.content_type ?? "");
     return { name, type, data: Buffer.from(content, "base64") };
   });
-  return { from, subject, files };
+  // Every address the email was sent to. OriginalRecipient is the address the email service received it at
+  // (the company's Veritus address), even when the company forwarded it from its own ap@ mailbox.
+  const to = new Set<string>();
+  const add = (v: unknown) => { for (const m of String(v ?? "").matchAll(/[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}/g)) to.add(m[0].toLowerCase()); };
+  add(get("OriginalRecipient"));
+  for (const k of ["ToFull", "CcFull", "BccFull"]) for (const x of (get(k) as { Email?: string }[] | undefined) ?? []) add(x?.Email);
+  add(get("To")); add(get("Cc")); add(b.recipient); add(b.envelope_to);
+  return { from, subject, files, to: [...to] };
+}
+
+// ---------- Per-company inbox address (set by the company's own admin) ----------
+
+/** The shared mail domain for company inbox addresses, set once for the whole Veritus deployment. */
+export const inboxDomain = () => (process.env.AP_INBOX_DOMAIN ?? "").trim().toLowerCase().replace(/^@/, "") || null;
+export const inboxAddressOf = (alias: string | null | undefined) => (alias && inboxDomain() ? `${alias}@${inboxDomain()}` : null);
+
+const RESERVED = new Set(["admin", "postmaster", "abuse", "noreply", "no-reply", "support", "billing", "root", "mailer-daemon", "veritus", "test"]);
+export function checkAlias(raw: string) {
+  const a = raw.trim().toLowerCase();
+  if (!/^[a-z0-9][a-z0-9.-]{2,38}[a-z0-9]$/.test(a) || a.includes("..")) throw new LedgerError(["Use 4 to 40 letters, numbers, dots or dashes for the inbox name, starting and ending with a letter or number"]);
+  if (RESERVED.has(a)) throw new LedgerError([`"${a}" is reserved. Choose another inbox name`]);
+  return a;
+}
+
+/** Give a company its own inbox name the first time it is needed, e.g. "demo-holdings-ap-7k2q". */
+export async function ensureInboxAlias(organizationId: string) {
+  const org = await prisma.organization.findUniqueOrThrow({ where: { id: organizationId }, select: { name: true, apInboxAlias: true } });
+  if (org.apInboxAlias) return org.apInboxAlias;
+  const base = org.name.toLowerCase().replace(/\b(inc|corp|corporation|co|ltd|opc|company)\b\.?/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 24) || "company";
+  for (let i = 0; i < 5; i++) {
+    const alias = `${base}-ap-${randomBytes(3).toString("hex").slice(0, 4)}`;
+    try {
+      await prisma.organization.update({ where: { id: organizationId }, data: { apInboxAlias: alias } });
+      return alias;
+    } catch { /* taken: try another */ }
+  }
+  throw new LedgerError(["Could not create an inbox address. Try again"]);
+}
+
+const cleanSenders = (raw: string) => {
+  const items = raw.split(/[\s,;]+/).map((x) => x.trim().toLowerCase()).filter(Boolean);
+  const bad = items.filter((x) => !/^([a-z0-9._%+-]+)?@[a-z0-9.-]+\.[a-z]{2,}$/.test(x));
+  if (bad.length) throw new LedgerError([`Not an email or @domain: ${bad.join(", ")}`]);
+  return items.length ? items.join(", ") : null;
+};
+
+export async function saveInboxSettings(organizationId: string, userId: string, input: { alias: string; address: string; senders: string; enabled: boolean }) {
+  const alias = checkAlias(input.alias);
+  const address = input.address.trim().toLowerCase() || null;
+  if (address && !/^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/.test(address)) throw new LedgerError(["Your company AP address is not a valid email"]);
+  const d = inboxDomain();
+  if (address && d && address.endsWith(`@${d}`)) throw new LedgerError(["Your company AP address is your own mailbox (e.g. ap@yourcompany.ph), not the Veritus address"]);
+  const senders = cleanSenders(input.senders);
+  const taken = await prisma.organization.findFirst({ where: { apInboxAlias: alias, id: { not: organizationId } }, select: { id: true } });
+  if (taken) throw new LedgerError(["That inbox name is already used by another company. Choose another"]);
+  if (address) {
+    const same = await prisma.organization.findFirst({ where: { apInboxAddress: address, id: { not: organizationId } }, select: { id: true } });
+    if (same) throw new LedgerError(["That AP address is already registered by another company"]);
+  }
+  const before = await prisma.organization.findUniqueOrThrow({ where: { id: organizationId }, select: { apInboxAlias: true, apInboxAddress: true, apInboxSenders: true, apInboxEnabled: true } });
+  const after = { apInboxAlias: alias, apInboxAddress: address, apInboxSenders: senders, apInboxEnabled: input.enabled };
+  await prisma.$transaction(async (tx) => {
+    await tx.organization.update({ where: { id: organizationId }, data: after });
+    await audit(tx, organizationId, userId, "ap_inbox.settings", organizationId, before, after, null, "organization");
+  });
+}
+
+/** Which company an inbound email belongs to: its Veritus address first, then a registered company AP address. */
+export async function organizationForRecipients(recipients: string[]) {
+  const d = inboxDomain();
+  const aliases = d ? recipients.filter((r) => r.endsWith(`@${d}`)).map((r) => r.slice(0, -d.length - 1).split("+")[0]) : [];
+  if (aliases.length) {
+    const org = await prisma.organization.findFirst({ where: { apInboxAlias: { in: aliases } } });
+    if (org) return org;
+  }
+  const orgs = recipients.length ? await prisma.organization.findMany({ where: { apInboxAddress: { in: recipients } }, take: 2 }) : [];
+  return orgs.length === 1 ? orgs[0] : null;
+}
+
+/** Blank allow-list = anyone may send. Entries are full emails or @domain (subdomains included). */
+export function senderAllowed(allowList: string | null | undefined, from: string) {
+  const list = (allowList ?? "").split(",").map((x) => x.trim().toLowerCase()).filter(Boolean);
+  if (!list.length) return true;
+  const f = from.trim().toLowerCase();
+  const dom = f.split("@")[1] ?? "";
+  return list.some((x) => (x.startsWith("@") ? dom === x.slice(1) || dom.endsWith(`.${x.slice(1)}`) : f === x));
 }

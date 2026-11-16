@@ -104,6 +104,7 @@ export const NAV: NavSection[] = [
       { href: "/entities", label: "Entities and Intercompany", icon: "entities" },
       { href: "/settings", label: "Company Settings", icon: "settings", perm: "org.manage" },
       { href: "/settings/approvals", label: "Approval Matrix", icon: "approvals", perm: "org.manage" },
+      { href: "/ap/inbox/setup", label: "AP Invoice Email", icon: "inbox", perm: "org.manage" },
       { href: "/users", label: "Users and Roles", icon: "users", perm: "users.manage" },
       { href: "/audit", label: "Audit Trail", icon: "audit", perm: "org.manage" },
     ],
