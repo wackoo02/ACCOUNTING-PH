@@ -1,3 +1,4 @@
+import { CustomizeLink } from "@/components/reporting/CustomizeLink";
 import Link from "next/link";
 import { requireCtx } from "@/lib/auth";
 import { trialBalance } from "@/lib/ledger/reports";
@@ -16,7 +17,7 @@ export default async function TrialBalance({ searchParams }: { searchParams: SP 
   const tPC = tb.rows.reduce((s, r) => s + r.periodCredit, 0n);
   return (
     <>
-      <div className="top"><h1>Trial Balance</h1><span className="muted">{ctx.org.name} · as of {to}</span></div>
+      <div className="top"><h1>Trial Balance</h1><CustomizeLink template="trial_balance" from={from} to={to} /><span className="muted">{ctx.org.name} · as of {to}</span></div>
       <form className="card row noprint">
         <div><label>Movement from</label><input type="date" name="from" defaultValue={from} /></div>
         <div><label>As of</label><input type="date" name="to" defaultValue={to} /></div>

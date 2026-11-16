@@ -145,3 +145,17 @@ One-time setup for the whole Veritus service (platform operator only):
 - All money math is in integer centavos (`src/lib/money.ts`).
 - Cash and bank: `src/lib/bank/cash.ts` (vouchers), `src/lib/bank/recon.ts` (statements, matching, reconciliation), `src/lib/bank/match.ts` (pure matching rules). AR collections and AP payments can create cash vouchers or post BANK entries; anything posted to a bank's GL account shows up for matching automatically.
 - Purchasing and payables: `src/lib/purchasing/service.ts`, `src/lib/ap/` (bills, payments, aging, inbox, pure math in `compute.ts`) and `src/lib/approvals.ts` (approval matrix, reusable by other documents). AP payments post through `postSubledgerDisbursementTx` in cash.ts, so they show in check monitoring and bank reconciliation.
+
+
+## Custom reports (report builder)
+**Reports → Custom Reports.** Every report can be customized and saved: start from a template (or press **Customize** on any standard report) and change
+- **Report type:** account balances (TB, account activity, budget vs actual, cost per department, expenses per employee/partner, your own statement layout), income statement, balance sheet, cash flow, GL lines, journal entries, aging (customers, vendors, employees).
+- **Periods:** months, quarters, year to date, fiscal years, balances as of a date, or fixed dates. Periods are relative to the report date, so saved reports stay current. Add comparisons (change and %) between any two periods.
+- **Columns:** side by side by entity/subsidiary or by any dimension (department, cost center, branch, project...), with a total. Amounts: opening, debit, credit, net movement, closing, budget, variance, variance %. Detail reports: pick, order, sort and subtotal columns.
+- **Rows:** group by account, type, IFRS line, parent account, entity, party or any dimension (up to 4 levels with subtotals), or design your own rows from account ranges/lists/types and formulas (e.g. `REV - COS`).
+- **Filters:** entities, specific accounts or code ranges, account types, IFRS lines, dimensions (by code, so they work across entities), source modules, customers/vendors/employees, entry status, text.
+- **Save and share:** only me, whole company, by role, or specific people; optionally let them edit. Others can always run it and save their own copy. Export to Excel or print to PDF.
+
+Access rules: a report is shared only inside its company, and each person only sees data for entities they are a member of.
+
+For developers: definitions are JSON validated by `src/lib/reporting/definition.ts`. Each report type is a source in `src/lib/reporting/sources/`, listed in `catalog.ts` (what the builder shows) and `run.ts` (how it runs). Later modules (AR/AP invoices, payroll, fixed assets) add a source there and return the common `ReportResult` shape, and get columns, saving, sharing, Excel and printing for free.
