@@ -35,6 +35,14 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
           <Link href="/intercompany">Intercompany</Link>
           <Link href="/fx">FX Revaluation</Link>
           <Link href="/periods">Fiscal Periods</Link>
+          <div className="sect">Cash and Bank</div>
+          <Link href="/bank">Bank and Cash Accounts</Link>
+          <Link href="/cash">Receipts and Disbursements</Link>
+          {can(ctx.role, "journal.post") && <Link href="/cash?status=PENDING_APPROVAL">Voucher Approvals</Link>}
+          <Link href="/cash/petty">Petty Cash</Link>
+          <Link href="/cash/checks">Check Monitoring</Link>
+          <Link href="/bank/statements">Bank Statements</Link>
+          <Link href="/bank/reconcile">Bank Reconciliation</Link>
           <div className="sect">Reports</div>
           <Link href="/trial-balance">Trial Balance</Link>
           <Link href="/reports/balance-sheet">Balance Sheet</Link>
@@ -54,7 +62,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
           {can(ctx.role, "org.manage") && <Link href="/audit">Audit Trail</Link>}
           <form action={logout}><button className="link" style={{ color: "#cfd8e3", padding: "7px 10px" }}>Sign out</button></form>
           <div className="sect">Coming next</div>
-          {["Receivables and aging", "Payables and aging", "Bank reconciliation", "Expense claims and mobility", "Payroll", "Fixed assets", "Prepaid expenses", "Leases (PFRS 16)", "Debt", "Inventory", "BIR reports"].map((m) => <div key={m} className="soon">{m}</div>)}
+          {["Receivables and aging", "Payables and aging", "Expense claims and mobility", "Payroll", "Fixed assets", "Prepaid expenses", "Leases (PFRS 16)", "Debt", "Inventory", "BIR reports"].map((m) => <div key={m} className="soon">{m}</div>)}
         </nav>
       </aside>
       <main className="main">{children}</main>

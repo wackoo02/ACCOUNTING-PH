@@ -79,7 +79,7 @@ function lineData(organizationId: string, l: NormalizedLine) {
   };
 }
 
-async function nextNumber(tx: Tx, organizationId: string, prefix: string, year: number) {
+export async function nextNumber(tx: Tx, organizationId: string, prefix: string, year: number) {
   const key = `${prefix}-${year}`;
   const seq = await tx.documentSequence.upsert({
     where: { organizationId_key: { organizationId, key } },
@@ -140,7 +140,7 @@ async function checkRefs(tx: Tx, organizationId: string, base: string, lines: No
 }
 
 /** Approval controls: permission, segregation of duties, and approval limit. */
-async function assertCanApprove(tx: Tx, organizationId: string, userId: string, preparerIds: (string | null)[], total: bigint) {
+export async function assertCanApprove(tx: Tx, organizationId: string, userId: string, preparerIds: (string | null)[], total: bigint) {
   const org = await orgOf(tx, organizationId);
   const m = await tx.membership.findUnique({ where: { userId_organizationId: { userId, organizationId } } });
   if (!m || !can(m.role, "journal.post")) throw new LedgerError(["You do not have rights to approve and post entries"]);
@@ -311,9 +311,20 @@ export async function rejectJournal(organizationId: string, userId: string, entr
 
 /** Drafts are voided (no GL effect). Posted entries are reversed with a new, linked entry. */
 export async function voidOrReverse(organizationId: string, userId: string, entryId: string, reversalDate?: Date) {
-  return prisma.$transaction(async (tx) => {
+  return prisma.$transaction((tx) => voidOrReverseTx(tx, organizationId, userId, entryId, reversalDate));
+}
+
+/** `fromSubledger`: the cash/bank module undoing its own entry (users must void the voucher instead). */
+export async function voidOrReverseTx(tx: Tx, organizationId: string, userId: string, entryId: string, reversalDate?: Date, fromSubledger = false) {
+  {
     const e = await tx.journalEntry.findFirst({ where: { id: entryId, organizationId }, include: { lines: true, reversedBy: true } });
     if (!e) throw new LedgerError(["Entry not found"]);
+    if (e.source === "BANK" && e.sourceId && !fromSubledger) {
+      throw new LedgerError(["This entry came from Cash and Bank. Void the cash voucher, or undo the bank adjustment on the reconciliation screen, instead."]);
+    }
+    if (e.lines.some((l) => l.clearedAt)) {
+      throw new LedgerError(["This entry is already cleared against the bank statement. Undo the match on the bank reconciliation screen first."]);
+    }
     if (e.status === "VOID") throw new LedgerError(["Entry is already void"]);
     if (e.status === "DRAFT" || e.status === "PENDING_APPROVAL") {
       await tx.journalEntry.update({ where: { id: e.id }, data: { status: "VOID", voidedById: userId, voidedAt: new Date() } });
@@ -325,7 +336,7 @@ export async function voidOrReverse(organizationId: string, userId: string, entr
     if (e.source === "CLOSING") throw new LedgerError(["Reopen the fiscal year to undo a closing entry"]);
     if (e.intercompanyGroupId) throw new LedgerError(["Intercompany entries must be reversed together from the intercompany screen"]);
     return reverseTx(tx, organizationId, userId, e, reversalDate);
-  });
+  }
 }
 
 type EntryWithLines = Prisma.JournalEntryGetPayload<{ include: { lines: true } }>;

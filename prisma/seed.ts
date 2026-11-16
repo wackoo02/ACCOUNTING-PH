@@ -5,6 +5,9 @@ import { prisma } from "../src/lib/db";
 import { provisionOrganization } from "../src/lib/org";
 import { postJournal, recordIntercompany, recordJournal, setupIntercompany } from "../src/lib/ledger/service";
 import { importMasters } from "../src/lib/masters/store";
+import { approveCash, saveCashTransaction } from "../src/lib/bank/cash";
+import { importStatement, statementTemplate } from "../src/lib/bank/recon";
+import ExcelJS from "exceljs";
 
 async function main() {
   if (await prisma.user.findUnique({ where: { email: "owner@demo.ph" } })) return console.log("Demo data already present.");
@@ -71,6 +74,47 @@ async function main() {
   await recordIntercompany({ userId: owner.id, date: dt("02-28"), memo: "Management fee charged to Demo Trading for February", reference: "IC-MF-02",
     from: { organizationId: P, lines: [{ accountId: await id("7040"), credit: "25000" }] },
     to: { organizationId: sub.id, lines: [{ accountId: await id("6070", sub.id), debit: "25000" }] } });
+
+  // ---- Cash and bank ----
+  await importMasters("vendors", P, owner.id, [{ code: "V-0001", name: "ABC Office Supplies Inc.", ewtRate: "1", atcCode: "WC158" }]);
+  await importMasters("banks", P, owner.id, [
+    { code: "BDO-CA", name: "BDO Current Account - Makati", kind: "CURRENT", glAccountCode: "1020", bankName: "BDO Unibank", accountNumber: "0012-3456-7890", nextCheckNo: 1001 },
+    { code: "BPI-SA", name: "BPI Savings - Payroll", kind: "SAVINGS", glAccountCode: "1025", bankName: "BPI", accountNumber: "1234-5678-90" },
+    { code: "BPI-USD", name: "BPI Dollar Savings", kind: "SAVINGS", glAccountCode: "1027", bankName: "BPI", currencyCode: "USD" },
+    { code: "PCF-ADMIN", name: "Petty Cash Fund - Admin", kind: "PETTY_CASH", glAccountCode: "1015", custodian: "Ben Bookkeeper", fundLimit: "10000" },
+    { code: "GCASH", name: "GCash Corporate Wallet", kind: "EWALLET", glAccountCode: "1030" },
+    { code: "COH", name: "Undeposited Collections", kind: "CASH_ON_HAND", glAccountCode: "1010" },
+  ]);
+  const bank = async (code: string) => (await prisma.bankAccount.findUniqueOrThrow({ where: { organizationId_code: { organizationId: P, code } } })).id;
+  const BDO = await bank("BDO-CA"), PCF = await bank("PCF-ADMIN");
+  const vouch = async (v: Parameters<typeof saveCashTransaction>[0]) => {
+    const t = await saveCashTransaction({ ...v, organizationId: P, userId: bk.id, action: "submit" });
+    await approveCash(P, acc.id, t.id);
+  };
+  await vouch({ organizationId: P, userId: bk.id, type: "DISBURSEMENT", bankAccountId: BDO, date: dt("01-20"), payee: "ABC Office Supplies Inc.", partyType: "VENDOR", partyId: "V-0001", method: "CHECK",
+    memo: "Office supplies, SI 1180", reference: "SI 1180", withholdingTaxCodeId: (await prisma.taxCode.findFirstOrThrow({ where: { organizationId: P, code: "WC158" } })).id,
+    lines: [{ accountId: await id("6060"), amount: "15151.52", dims: { departmentId: await dim("ADMIN") } }] });
+  await vouch({ organizationId: P, userId: bk.id, type: "DISBURSEMENT", bankAccountId: BDO, date: dt("01-28"), payee: "Meralco", method: "CHECK", memo: "Electricity for January",
+    lines: [{ accountId: await id("6040"), amount: "8500", dims: { departmentId: await dim("ADMIN") } }] });
+  await vouch({ organizationId: P, userId: bk.id, type: "TRANSFER", bankAccountId: BDO, toBankAccountId: PCF, date: dt("01-05"), method: "CHECK", amount: "10000", payee: "Ben Bookkeeper", memo: "Establish admin petty cash fund" });
+  await vouch({ organizationId: P, userId: bk.id, type: "DISBURSEMENT", bankAccountId: PCF, date: dt("01-12"), payee: "Grab", memo: "Taxi to BIR RDO 47", lines: [{ accountId: await id("6050"), amount: "350", dims: { departmentId: await dim("ADMIN") } }] });
+  await vouch({ organizationId: P, userId: bk.id, type: "DISBURSEMENT", bankAccountId: PCF, date: dt("01-14"), payee: "Lalamove", memo: "Deliver documents to client", lines: [{ accountId: await id("6052"), amount: "280" }] });
+  // A January statement, uploaded but not yet matched, so the recommended matches can be tried.
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.load((await statementTemplate()) as unknown as ArrayBuffer);
+  const ws = wb.getWorksheet("Statement")!;
+  [
+    [`${y}-01-02`, "CASH DEPOSIT", "DEP0102", "", "", 2000000, 2000000],
+    [`${y}-01-03`, "ONLINE TRANSFER TO GCASH", "IB77120", "", 20000, "", 1980000],
+    [`${y}-01-06`, "CHECK ENCASHMENT", "", "001003", 10000, "", 1970000],
+    [`${y}-01-16`, "CHECK DEPOSITED BY PAYEE", "CV 0001", "", 64200, "", 1905800],
+    [`${y}-01-24`, "CLEARING CHECK", "", "001001", 15000, "", 1890800],
+    [`${y}-01-31`, "PAYROLL CREDIT", "PR-01", "", 182000, "", 1708800],
+    [`${y}-01-31`, "SERVICE CHARGE", "", "", 150, "", 1708650],
+    [`${y}-01-31`, "INTEREST EARNED", "", "", "", 85.5, 1708735.5],
+    [`${y}-01-31`, "W/TAX ON INTEREST", "", "", 17.1, "", 1708718.4],
+  ].forEach((r, i) => { ws.getRow(i + 2).values = r; });
+  await importStatement({ organizationId: P, userId: bk.id, bankAccountId: BDO, buf: (await wb.xlsx.writeBuffer()) as ArrayBuffer, fileName: "BDO-January.xlsx", openingBalance: "0" });
   console.log("Demo created. Sign in as owner@demo.ph / accountant@demo.ph / bookkeeper@demo.ph, password demo12345");
 }
 main().finally(() => prisma.$disconnect());

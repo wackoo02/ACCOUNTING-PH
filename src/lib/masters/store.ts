@@ -9,11 +9,14 @@ export class MasterError extends Error {
   constructor(public errors: string[]) { super(errors.join("; ")); }
 }
 
+// Optional in the sheet but required in the database (it has a default): a blank cell keeps the default.
+const NOT_NULL = new Set(["currencyCode"]);
+
 /** Fields that are optional in the sheet: a blank cell means "clear it" on update. */
 function blanksToNull(kind: MasterKind, data: Record<string, unknown>) {
   const out: Record<string, unknown> = { ...data };
   for (const f of MASTERS[kind].fields) {
-      if (!(f.key in out) && !f.required && (f.type === "text" || f.type === "date") && f.key !== "parentCode") out[f.key] = null;
+      if (!(f.key in out) && !f.required && (f.type === "text" || f.type === "date") && f.key !== "parentCode" && !NOT_NULL.has(f.key)) out[f.key] = null;
   }
   return out;
 }
@@ -74,9 +77,42 @@ async function saveDimension(tx: Tx, organizationId: string, d: Record<string, u
   return r;
 }
 
+async function saveBankAccount(tx: Tx, organizationId: string, d: Record<string, unknown>) {
+  const code = d.code as string;
+  const glCode = String(d.glAccountCode ?? "").trim();
+  const gl = await tx.account.findUnique({ where: { organizationId_code: { organizationId, code: glCode } } });
+  const errs: string[] = [];
+  if (!gl) errs.push(`${code}: GL account ${glCode} not found`);
+  else {
+    if (gl.type !== "ASSET" || !gl.isPostable) errs.push(`${code}: GL account ${glCode} must be a postable asset account (cash and cash equivalents)`);
+    const other = await tx.bankAccount.findFirst({ where: { organizationId, glAccountId: gl.id, code: { not: code } } });
+    if (other) errs.push(`${code}: GL account ${glCode} is already used by ${other.code}. Give each bank account its own GL account.`);
+  }
+  const org = await tx.organization.findUniqueOrThrow({ where: { id: organizationId } });
+  const currencyCode = d.currencyCode ? String(d.currencyCode).toUpperCase() : gl?.currencyCode ?? org.baseCurrency;
+  if (gl && (gl.currencyCode ?? org.baseCurrency) !== currencyCode) errs.push(`${code}: currency ${currencyCode} does not match GL account ${glCode} (${gl.currencyCode ?? org.baseCurrency})`);
+  if (currencyCode !== org.baseCurrency && !(await tx.currency.findUnique({ where: { organizationId_code: { organizationId, code: currencyCode } } }))) errs.push(`${code}: add ${currencyCode} to Currencies first`);
+  if (errs.length) throw new MasterError(errs);
+  const existing = await tx.bankAccount.findUnique({ where: { organizationId_code: { organizationId, code } } });
+  if (existing && existing.glAccountId !== gl!.id) {
+    const used = await tx.cashTransaction.count({ where: { organizationId, OR: [{ bankAccountId: existing.id }, { toBankAccountId: existing.id }] } })
+      + await tx.bankStatement.count({ where: { organizationId, bankAccountId: existing.id } });
+    if (used) throw new MasterError([`${code}: the GL account cannot change because the account already has transactions`]);
+  }
+  const data = {
+    name: d.name as string, kind: d.kind as string, glAccountId: gl!.id, currencyCode,
+    bankName: (d.bankName as string | undefined) ?? null, branchName: (d.branchName as string | undefined) ?? null,
+    accountNumber: (d.accountNumber as string | undefined) ?? null, custodian: (d.custodian as string | undefined) ?? null,
+    nextCheckNo: (d.nextCheckNo as number | undefined) ?? null, fundLimit: (d.fundLimit as number | string | undefined) ?? 0,
+    isActive: (d.isActive as boolean | undefined) ?? true,
+  };
+  return tx.bankAccount.upsert({ where: { organizationId_code: { organizationId, code } }, create: { ...data, organizationId, code }, update: data });
+}
+
 async function saveOne(tx: Tx, kind: MasterKind, organizationId: string, d: Record<string, unknown>, codeToId: Map<string, string>) {
   if (kind === "accounts") return saveAccount(tx, organizationId, d, codeToId);
   if (kind === "dimensions") return saveDimension(tx, organizationId, d, codeToId);
+  if (kind === "banks") return saveBankAccount(tx, organizationId, d);
   const code = d.code as string;
   const data = blanksToNull(kind, d);
   delete data.code;
