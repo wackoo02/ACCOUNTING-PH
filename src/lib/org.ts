@@ -19,8 +19,8 @@ export const PH_TAX_CODES = [
   { code: "WI011", name: "EWT 10% - professional fees (individual, gross > P3M)", taxType: "EWT", rate: 10, atcCode: "WI011", accountCode: "2045" },
   { code: "WC011", name: "EWT 15% - professional fees (corporate, gross income > P720k)", taxType: "EWT", rate: 15, atcCode: "WC011", accountCode: "2045" },
   { code: "FWT20-INT", name: "Final tax 20% - interest on bank deposits", taxType: "FWT", rate: 20, atcCode: "WC180", accountCode: "7540" },
-  { code: "FWT10-DIV", name: "Final tax 10% - cash dividends to individuals", taxType: "FWT", rate: 10, atcCode: "WI202", accountCode: null },
-  { code: "PT3", name: "Percentage tax 3% (non-VAT, Sec. 116)", taxType: "PERCENTAGE", rate: 3, atcCode: "PT010", accountCode: null },
+  { code: "FWT10-DIV", name: "Final tax 10% - cash dividends to individuals", taxType: "FWT", rate: 10, atcCode: "WI202", accountCode: "2046" },
+  { code: "PT3", name: "Percentage tax 3% (non-VAT, Sec. 116)", taxType: "PERCENTAGE", rate: 3, atcCode: "PT010", accountCode: "2047" },
 ];
 
 /** Create a company with its owner, default PH/IFRS chart of accounts and PHP currency. */
