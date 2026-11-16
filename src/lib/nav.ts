@@ -39,6 +39,40 @@ export const NAV: NavSection[] = [
     ],
   },
   {
+    title: "Receivables and Billing",
+    items: [
+      { href: "/receivables", label: "Sales Invoices", icon: "receivables" },
+      { href: "/receivables?status=PENDING_APPROVAL", label: "Invoice Approvals", icon: "approvals", perm: "journal.post" },
+      { href: "/receivables?kind=CREDIT_MEMO", label: "Credit Memos", icon: "journal" },
+      { href: "/receivables/collections", label: "Collections", icon: "cash" },
+      { href: "/receivables/aging", label: "Customer Aging", icon: "activity" },
+      { href: "/receivables/statement", label: "Statements of Account", icon: "statements" },
+      { href: "/receivables/billing", label: "Contract Billing", icon: "recurring" },
+      { href: "/receivables/series", label: "BIR Invoice Series", icon: "bir" },
+    ],
+  },
+  {
+    title: "Purchasing",
+    items: [
+      { href: "/purchasing/requests", label: "Purchase Requests", icon: "journal-new" },
+      { href: "/purchasing/rfq", label: "RFQ / Canvass", icon: "activity" },
+      { href: "/purchasing/orders", label: "Purchase Orders", icon: "cart" },
+      { href: "/purchasing/receipts", label: "Receiving Reports", icon: "receive" },
+    ],
+  },
+  {
+    title: "Payables",
+    items: [
+      { href: "/ap/inbox", label: "AP Invoice Inbox", icon: "inbox" },
+      { href: "/ap/bills", label: "Supplier Bills", icon: "payables" },
+      { href: "/ap/approvals", label: "Purchasing and AP Approvals", icon: "approvals" },
+      { href: "/ap/schedule", label: "Payment Schedule", icon: "periods" },
+      { href: "/ap/payments", label: "Payment Vouchers", icon: "cash-out" },
+      { href: "/ap/aging", label: "AP Aging", icon: "aging" },
+      { href: "/ap/2307", label: "BIR 2307 Certificates", icon: "bir" },
+    ],
+  },
+  {
     title: "Expense and Mobility",
     items: [
       { href: "/expenses", label: "Mobility Dashboard", icon: "mobility" },
@@ -94,6 +128,8 @@ export const NAV: NavSection[] = [
     items: [
       { href: "/entities", label: "Entities and Intercompany", icon: "entities" },
       { href: "/settings", label: "Company Settings", icon: "settings", perm: "org.manage" },
+      { href: "/settings/approvals", label: "Approval Matrix", icon: "approvals", perm: "org.manage" },
+      { href: "/ap/inbox/setup", label: "AP Invoice Email", icon: "inbox", perm: "org.manage" },
       { href: "/users", label: "Users and Roles", icon: "users", perm: "users.manage" },
       { href: "/audit", label: "Audit Trail", icon: "audit", perm: "org.manage" },
     ],
@@ -101,8 +137,6 @@ export const NAV: NavSection[] = [
 ];
 
 export const COMING_NEXT: { label: string; icon: IconName }[] = [
-  { label: "Receivables and aging", icon: "receivables" },
-  { label: "Payables and aging", icon: "payables" },
   { label: "Payroll", icon: "payroll" },
   { label: "Depreciation and disposals", icon: "fixed-assets" },
   { label: "Prepaid expenses", icon: "prepaid" },

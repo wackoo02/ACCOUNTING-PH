@@ -69,6 +69,24 @@ Turn `SEED_DEMO` off and change or remove the demo users before real company dat
 - Reconciliation report: balance per bank + deposits in transit − outstanding checks = balance per books ± bank items not yet booked; finalize when the difference is zero (locks its matches; owner/admin can reopen); nothing can be dated inside a finalized reconciliation
 **Petty cash (mobile app API)**: funds, vouchers from receipt photos (AI reads supplier, TIN, items, VAT, tips and proposes the account), VAT/EWT computation, fixed asset threshold with approved PO, approvals, and replenishment batches that post a Petty Cash journal. See [docs/MOBILE_API.md](docs/MOBILE_API.md).
 
+## What's in Phase 5: Purchasing and Payables
+**Purchasing**: purchase requests (draft → for approval → approved) → RFQ / canvass sheet (quotes from several suppliers side by side; awarding a quote that is not the lowest needs a reason) → purchase order with approval → receiving reports (partial deliveries; each posts Dr expense/inventory/asset, Cr Goods Received Not Yet Invoiced).
+
+**Supplier bills (APV-)**: lines classified as expense, prepayment (with service period), fixed asset or inventory; VAT (inclusive or exclusive, zero-rated/exempt, non-VAT suppliers) and expanded withholding tax per line by tax code. Bills linked to a PO are 3-way matched: you cannot bill more than was received, the GRNI is cleared at PO cost and any price difference goes to the line's account. Fixed asset lines must come from an approved PO. The same supplier invoice number cannot be entered twice. Approval posts the bill to the GL.
+
+**Approval matrix** (Settings → Approval Matrix, admins): levels per document (PR, PO, bill, payment) by amount, approved by a role or a named person. The preparer cannot approve and one person approves one level only. With no rules, one approval by an accountant/admin/owner within their approval limit.
+
+**Payments (PV-)**: pay one or more bills of a supplier, by check, transfer or cash; the final approval releases the payment as a posted cash disbursement (next check number from the checkbook), printable check, voucher and **BIR Form 2307** per payment (and per quarter). Payment schedule with hold/release and a payment run that drafts one voucher per supplier. **AP aging** summary and detail by days past due or invoice date, tied to the AP control account in the GL.
+
+**AP invoice inbox**: suppliers email PDF/JPG/PNG invoices to the company's inbox address (or staff upload them). AI reads the supplier, TIN, invoice number, dates, VAT, withholding and each line, classifies the lines, matches the supplier and an approved PO, and flags duplicates. Accounting staff review the document side by side with the proposed bill; nothing reaches the AP ledger until they save it and it passes the approval matrix.
+
+Inbox email, per company: each company gets its own address, e.g. `demo-holdings-ap-7k2q@inbox.veritus.ph`. The company's own admin manages it in Settings → AP Invoice Email: change the inbox name, register their own AP mailbox (e.g. ap@client.ph, which they forward to the Veritus address), limit which senders are accepted, or turn email off. No developer steps are needed per company. A company with its own inbound-email service can use a private webhook instead (Advanced on the same page).
+
+One-time setup for the whole Veritus service (platform operator only):
+1. Pick a mail domain, e.g. `inbox.veritus.ph`, and point its MX record to Postmark (Postmark → Inbound → domain forwarding). Every address on it then reaches one Postmark inbound stream.
+2. Set the stream's webhook URL to `https://veritus:<secret>@<your-app>/api/inbound/ap-email`. Emails are routed to the company by recipient address.
+3. In Vercel set `AP_INBOX_DOMAIN` (e.g. inbox.veritus.ph), `INBOUND_WEBHOOK_SECRET` (the same random secret, 16+ characters) and `ANTHROPIC_API_KEY` (optional `AP_INVOICE_MODEL`). Without a key, documents still arrive and are keyed in by hand.
+
 ## Veritus Mobility app and Expense & Mobility (Phase 7, part)
 **Mobile app** at `/m`: an installable web app (PWA). On iPhone open it in Safari → Share → Add to Home Screen; on Android Chrome offers "Install app". Same login as the web ERP. Tiles: Petty Cash, Travel (local and international, foreign receipts translated to English and converted at the day's rate), Transport (Grab, inDrive, JoyRide, Angkas, taxi), Sent Package (Lalamove, Transportify, couriers), Sales Invoice (scan an issued invoice and post the sale) and Asset Audit (scan QR stickers).
 
@@ -88,6 +106,19 @@ Turn `SEED_DEMO` off and change or remove the demo users before real company dat
 **Fixed assets (start)**: Fixed Asset Register master list, printable QR stickers, and asset counts scanned from the app (found / wrong location / unknown / missing, by location and category; closing marks unscanned assets missing). Depreciation and disposals come with the fixed asset module.
 
 **What needs provider partnerships**: see Mobility Settings → Provider connections. Today Veritus works with statement / report imports and receipt capture. Pulling trips and orders automatically, booking from Veritus, or auto-paying needs a business account and API agreement with Grab for Business, Lalamove Business, Transportify, GCash for Business (Mynt) and Maya Business; direct card feeds need an agreement with the bank.
+
+## What's in Phase 4: Receivables and billing
+**Sales invoices and credit memos** (draft → for approval → issued; same approval limits and segregation of duties): VATable / zero-rated / VAT-exempt lines, prices with or without VAT, line discounts, products, revenue account and dimensions per line, foreign-currency customers, expected withholding by the customer (BIR 2307). Issuing posts Dr Accounts Receivable / Cr Sales + Output VAT (source SALES). A credit memo posts the reverse (Sales Returns) and is applied to the invoice it corrects. Non-VAT companies print NON-VAT and "not valid for claim of input tax".
+
+**BIR invoice series** (Receivables → BIR Invoice Series): register each ATP / CAS / CRM-POS / EIS serial range with permit and printer details. Serials are assigned only when a document is approved, cancelled invoices keep their number, and posting stops when a range is used up.
+
+**Collections**: cash or check received plus tax withheld (2307), applied to one or more open invoices (pay in full, oldest first, or by hand). Any excess becomes an advance (Advances from Customers) that can be applied later. Foreign-currency collections post the realized FX gain/loss. Voiding (e.g. bounced check) reopens the invoices and keeps the bank reconciliation clean.
+
+**Reports**: customer aging summary and detail (by days past due or invoice date; not yet due, 1-30, 31-60, 61-90, 91-120, over 120), with a tie-out to the AR control and customer advances GL balances; statement of account per customer with aging.
+
+**PDF and email**: BIR-format sales invoice, credit memo, collection receipt and statement PDFs (`/api/receivables/pdf`). Email to the customer's Invoice Emails with the PDF attached needs `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `MAIL_FROM` on the server; every send is logged.
+
+**Contract billing**: subscriptions and retainer contracts invoice every month/quarter/half/year (catching up missed periods, never billing a period twice); project contracts bill milestones by % or amount of the contract value. Hooks for POS (series type POS_INVOICE, invoice source POS) and scanned invoices (source SCAN) are in place.
 
 ## Leases (PFRS 16 / IFRS 16, lessee)
 **Lease register** (Leases → New Lease): lease number, lessor (vendor list or free text), lease type, asset, start and end dates, payment per period with frequency (monthly / quarterly / semi-annual / annual), in advance or in arrears, rent escalation (e.g. +5% every 12 months), incremental borrowing rate and the discount rate used, currency and rate, 12% VAT and EWT on payments, initial direct costs, advance rent, incentives, restoration cost, and the GL accounts (ROU asset, accumulated depreciation, current and non-current lease liability, interest, depreciation, payable, gain/loss). Saving calculates the liability, ROU asset and full monthly schedule before anything posts.
@@ -111,3 +142,4 @@ Turn `SEED_DEMO` off and change or remove the demo users before real company dat
 - Lines carry `partyType`/`partyId` (customer, vendor, employee, partner) for aging and expense-per-person reports, and `clearedAt`/`clearingRef` for bank reconciliation and transaction clearing.
 - All money math is in integer centavos (`src/lib/money.ts`).
 - Cash and bank: `src/lib/bank/cash.ts` (vouchers), `src/lib/bank/recon.ts` (statements, matching, reconciliation), `src/lib/bank/match.ts` (pure matching rules). AR collections and AP payments can create cash vouchers or post BANK entries; anything posted to a bank's GL account shows up for matching automatically.
+- Purchasing and payables: `src/lib/purchasing/service.ts`, `src/lib/ap/` (bills, payments, aging, inbox, pure math in `compute.ts`) and `src/lib/approvals.ts` (approval matrix, reusable by other documents). AP payments post through `postSubledgerDisbursementTx` in cash.ts, so they show in check monitoring and bank reconciliation.
