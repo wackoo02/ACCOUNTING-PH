@@ -93,6 +93,7 @@ function titleBlock(p: Pdf, title: string, number: string | null | false, date: 
   }
   p.text(`Date: ${longDate(date)}`, x, y, { align: "right" });
   for (const [k, v] of extra) { y -= 12; p.text(`${k}: ${v}`, x, y, { align: "right" }); }
+  return y - 6;
 }
 
 function permitFooter(p: Pdf, series: Series, opts: { supplementary?: boolean; vatRegistered: boolean }) {
@@ -138,7 +139,7 @@ export async function invoicePdf(organizationId: string, id: string) {
   const ccy = inv.currencyCode === org.baseCurrency ? "" : `${inv.currencyCode} `;
   const m = (c: bigint) => `${ccy}${formatPeso(c)}`;
   let y = sellerHeader(p, org, series);
-  titleBlock(p, cm ? "CREDIT MEMO" : "SALES INVOICE", inv.number, inv.date, cm ? [] : [["Terms", inv.termsDays ? `${inv.termsDays} days` : "Cash / due on receipt"], ["Due date", longDate(inv.dueDate)]]);
+  y = Math.min(y, titleBlock(p, cm ? "CREDIT MEMO" : "SALES INVOICE", inv.number, inv.date, cm ? [] : [["Terms", inv.termsDays ? `${inv.termsDays} days` : "Cash / due on receipt"], ["Due date", longDate(inv.dueDate)]]));
 
   // Buyer
   y -= 8;
@@ -231,7 +232,7 @@ export async function receiptPdf(organizationId: string, id: string) {
   const ccy = r.currencyCode === org.baseCurrency ? "" : `${r.currencyCode} `;
   const m = (c: bigint) => `${ccy}${formatPeso(c)}`;
   let y = sellerHeader(p, org, series);
-  titleBlock(p, "COLLECTION RECEIPT", r.number, r.date);
+  y = Math.min(y, titleBlock(p, "COLLECTION RECEIPT", r.number, r.date));
   y -= 16;
   const cash = cents(r.cashAmount), wht = cents(r.withholdingAmount);
   p.text("Received from", p.M, y, { size: 7, color: MUTED });
@@ -278,7 +279,7 @@ export async function statementPdf(organizationId: string, customerId: string, f
   const org = await prisma.organization.findUniqueOrThrow({ where: { id: organizationId } });
   const p = await Pdf.create();
   let y = sellerHeader(p, org, null);
-  titleBlock(p, "STATEMENT OF ACCOUNT", false, to, [["Period", `${ymd(st.from)} to ${ymd(st.to)}`]]);
+  y = Math.min(y, titleBlock(p, "STATEMENT OF ACCOUNT", false, to, [["Period", `${ymd(st.from)} to ${ymd(st.to)}`]]));
   y -= 14;
   p.text(st.customer.name, p.M, y, { size: 11, bold: true });
   p.text(`${st.customer.code}${st.customer.tin ? `  ·  TIN ${st.customer.tin}` : ""}`, p.M, y - 12, { color: MUTED });

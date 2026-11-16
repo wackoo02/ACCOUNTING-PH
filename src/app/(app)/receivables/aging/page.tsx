@@ -52,7 +52,7 @@ export default async function Aging({ searchParams }: { searchParams: SP }) {
             </tr>
           ))}
           {a.customers.length === 0 && <tr><td colSpan={12} className="muted">No open invoices.</td></tr>}
-          <tr className="total"><td colSpan={detail ? 5 : 1}>Total</td>{a.totals.buckets.map((b, k) => <td key={k} className="num">{formatPeso(b)}</td>)}<td className="num">({formatPeso(a.totals.credits)})</td><td className="num">{formatPeso(a.totals.net)}</td></tr>
+          <tr className="total"><td colSpan={detail ? 5 : 1}>Total</td>{a.totals.buckets.map((b, k) => <td key={k} className="num">{formatPeso(b)}</td>)}<td className="num">{a.totals.credits ? `(${formatPeso(a.totals.credits)})` : ""}</td><td className="num">{formatPeso(a.totals.net)}</td></tr>
           {a.totals.invoices > 0n && <tr><td colSpan={detail ? 5 : 1} className="muted">% of open invoices</td>{a.totals.buckets.map((b, k) => <td key={k} className="num muted">{(Number((b * 10000n) / a.totals.invoices) / 100).toFixed(1)}%</td>)}<td /><td /></tr>}
         </tbody>
       </table></div>
