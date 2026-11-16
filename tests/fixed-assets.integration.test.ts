@@ -7,6 +7,7 @@ import { provisionOrganization } from "@/lib/org";
 import { importMasters } from "@/lib/masters/store";
 import { addAsset, acceptSeenLocation, disposeAsset, improveAsset, previewDepreciation, runDepreciation, transferAsset, undoDepreciationRun, voidAssetTxn } from "@/lib/assets/service";
 import { assetRegister, depreciationSchedule, disposalReport, rollforward } from "@/lib/assets/reports";
+import { unregisteredBillLines } from "@/lib/assets/form-data";
 import { closeAudit, scanAsset, startAudit } from "@/lib/assets/audit";
 import { voidOrReverse } from "@/lib/ledger/service";
 
@@ -31,6 +32,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await prisma.assetScan.deleteMany({ where: { organizationId: org } });
   await prisma.assetAudit.deleteMany({ where: { organizationId: org } });
+  await prisma.apBill.deleteMany({ where: { organizationId: org } });
   await prisma.fixedAssetTxn.deleteMany({ where: { organizationId: org } });
   await prisma.depreciationRun.deleteMany({ where: { organizationId: org } });
   await prisma.fixedAsset.deleteMany({ where: { organizationId: org } });
@@ -196,5 +198,24 @@ describe("fixed assets", () => {
     expect(st["LAND-1"]).toBe("Missing");
     await acceptSeenLocation(org, owner, (await asset("FA-9")).id);
     expect((await asset("FA-9")).location).toBe("BGC");
+  });
+
+  it("picks up posted supplier bill lines classified as fixed assets, without posting again", async () => {
+    const vendor = await prisma.vendor.findFirstOrThrow({ where: { organizationId: org, code: "V-1" } });
+    const acct = await prisma.account.findFirstOrThrow({ where: { organizationId: org, code: "1530" } });
+    const bill = await prisma.apBill.create({ data: {
+      organizationId: org, number: `APV-T-${tag}`, vendorId: vendor.id, supplierInvoiceNo: "SI-77", invoiceDate: d("2026-08-01"), date: d("2026-08-01"), dueDate: d("2026-08-31"),
+      memo: "Laptops", status: "POSTED", subtotal: 50000, total: 56000, netPayable: 56000, createdById: owner,
+      lines: { create: [{ lineNo: 1, description: "ThinkPad T14", category: "FIXED_ASSET", accountId: acct.id, unitPrice: 50000, netAmount: 50000 }, { lineNo: 2, description: "Delivery", category: "EXPENSE", accountId: acct.id, unitPrice: 0, netAmount: 0 }] },
+    }, include: { lines: true } });
+    const open = await unregisteredBillLines(org);
+    expect(open.map((l) => [l.description, l.cost, l.vendor?.code, l.accountCode])).toEqual([["ThinkPad T14", "50000.00", "V-1", "1530"]]);
+    const before = await glBalance("1530");
+    await expect(addAsset(org, owner, { name: "ThinkPad T14", categoryCode: "IT", acquisitionDate: d("2026-08-01"), cost: "50000", postToGl: true, offsetAccountCode: "2010", apBillLineId: open[0].id })).rejects.toThrow(/already in the GL/);
+    const a = await addAsset(org, owner, { name: "ThinkPad T14", categoryCode: "IT", vendorCode: "V-1", acquisitionDate: d("2026-08-01"), cost: "50000", postToGl: false, apBillLineId: open[0].id, strict: true });
+    expect(await glBalance("1530")).toBe(before);
+    expect((await prisma.fixedAssetTxn.findFirstOrThrow({ where: { assetId: a.id } })).type).toBe("ADDITION");
+    expect(await unregisteredBillLines(org)).toEqual([]);
+    await expect(addAsset(org, owner, { name: "again", categoryCode: "IT", acquisitionDate: d("2026-08-01"), cost: "50000", postToGl: false, apBillLineId: bill.lines[0].id })).rejects.toThrow(/already registered/);
   });
 });

@@ -92,6 +92,8 @@ export type AdditionInput = {
   accountCode?: string | null; accumDepAccountCode?: string | null; depExpenseAccountCode?: string | null;
   /** true: Dr asset / Cr offsetAccountCode. false: already in the GL (AP bill, opening balance). */
   postToGl: boolean; offsetAccountCode?: string | null; reference?: string | null; memo?: string | null;
+  /** Registered from a posted supplier bill line (already in the GL through AP). */
+  apBillLineId?: string | null;
   /** Assets brought in already partly depreciated (only when not posting to the GL). */
   openingAccum?: string | null; depreciatedThrough?: Date | null;
   /** Require full depreciation setup even when not posting (the web form does; the Excel upload doesn't). */
@@ -147,6 +149,13 @@ export async function addAssetTx(tx: Tx, organizationId: string, userId: string,
     if (openingAccum < 0n || openingAccum > s.cost - s.salvage) errors.push("Opening accumulated depreciation must be between zero and cost less salvage");
     if (openingAccum && !i.depreciatedThrough) errors.push("Enter the month the opening accumulated depreciation runs through");
     const offsetId = i.postToGl ? await accountId(tx, organizationId, clean(i.offsetAccountCode), "account to credit (e.g. Accounts Payable or cash)", errors) : null;
+    if (i.apBillLineId) {
+      if (i.postToGl) errors.push("This asset came from a posted supplier bill, so it is already in the GL. Don't post it again.");
+      const line = await tx.apBillLine.findFirst({ where: { id: i.apBillLineId, bill: { organizationId, status: "POSTED" } } });
+      if (!line) errors.push("Supplier bill line not found or not posted");
+      const used = await tx.fixedAsset.findFirst({ where: { organizationId, apBillLineId: i.apBillLineId, status: { not: "CANCELLED" } } });
+      if (used) errors.push(`That bill line is already registered as ${used.code}`);
+    }
     let code = clean(i.code)?.toUpperCase() ?? null;
     if (code && (await tx.fixedAsset.findUnique({ where: { organizationId_code: { organizationId, code } } }))) errors.push(`Asset number ${code} is already used`);
     if (errors.length) throw new LedgerError(errors);
@@ -155,7 +164,7 @@ export async function addAssetTx(tx: Tx, organizationId: string, userId: string,
     const asset = await tx.fixedAsset.create({ data: {
       organizationId, code, name: i.name.trim(), categoryCode: s.cat?.code ?? null, category: s.cat?.name ?? null,
       serialNo: clean(i.serialNo), location: clean(i.location), departmentCode: clean(i.departmentCode)?.toUpperCase() ?? null, costCenterCode: clean(i.costCenterCode)?.toUpperCase() ?? null,
-      custodianCode: clean(i.custodianCode)?.toUpperCase() ?? null, vendorCode: clean(i.vendorCode)?.toUpperCase() ?? null, poNumber: clean(i.poNumber),
+      custodianCode: clean(i.custodianCode)?.toUpperCase() ?? null, vendorCode: clean(i.vendorCode)?.toUpperCase() ?? null, poNumber: clean(i.poNumber), apBillLineId: i.apBillLineId ?? null,
       acquisitionDate: acq, inServiceDate: inService, cost: dec(s.cost), salvageValue: dec(s.salvage), usefulLifeMonths: s.life, depreciationMethod: s.method,
       accountCode: s.accountCode, accumDepAccountCode: s.accumDepAccountCode, depExpenseAccountCode: s.depExpenseAccountCode,
       accumulatedDepreciation: dec(openingAccum), depreciatedThrough: through,
@@ -173,8 +182,8 @@ export async function addAssetTx(tx: Tx, organizationId: string, userId: string,
       });
       journalEntryId = je.id;
     }
-    await newTxn(tx, organizationId, userId, asset.id, i.postToGl ? "ADDITION" : "OPENING", acq ?? asDay(new Date()), {
-      costChange: dec(s.cost), accumChange: dec(openingAccum), journalEntryId, memo: clean(i.memo) ?? (i.postToGl ? "Asset acquired" : "Brought into the register (already in the GL)"),
+    await newTxn(tx, organizationId, userId, asset.id, i.postToGl || i.apBillLineId ? "ADDITION" : "OPENING", acq ?? asDay(new Date()), {
+      costChange: dec(s.cost), accumChange: dec(openingAccum), journalEntryId, memo: clean(i.memo) ?? (i.postToGl ? "Asset acquired" : i.apBillLineId ? "Registered from supplier bill (posted through Payables)" : "Brought into the register (already in the GL)"),
       reference: clean(i.reference), details: { offsetAccountCode: i.postToGl ? clean(i.offsetAccountCode) : null, depreciatedThrough: through?.toISOString().slice(0, 10) ?? null },
     });
     await audit(tx, organizationId, userId, "asset.add", asset.id, { code, cost: fromCentavos(s.cost), postedToGl: i.postToGl }, null, null, "fixed_asset");
@@ -353,7 +362,7 @@ export async function voidAssetTxn(organizationId: string, userId: string, txnId
     await tx.fixedAssetTxn.update({ where: { id: t.id }, data: { status: "VOID", details: { ...(t.details as object ?? {}), voidReason: reason.trim(), voidedById: userId } } });
     const before = (t.details as { before?: Snap } | null)?.before;
     if (t.type === "TRANSFER") await tx.fixedAsset.update({ where: { id: a.id }, data: (t.details as { from: Record<string, string | null> }).from });
-    else if (t.type === "ADDITION") await tx.fixedAsset.update({ where: { id: a.id }, data: { status: "CANCELLED", isActive: false, cost: 0 } });
+    else if (t.type === "ADDITION") await tx.fixedAsset.update({ where: { id: a.id }, data: { status: "CANCELLED", isActive: false, cost: 0, apBillLineId: null } });
     else if (before) await tx.fixedAsset.update({ where: { id: a.id }, data: unsnap(before) });
     await audit(tx, organizationId, userId, "asset.txn_void", a.id, { code: a.code, number: t.number, type: t.type, reason: reason.trim() }, null, null, "fixed_asset");
   });

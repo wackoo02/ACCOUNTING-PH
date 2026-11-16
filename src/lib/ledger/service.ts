@@ -325,6 +325,9 @@ export async function voidOrReverseTx(tx: Tx, organizationId: string, userId: st
     if (e.source === "FIXED_ASSETS" && e.sourceId && !fromSubledger) {
       throw new LedgerError(["This entry came from Fixed Assets. Undo the asset transaction or the depreciation run there instead."]);
     }
+    if (e.source === "PURCHASES" && e.sourceId && !fromSubledger) {
+      throw new LedgerError(["This entry came from Purchasing / Payables. Void the supplier bill or receiving report instead."]);
+    }
     if (e.source === "SALES" && e.sourceId && !fromSubledger) {
       throw new LedgerError(["This entry came from Receivables. Void the sales invoice, credit memo or collection instead."]);
     }

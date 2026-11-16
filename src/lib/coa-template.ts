@@ -56,6 +56,7 @@ export const PH_IFRS_TEMPLATE: TemplateAccount[] = [
   // ---- LIABILITIES ----
   { code: "2000", name: "Current Liabilities", type: L, ifrsGroup: "Current liabilities", isCurrent: true, header: true },
   { code: "2010", name: "Accounts Payable - Trade", type: L, ifrsGroup: "Trade and other payables", isCurrent: true, parent: "2000", systemRole: "AP_CONTROL" },
+  { code: "2012", name: "Goods Received Not Yet Invoiced", type: L, ifrsGroup: "Trade and other payables", isCurrent: true, parent: "2000", systemRole: "GRNI" },
   { code: "2015", name: "Corporate Credit Card Payable", type: L, ifrsGroup: "Trade and other payables", isCurrent: true, parent: "2000", systemRole: "CORPORATE_CARD" },
   { code: "2018", name: "Employee Reimbursements Payable", type: L, ifrsGroup: "Trade and other payables", isCurrent: true, parent: "2000", systemRole: "EMPLOYEE_REIMB_PAYABLE" },
   { code: "2020", name: "Accrued Expenses", type: L, ifrsGroup: "Trade and other payables", isCurrent: true, parent: "2000" },

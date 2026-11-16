@@ -23,7 +23,7 @@ const refresh = () => revalidatePath("/assets", "layout");
 
 export async function addAssetAction(_: State, fd: FormData): Promise<State> {
   const postToGl = s(fd, "postToGl") === "yes";
-  const ctx = await requireCtx(postToGl ? "journal.post" : "masters.manage");
+  const ctx = await requireCtx(postToGl || s(fd, "apBillLineId") ? "journal.post" : "masters.manage");
   let id: string;
   try {
     const acq = date(fd, "acquisitionDate");
@@ -34,7 +34,7 @@ export async function addAssetAction(_: State, fd: FormData): Promise<State> {
       vendorCode: opt(fd, "vendorCode"), poNumber: opt(fd, "poNumber"), acquisitionDate: acq, inServiceDate: date(fd, "inServiceDate"),
       cost: s(fd, "cost"), salvageValue: opt(fd, "salvageValue"), usefulLifeMonths: int(fd, "usefulLifeMonths"), depreciationMethod: opt(fd, "depreciationMethod"),
       accountCode: opt(fd, "accountCode"), accumDepAccountCode: opt(fd, "accumDepAccountCode"), depExpenseAccountCode: opt(fd, "depExpenseAccountCode"),
-      postToGl, offsetAccountCode: opt(fd, "offsetAccountCode"), reference: opt(fd, "reference"), memo: opt(fd, "memo"),
+      postToGl, apBillLineId: opt(fd, "apBillLineId"), offsetAccountCode: opt(fd, "offsetAccountCode"), reference: opt(fd, "reference"), memo: opt(fd, "memo"),
       openingAccum: postToGl ? null : opt(fd, "openingAccum"), depreciatedThrough: postToGl ? null : date(fd, "depreciatedThrough"), strict: true,
     });
     id = a.id;

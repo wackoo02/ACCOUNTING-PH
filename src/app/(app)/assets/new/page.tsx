@@ -1,25 +1,39 @@
 import Link from "next/link";
 import { requireCtx } from "@/lib/auth";
 import { today } from "@/lib/format";
-import { assetFormData } from "@/lib/assets/form-data";
+import { assetFormData, unregisteredBillLines } from "@/lib/assets/form-data";
 import { METHOD_LABEL } from "@/lib/assets/depreciation";
 import { ActionForm } from "@/components/ActionForm";
 import { AccountInput, AccountList, LocationList, Pick } from "@/components/AssetPick";
 import { addAssetAction } from "../../asset-actions";
 
-export default async function NewAsset() {
+export default async function NewAsset({ searchParams }: { searchParams: Promise<{ billLine?: string }> }) {
   const ctx = await requireCtx("reports.view");
-  const d = await assetFormData(ctx.org.id);
+  const sp = await searchParams;
+  const [d, bills] = await Promise.all([assetFormData(ctx.org.id), unregisteredBillLines(ctx.org.id)]);
+  const b = bills.find((x) => x.id === sp.billLine);
   return (
     <>
       <div className="top"><h1>New asset (addition)</h1></div>
       {d.categories.length === 0 && <div className="notice">Set up <Link href="/masters/asset-categories">asset categories</Link> first: they give each new asset its GL accounts, useful life and numbering.</div>}
+      {bills.length > 0 && !b && (
+        <div className="card">
+          <h3 style={{ marginTop: 0 }}>From supplier bills ({bills.length})</h3>
+          <p className="muted">Posted bills with lines classified as fixed assets that are not in the register yet. They are already in the GL through Payables, so registering one doesn&apos;t post again.</p>
+          <div className="table-wrap"><table>
+            <thead><tr><th>Bill</th><th>Date</th><th>Vendor</th><th>Description</th><th>PO</th><th className="num">Qty</th><th className="num">Cost</th><th /></tr></thead>
+            <tbody>{bills.map((x) => <tr key={x.id}><td>{x.billNumber}<div className="muted">SI {x.supplierInvoiceNo}</div></td><td>{x.date}</td><td>{x.vendor?.name}</td><td>{x.description}</td><td>{x.poNumber}</td><td className="num">{x.quantity}</td><td className="num">{Number(x.cost).toLocaleString("en-PH", { minimumFractionDigits: 2 })}</td><td><Link className="btn secondary" href={`/assets/new?billLine=${x.id}`}>Register</Link></td></tr>)}</tbody>
+          </table></div>
+        </div>
+      )}
+      {b && <div className="notice">Registering {b.description} from bill {b.billNumber} (SI {b.supplierInvoiceNo}). It is already in the GL through Payables, so no entry is posted.{b.quantity > 1 ? ` The line has ${b.quantity} units: this registers them as one asset; change the cost and register the rest separately if each unit should get its own sticker.` : ""} <Link href="/assets/new">Cancel</Link></div>}
       <ActionForm action={addAssetAction}>
         <AccountList d={d} /><LocationList d={d} />
+        {b && <input type="hidden" name="apBillLineId" value={b.id} />}
         <div className="card">
           <h3 style={{ marginTop: 0 }}>Asset</h3>
           <div className="grid">
-            <div><label>Description *</label><input name="name" required placeholder="e.g. Dell Latitude 5440 laptop" /></div>
+            <div><label>Description *</label><input name="name" required defaultValue={b?.description} placeholder="e.g. Dell Latitude 5440 laptop" /></div>
             <div><label>Category *</label><select name="categoryCode" required defaultValue=""><option value="" disabled>Choose…</option>{d.categories.map((c) => <option key={c.code} value={c.code}>{c.name} ({c.usefulLifeMonths} mo., {c.prefix ?? "FA"}-…)</option>)}</select></div>
             <div><label>Asset no.</label><input name="code" placeholder="Blank = next number for the category" /></div>
             <div><label>Serial no.</label><input name="serialNo" /></div>
@@ -32,15 +46,15 @@ export default async function NewAsset() {
         <div className="card">
           <h3 style={{ marginTop: 0 }}>Purchase and depreciation</h3>
           <div className="grid">
-            <Pick name="vendorCode" label="Vendor" options={d.vendors} />
-            <div><label>PO / supplier invoice no.</label><input name="poNumber" /></div>
-            <div><label>Purchase date *</label><input type="date" name="acquisitionDate" required defaultValue={today()} /></div>
+            <Pick name="vendorCode" label="Vendor" options={d.vendors} value={b?.vendor?.code} />
+            <div><label>PO / supplier invoice no.</label><input name="poNumber" defaultValue={b?.poNumber ?? b?.supplierInvoiceNo} /></div>
+            <div><label>Purchase date *</label><input type="date" name="acquisitionDate" required defaultValue={b?.date ?? today()} /></div>
             <div><label>In-service date</label><input type="date" name="inServiceDate" /><div className="muted" style={{ fontSize: 12 }}>Blank = purchase date. On or before the 15th depreciates from that month.</div></div>
-            <div><label>Acquisition cost *</label><input name="cost" required inputMode="decimal" placeholder="0.00" /><div className="muted" style={{ fontSize: 12 }}>Purchase price plus costs to bring it to use, net of VAT you can claim.</div></div>
+            <div><label>Acquisition cost *</label><input name="cost" required inputMode="decimal" placeholder="0.00" defaultValue={b?.cost} /><div className="muted" style={{ fontSize: 12 }}>Purchase price plus costs to bring it to use, net of VAT you can claim.</div></div>
             <div><label>Salvage value</label><input name="salvageValue" inputMode="decimal" placeholder="Blank = category %" /></div>
             <div><label>Useful life (months)</label><input name="usefulLifeMonths" inputMode="numeric" placeholder="Blank = category" /></div>
             <div><label>Method</label><select name="depreciationMethod" defaultValue=""><option value="">Category default</option>{Object.entries(METHOD_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
-            <AccountInput name="accountCode" label="GL asset account" placeholder="Blank = category" />
+            <AccountInput name="accountCode" label="GL asset account" placeholder="Blank = category" value={b?.accountCode} />
             <AccountInput name="accumDepAccountCode" label="Accumulated depreciation account" placeholder="Blank = category" />
             <AccountInput name="depExpenseAccountCode" label="Depreciation expense account" placeholder="Blank = category" />
           </div>
@@ -48,12 +62,12 @@ export default async function NewAsset() {
         <div className="card">
           <h3 style={{ marginTop: 0 }}>Accounting entry</h3>
           <div className="grid">
-            <div><label>Post to the GL?</label><select name="postToGl" defaultValue="yes">
+            <div><label>Post to the GL?</label><select name="postToGl" defaultValue={b ? "no" : "yes"}>
               <option value="yes">Yes: Dr asset account / Cr the account below</option>
               <option value="no">No: already in the books (AP bill, opening balance)</option>
             </select></div>
             <AccountInput name="offsetAccountCode" label="Account to credit" placeholder="e.g. 2010 Accounts Payable, 1020 Cash in bank" help="When posting. Use Accounts Payable when the supplier bill is not yet in Veritus." />
-            <div><label>Reference</label><input name="reference" placeholder="e.g. SI 12345" /></div>
+            <div><label>Reference</label><input name="reference" placeholder="e.g. SI 12345" defaultValue={b ? `${b.billNumber} / SI ${b.supplierInvoiceNo}` : undefined} /></div>
             <div><label>Notes</label><input name="memo" /></div>
             <div><label>Opening accumulated depreciation</label><input name="openingAccum" inputMode="decimal" placeholder="Only when not posting" /></div>
             <div><label>…depreciated through</label><input type="date" name="depreciatedThrough" /><div className="muted" style={{ fontSize: 12 }}>Last month-end covered, e.g. 2025-12-31.</div></div>
