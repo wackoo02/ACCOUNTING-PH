@@ -10,6 +10,7 @@ export type ReportFilter = {
   dims?: Partial<Record<DimKey, string>>;
   includeConsolidation?: boolean; // include group-only adjustments
   excludeClosing?: boolean;       // ignore year-end closing entries (for P&L style reports)
+  where?: Prisma.JournalLineWhereInput; // extra line conditions (custom report builder filters)
 };
 
 function lineWhere(organizationId: string | { in: string[] }, f: ReportFilter, date: Prisma.DateTimeFilter): Prisma.JournalLineWhereInput {
@@ -26,6 +27,7 @@ function lineWhere(organizationId: string | { in: string[] }, f: ReportFilter, d
     const v = f.dims?.[d.key];
     if (v) (w as Record<string, unknown>)[d.key] = v;
   }
+  if (f.where) w.AND = [f.where];
   return w;
 }
 

@@ -881,3 +881,33 @@ model ReceiptImage {
   createdAt      DateTime     @default(now())
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 }
+
+// ---------- Custom reports ----------
+// A report a user designed in the report builder. `definition` is the builder's JSON
+// (src/lib/reporting/definition.ts). Sharing stays inside the company that owns the report.
+enum ReportVisibility {
+  PRIVATE  // only the owner
+  COMPANY  // everyone in the company who can view reports
+  ROLES    // members with one of sharedRoles
+  USERS    // the members listed in sharedUserIds
+}
+
+model SavedReport {
+  id             String           @id @default(cuid())
+  organizationId String
+  ownerId        String
+  name           String
+  description    String?
+  source         String           // report source id, e.g. balances, income_statement, aging
+  definition     Json
+  visibility     ReportVisibility @default(PRIVATE)
+  sharedRoles    Role[]
+  sharedUserIds  String[]
+  allowEdit      Boolean          @default(false) // people it is shared with may change it (not only copy it)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  updatedById    String?
+
+  @@index([organizationId, visibility])
+  @@index([organizationId, ownerId])
+}
