@@ -150,6 +150,46 @@ export async function taxLines(organizationId: string, from: Date, to: Date, f: 
     }
   }
 
+  // 2a''. Payables: supplier bills (input VAT by purchase class; EWT recognized when the bill is booked).
+  if (want("INPUT_VAT") || want("EWT") || want("FWT")) {
+    const bills = await prisma.apBill.findMany({ where: { organizationId, status: "POSTED", date: { gte: from, lte: to } }, include: { lines: true }, orderBy: [{ date: "asc" }, { number: "asc" }] });
+    const bst = await entryStates(bills.map((b) => b.journalEntryId));
+    const GOODS_ATC = /^W[CI](158|640)$/; // purchases of goods (incl. top withholding agents)
+    for (const b of bills) {
+      if (fed.has(`PURCHASES:${b.id}`)) continue;
+      const st = b.journalEntryId ? bst.get(b.journalEntryId) : undefined;
+      if (!live(st)) continue;
+      const v = parties.get(`VENDOR:${b.vendorId}`);
+      const party: Party = v ?? { ...blankParty(), type: "VENDOR", id: b.vendorId };
+      const common = { source: "PURCHASES", sourceId: b.id, journalEntryId: st!.id, journalNumber: st!.number, journalLineId: null, docType: "BILL", docNumber: b.supplierInvoiceNo, description: b.memo, date: b.date, party };
+      const vat = new Map<string, { base: bigint; tax: bigint }>();
+      const ewt = new Map<string, { base: bigint; tax: bigint; tc: NonNullable<ReturnType<typeof taxCodes.get>> }>();
+      for (const l of b.lines) {
+        const tc = l.ewtTaxCodeId ? taxCodes.get(l.ewtTaxCodeId) : undefined;
+        const atc = (tc?.atcCode ?? "").toUpperCase();
+        const cls = l.vatType === "ZERO_RATED" || l.vatType === "EXEMPT" ? l.vatType
+          : l.category === "FIXED_ASSET" ? "CAPITAL_GOODS"
+          : l.category === "INVENTORY" || GOODS_ATC.test(atc) || !tc ? "GOODS" : "SERVICES";
+        const net = toBase(l.netAmount, b.fxRate);
+        // No VAT on the line (non-VAT supplier or exempt item) goes to the exempt column.
+        const k = c(l.vatAmount) === 0n && cls !== "ZERO_RATED" ? "EXEMPT" : cls;
+        const t = vat.get(k) ?? { base: 0n, tax: 0n };
+        t.base += net; t.tax += toBase(l.vatAmount, b.fxRate);
+        vat.set(k, t);
+        if (tc && c(l.ewtAmount) > 0n) {
+          const e = ewt.get(tc.id) ?? { base: 0n, tax: 0n, tc };
+          e.base += net; e.tax += toBase(l.ewtAmount, b.fxRate);
+          ewt.set(tc.id, e);
+        }
+      }
+      if (want("INPUT_VAT")) for (const [cls, t] of vat) out.push({ ...common, key: `APV:${b.id}:${cls}`, kind: "INPUT_VAT", vatClass: cls, atcCode: null, rate: t.tax > 0n ? 12 : 0, base: t.base, tax: t.tax });
+      for (const [id, e] of ewt) {
+        const kind: TaxKind = e.tc.taxType === "FWT" ? "FWT" : "EWT";
+        if (want(kind)) out.push({ ...common, key: `APV:${b.id}:${id}`, kind, vatClass: null, atcCode: e.tc.atcCode ?? e.tc.code, rate: Number(e.tc.rate), base: e.base, tax: e.tax });
+      }
+    }
+  }
+
   // 2b. Petty cash vouchers (mobile app) once their replenishment batch is posted.
   if (want("INPUT_VAT") || want("EWT")) {
     const v = await prisma.pettyCashVoucher.findMany({

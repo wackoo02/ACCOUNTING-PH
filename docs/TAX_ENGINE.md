@@ -21,7 +21,9 @@ income tax / VAT / percentage tax a customer withheld from us (2307 received), o
    - AR: `OUTPUT_VAT` per invoice line (VATABLE / GOVERNMENT / ZERO_RATED / EXEMPT), `CWT` / `VAT_WITHHELD` when the customer's 2307 is recorded, `PERCENTAGE` for non-VAT sellers.
    - AP: `INPUT_VAT` per bill line (CAPITAL_GOODS / GOODS / SERVICES / IMPORT_GOODS / SERVICES_NONRESIDENT / NOT_QUALIFIED / EXEMPT / ZERO_RATED), `EWT` or `FWT` with the ATC when withholding on payment or accrual.
    - Payroll: register a `CompensationFeed` (`src/lib/tax/types.ts`) for 1601-C, 1604-C and BIR 2316.
-2. **Built-in adapters** read modules that already hold tax data: cash receipts/disbursements (EWT withheld, CWT received)
+2. **Built-in adapters** read modules that already hold tax data: AR sales invoices and credit memos (output VAT, or 3%
+   percentage tax for non-VAT sellers) and collections (CWT / VAT withheld from 2307s received); AP supplier bills (input VAT
+   by purchase class, EWT/FWT by ATC on the bill date); cash receipts/disbursements (EWT withheld, CWT received)
    and petty cash vouchers (input VAT, EWT). If a module feeds its own rows for a document, the adapter skips it.
 3. **Tax review** lists every GL line on a tax account that nothing explained (manual journals, a cash voucher's
    Input VAT line) so a person classifies it, or marks it "not a tax transaction".
