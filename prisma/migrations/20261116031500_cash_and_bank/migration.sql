@@ -1,5 +1,6 @@
+-- Written to be safe to re-run: a first attempt on the hosted database stopped partway.
 -- CreateTable
-CREATE TABLE "BankAccount" (
+CREATE TABLE IF NOT EXISTS "BankAccount" (
     "id" TEXT NOT NULL,
     "organizationId" TEXT NOT NULL,
     "code" TEXT NOT NULL,
@@ -20,7 +21,7 @@ CREATE TABLE "BankAccount" (
 );
 
 -- CreateTable
-CREATE TABLE "CashTransaction" (
+CREATE TABLE IF NOT EXISTS "CashTransaction" (
     "id" TEXT NOT NULL,
     "organizationId" TEXT NOT NULL,
     "number" TEXT NOT NULL,
@@ -66,7 +67,7 @@ CREATE TABLE "CashTransaction" (
 );
 
 -- CreateTable
-CREATE TABLE "BankStatement" (
+CREATE TABLE IF NOT EXISTS "BankStatement" (
     "id" TEXT NOT NULL,
     "organizationId" TEXT NOT NULL,
     "bankAccountId" TEXT NOT NULL,
@@ -85,7 +86,7 @@ CREATE TABLE "BankStatement" (
 );
 
 -- CreateTable
-CREATE TABLE "BankStatementLine" (
+CREATE TABLE IF NOT EXISTS "BankStatementLine" (
     "id" TEXT NOT NULL,
     "statementId" TEXT NOT NULL,
     "organizationId" TEXT NOT NULL,
@@ -104,7 +105,7 @@ CREATE TABLE "BankStatementLine" (
 );
 
 -- CreateTable
-CREATE TABLE "BankMatch" (
+CREATE TABLE IF NOT EXISTS "BankMatch" (
     "id" TEXT NOT NULL,
     "organizationId" TEXT NOT NULL,
     "bankAccountId" TEXT NOT NULL,
@@ -117,40 +118,52 @@ CREATE TABLE "BankMatch" (
 );
 
 -- CreateIndex
-CREATE UNIQUE INDEX "BankAccount_organizationId_code_key" ON "BankAccount"("organizationId", "code");
+CREATE UNIQUE INDEX IF NOT EXISTS "BankAccount_organizationId_code_key" ON "BankAccount"("organizationId", "code");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "BankAccount_organizationId_glAccountId_key" ON "BankAccount"("organizationId", "glAccountId");
+CREATE UNIQUE INDEX IF NOT EXISTS "BankAccount_organizationId_glAccountId_key" ON "BankAccount"("organizationId", "glAccountId");
 
 -- CreateIndex
-CREATE INDEX "CashTransaction_organizationId_bankAccountId_idx" ON "CashTransaction"("organizationId", "bankAccountId");
+CREATE INDEX IF NOT EXISTS "CashTransaction_organizationId_bankAccountId_idx" ON "CashTransaction"("organizationId", "bankAccountId");
 
 -- CreateIndex
-CREATE INDEX "CashTransaction_organizationId_type_status_idx" ON "CashTransaction"("organizationId", "type", "status");
+CREATE INDEX IF NOT EXISTS "CashTransaction_organizationId_type_status_idx" ON "CashTransaction"("organizationId", "type", "status");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "CashTransaction_organizationId_number_key" ON "CashTransaction"("organizationId", "number");
+CREATE UNIQUE INDEX IF NOT EXISTS "CashTransaction_organizationId_number_key" ON "CashTransaction"("organizationId", "number");
 
 -- CreateIndex
-CREATE INDEX "BankStatement_organizationId_bankAccountId_periodTo_idx" ON "BankStatement"("organizationId", "bankAccountId", "periodTo");
+CREATE INDEX IF NOT EXISTS "BankStatement_organizationId_bankAccountId_periodTo_idx" ON "BankStatement"("organizationId", "bankAccountId", "periodTo");
 
 -- CreateIndex
-CREATE INDEX "BankStatementLine_organizationId_bankAccountId_matchId_idx" ON "BankStatementLine"("organizationId", "bankAccountId", "matchId");
+CREATE INDEX IF NOT EXISTS "BankStatementLine_organizationId_bankAccountId_matchId_idx" ON "BankStatementLine"("organizationId", "bankAccountId", "matchId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "BankStatementLine_bankAccountId_fingerprint_key" ON "BankStatementLine"("bankAccountId", "fingerprint");
+CREATE UNIQUE INDEX IF NOT EXISTS "BankStatementLine_bankAccountId_fingerprint_key" ON "BankStatementLine"("bankAccountId", "fingerprint");
 
 -- CreateIndex
-CREATE INDEX "JournalLine_organizationId_accountId_clearedAt_idx" ON "JournalLine"("organizationId", "accountId", "clearedAt");
+CREATE INDEX IF NOT EXISTS "JournalLine_organizationId_accountId_clearedAt_idx" ON "JournalLine"("organizationId", "accountId", "clearedAt");
 
 -- CreateIndex
-CREATE INDEX "JournalLine_clearingRef_idx" ON "JournalLine"("clearingRef");
+CREATE INDEX IF NOT EXISTS "JournalLine_clearingRef_idx" ON "JournalLine"("clearingRef");
 
 -- AddForeignKey
-ALTER TABLE "BankAccount" ADD CONSTRAINT "BankAccount_glAccountId_fkey" FOREIGN KEY ("glAccountId") REFERENCES "Account"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'BankAccount_glAccountId_fkey') THEN
+    ALTER TABLE "BankAccount" ADD CONSTRAINT "BankAccount_glAccountId_fkey" FOREIGN KEY ("glAccountId") REFERENCES "Account"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+  END IF;
+END $$;
 
 -- AddForeignKey
-ALTER TABLE "BankStatementLine" ADD CONSTRAINT "BankStatementLine_statementId_fkey" FOREIGN KEY ("statementId") REFERENCES "BankStatement"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'BankStatementLine_statementId_fkey') THEN
+    ALTER TABLE "BankStatementLine" ADD CONSTRAINT "BankStatementLine_statementId_fkey" FOREIGN KEY ("statementId") REFERENCES "BankStatement"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+  END IF;
+END $$;
 
 -- AddForeignKey
-ALTER TABLE "BankStatementLine" ADD CONSTRAINT "BankStatementLine_matchId_fkey" FOREIGN KEY ("matchId") REFERENCES "BankMatch"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'BankStatementLine_matchId_fkey') THEN
+    ALTER TABLE "BankStatementLine" ADD CONSTRAINT "BankStatementLine_matchId_fkey" FOREIGN KEY ("matchId") REFERENCES "BankMatch"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+  END IF;
+END $$;
