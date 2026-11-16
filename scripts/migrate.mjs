@@ -10,4 +10,18 @@ if (!url) {
   );
   process.exit(1);
 }
-execSync("npx prisma migrate deploy", { stdio: "inherit", env: { ...process.env, DATABASE_URL: url } });
+const env = { ...process.env, DATABASE_URL: url };
+
+// Migrations written to be safe to re-run. If a deploy stopped partway through one of them,
+// Prisma blocks all later deploys (error P3009); marking it rolled back lets it run again.
+const RERUNNABLE = ["20261116031500_cash_and_bank"];
+for (const name of RERUNNABLE) {
+  try {
+    execSync(`npx prisma migrate resolve --rolled-back ${name}`, { stdio: "pipe", env });
+    console.log(`Retrying migration ${name}, which had stopped partway on an earlier deploy.`);
+  } catch {
+    // Not in a failed state (already applied or not yet run): nothing to do.
+  }
+}
+
+execSync("npx prisma migrate deploy", { stdio: "inherit", env });
