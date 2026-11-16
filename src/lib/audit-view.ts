@@ -29,6 +29,9 @@ function show(v: unknown): string {
 }
 
 export const ACTION_LABELS: Record<string, string> = {
+  "inventory.create": "Created", "inventory.update": "Edited (draft)", "inventory.submit": "Submitted for approval", "inventory.post": "Posted",
+  "inventory.reject": "Returned to preparer", "inventory.void": "Voided", "count.create": "Count sheet created", "count.update": "Counts entered",
+  "count.submit": "Count submitted", "count.reject": "Returned for recount", "count.post": "Count approved and posted", "count.void": "Count cancelled",
   "journal.create": "Created (draft)",
   "journal.create_submit": "Created and submitted for approval",
   "journal.create_post": "Created and posted",
