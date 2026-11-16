@@ -95,3 +95,10 @@ Turn `SEED_DEMO` off and change or remove the demo users before real company dat
 - Lines carry `partyType`/`partyId` (customer, vendor, employee, partner) for aging and expense-per-person reports, and `clearedAt`/`clearingRef` for bank reconciliation and transaction clearing.
 - All money math is in integer centavos (`src/lib/money.ts`).
 - Cash and bank: `src/lib/bank/cash.ts` (vouchers), `src/lib/bank/recon.ts` (statements, matching, reconciliation), `src/lib/bank/match.ts` (pure matching rules). AR collections and AP payments can create cash vouchers or post BANK entries; anything posted to a bank's GL account shows up for matching automatically.
+
+## What's in Phase 9: BIR tax engine
+VAT, expanded and final withholding, percentage tax, and taxes withheld by customers, kept in one tax ledger that AR, AP, payroll, cash vouchers and petty cash feed (see [docs/TAX_ENGINE.md](docs/TAX_ENGINE.md)).
+- Returns: 2550Q, 2550M (optional), 2551Q, 0619-E / 1601-EQ, 0619-F / 1601-FQ, with manual items, record of filing (reference no., payment) and the 2550Q VAT closing entry
+- Attachments: SLSP / RELIEF (sales and purchases DAT), QAP, SAWT, 1604-E and 1604-F alphalists (DAT and CSV), BIR 2307 certificates; 1604-C / 2316 hook for payroll
+- Filing calendar with due dates, tax ledger vs GL tie-out, review screen for GL tax lines without details
+- Books of accounts: General Journal, Cash Receipts, Cash Disbursements, Sales and Purchase journals (print / CSV)

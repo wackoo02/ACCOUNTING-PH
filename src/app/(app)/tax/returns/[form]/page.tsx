@@ -75,7 +75,7 @@ export default async function ReturnPage({ params, searchParams }: { params: Pro
                     <td className="num">{peso(row.base)}</td>
                     <td className="num">{row.rate ?? ""}</td>
                     <td className={`num${row.input && editable ? " in" : ""}`}>
-                      {row.input && editable ? <input name={`in.${row.key}`} className="num" defaultValue={r.saved?.inputs[row.key] ?? (row.tax ? fromCentavos(row.tax) : "")} placeholder="0.00" /> : peso(row.tax)}
+                      {row.input && editable ? <input name={`in.${row.key}`} className="num" defaultValue={r.saved?.inputs[row.key] ?? ""} placeholder={row.tax ? fromCentavos(row.tax) : "0.00"} /> : peso(row.tax)}
                     </td>
                   </tr>
                 ))}
