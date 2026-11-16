@@ -33,7 +33,7 @@ export async function newRunAction(_: FormState, fd: FormData): Promise<FormStat
     const ctx = await requireCtx("payroll.process");
     const run = await createRun(ctx.org.id, ctx.user.id, {
       kind: s(fd, "kind") as "REGULAR", frequency: s(fd, "frequency") as "SEMI_MONTHLY", periodStart: s(fd, "periodStart"), periodEnd: s(fd, "periodEnd"), payDate: s(fd, "payDate"),
-      deductContributions: fd.get("deductContributions") === null ? undefined : b(fd, "deductContributions"), yearEndAdjustment: b(fd, "yearEndAdjustment"), memo: s(fd, "memo"),
+      deductContributions: s(fd, "deductContributions") === "true" ? true : s(fd, "deductContributions") === "false" ? false : undefined, yearEndAdjustment: b(fd, "yearEndAdjustment"), memo: s(fd, "memo"),
     });
     id = run.id;
   } catch (e) { return fail(e); }

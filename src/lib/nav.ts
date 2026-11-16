@@ -52,6 +52,19 @@ export const NAV: NavSection[] = [
     ],
   },
   {
+    title: "Payroll and HR",
+    items: [
+      { href: "/payroll", label: "Payroll Runs", icon: "payroll", perm: "payroll.process" },
+      { href: "/payroll/employees", label: "Employees and Pay", icon: "employees", perm: "payroll.process" },
+      { href: "/payroll/2316", label: "BIR 2316", icon: "bir", perm: "payroll.approve" },
+      { href: "/payroll/reports", label: "Payroll Reports", icon: "budget", perm: "payroll.process" },
+      { href: "/hr/requests", label: "Leave, OT and Time Requests", icon: "approvals", perm: "hr.manage" },
+      { href: "/hr/time", label: "Time Records", icon: "periods", perm: "hr.manage" },
+      { href: "/hr", label: "Schedules, Holidays, Leave", icon: "settings", perm: "hr.manage" },
+      { href: "/portal", label: "My Employee Portal", icon: "users" },
+    ],
+  },
+  {
     title: "Fixed Assets",
     items: [
       { href: "/masters/assets", label: "Asset Register", icon: "fixed-assets" },
@@ -91,7 +104,6 @@ export const NAV: NavSection[] = [
 export const COMING_NEXT: { label: string; icon: IconName }[] = [
   { label: "Receivables and aging", icon: "receivables" },
   { label: "Payables and aging", icon: "payables" },
-  { label: "Payroll", icon: "payroll" },
   { label: "Depreciation and disposals", icon: "fixed-assets" },
   { label: "Prepaid expenses", icon: "prepaid" },
   { label: "Leases (PFRS 16)", icon: "leases" },

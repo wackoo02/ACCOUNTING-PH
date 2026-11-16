@@ -39,8 +39,9 @@ export default async function PayrollRuns() {
             <div><label>Pay date</label><input type="date" name="payDate" defaultValue={pe} required /></div>
           </div>
           <div className="row" style={{ marginTop: 10 }}>
-            <div><label><input type="checkbox" name="deductContributions" defaultChecked={!first} style={{ width: "auto" }} /> Deduct SSS, PhilHealth and Pag-IBIG in this run</label>
-              <div className="muted" style={{ fontSize: 12 }}>Usually the second cutoff (period ending at month-end). Monthly runs always deduct.</div></div>
+            <div><label>SSS, PhilHealth and Pag-IBIG</label><select name="deductContributions" defaultValue="auto">
+                <option value="auto">Automatic: deduct when the period ends at month-end</option><option value="true">Deduct in this run</option><option value="false">Don't deduct in this run</option></select>
+              <div className="muted" style={{ fontSize: 12 }}>Contributions are computed on the whole month's pay in the second cutoff. Monthly runs always deduct.</div></div>
             <div><label><input type="checkbox" name="yearEndAdjustment" style={{ width: "auto" }} /> Year-end tax adjustment (annualize withholding tax)</label>
               <div className="muted" style={{ fontSize: 12 }}>Use in the last payroll of the year or the final pay of a separated employee.</div></div>
             <div><label>Notes</label><input name="memo" /></div>
