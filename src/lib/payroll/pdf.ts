@@ -98,12 +98,12 @@ export class Doc {
     rows.forEach((r, ri) => {
       if (this.y - size - 6 < this.margin + 14) { this.addPage(); head(); }
       const isBold = (o.boldLast && ri === rows.length - 1) || String(r[0]).startsWith("**");
+      if (isBold) { this.page.drawLine({ start: { x: this.margin, y: this.y - 1 }, end: { x: this.width - this.margin, y: this.y - 1 }, thickness: 0.6, color: GREY }); this.y -= 3; }
       cols.forEach((c, i) => {
         const v = typeof r[i] === "number" ? peso(r[i] as number) : String(r[i] ?? "").replace(/^\*\*/, "");
         this.at(v, xs[i], this.y - size, { size, font: isBold ? this.bold : this.font, align: c.align ?? (typeof r[i] === "number" ? "right" : "left"), width: ws[i] });
       });
       this.y -= size + 5;
-      if (isBold) { this.page.drawLine({ start: { x: this.margin, y: this.y + size + 4 }, end: { x: this.width - this.margin, y: this.y + size + 4 }, thickness: 0.5, color: LINE }); }
     });
     this.y -= 4;
   }
