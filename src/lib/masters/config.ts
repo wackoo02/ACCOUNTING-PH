@@ -166,6 +166,8 @@ export const MASTERS: Record<MasterKind, MasterDef> = {
       { key: "vatRegistered", header: "VAT Registered", type: "bool", example: true, list: true },
       { key: "withholdsTax", header: "Withholds Tax (issues 2307)", type: "bool", example: false, list: true },
       { key: "currencyCode", header: "Currency", type: "text", example: "PHP" },
+      { key: "businessStyle", header: "Business Style", type: "text", example: "XYZ Hardware", help: "Trade name printed on the sales invoice under the registered name." },
+      { key: "invoiceEmails", header: "Invoice Emails", type: "text", example: "ap@xyz.ph; finance@xyz.ph", help: "Where invoices, receipts and statements are emailed. Separate several with ; or ," },
       active,
     ],
   },
