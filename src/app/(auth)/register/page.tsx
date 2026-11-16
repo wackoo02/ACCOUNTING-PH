@@ -3,12 +3,14 @@ import Link from "next/link";
 import { useActionState } from "react";
 import { register } from "../actions";
 import { Errors } from "@/components/Errors";
+import { Logo } from "@/components/Logo";
 
 export default function RegisterPage() {
   const [state, action, pending] = useActionState(register, undefined);
   return (
     <div className="auth card">
-      <h1>Create your company</h1>
+      <Logo tagline />
+      <h1 style={{ marginTop: 20 }}>Create your company</h1>
       <p className="muted">You will be the owner. A Philippine chart of accounts (PFRS/IFRS-aligned) is set up for you.</p>
       <Errors errors={state?.errors} />
       <form action={action}>
