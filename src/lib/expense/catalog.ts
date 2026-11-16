@@ -184,3 +184,17 @@ export function findDuplicates(me: Omit<DupCandidate, "id" | "number">, others: 
 
 export type Check = { key: string; label: string; ok: boolean; level: "info" | "warn" | "block"; note: string };
 export const checksBlock = (cs: Check[]) => cs.some((c) => !c.ok && c.level === "block");
+
+/**
+ * Integration points with providers. "today" works now without any agreement; "partnership" is what needs a
+ * business account / API agreement with the provider before Veritus can connect directly.
+ */
+export const CONNECTORS: { key: string; name: string; covers: string; today: string; partnership: string }[] = [
+  { key: "GRAB", name: "Grab for Business", covers: "Rides and GrabExpress", today: "Import the monthly trip report (CSV) as a statement of the paying card or wallet; employees scan in-app e-receipts.", partnership: "Grab for Business account plus API / SFTP report access to pull trips automatically and charge rides to the company." },
+  { key: "LALAMOVE", name: "Lalamove Business", covers: "Deliveries", today: "Import the wallet / order export; staff scan the e-receipt or enter the order number.", partnership: "Lalamove Business wallet plus API key to book deliveries from Veritus and pull orders with their cost." },
+  { key: "TRANSPORTIFY", name: "Transportify (Deliveree)", covers: "Deliveries and trucking", today: "Import the billing statement; staff scan the booking receipt.", partnership: "Business account and API access for bookings and billing data." },
+  { key: "JOYRIDE", name: "JoyRide / Angkas / inDrive", covers: "Motorcycle taxi and rides", today: "Staff capture the in-app receipt or enter it manually (non-VAT when no TIN).", partnership: "No public corporate API; would need a direct corporate arrangement." },
+  { key: "GCASH", name: "GCash for Business", covers: "Paying rides and deliveries from a company wallet", today: "Import the GCash Business transaction history (CSV) as a statement; auto-match clears posted claims.", partnership: "GCash Business / Mynt API agreement to pull transactions automatically and to auto-pay or disburse from Veritus." },
+  { key: "MAYA", name: "Maya Business", covers: "Company wallet and Maya corporate cards", today: "Import the Maya Business statement (CSV).", partnership: "Maya Business API agreement for transaction feeds and payouts." },
+  { key: "CARD", name: "Corporate credit / debit cards", covers: "BDO, BPI, Metrobank, etc.", today: "Import the card statement (CSV) on the card's account; auto-match clears posted claims.", partnership: "Direct bank feeds need a host-to-host or open-banking agreement with the bank." },
+];

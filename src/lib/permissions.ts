@@ -13,7 +13,7 @@ export type Permission =
   | "pettycash.approve" // approve petty cash vouchers and purchase orders
   | "pettycash.replenish" // create replenishment batches
   | "expense.finance" // finance review of expense & mobility claims, reimbursements, reconciliation
-  | "assets.audit"; // scan asset QR stickers and run asset counts // finance review of expense & mobility claims, reimbursements, reconciliation
+  | "assets.audit"; // scan asset QR stickers and run asset counts
 
 const MATRIX: Record<Role, Permission[]> = {
   OWNER: ["masters.manage", "journal.create", "journal.post", "journal.void", "period.close", "reports.view", "users.manage", "org.manage", "pettycash.capture", "pettycash.approve", "pettycash.replenish", "expense.finance", "assets.audit"],
