@@ -1,7 +1,6 @@
 -- BIR tax engine. Written to be safe to re-run (see scripts/migrate.mjs RERUNNABLE).
 -- AlterTable
-ALTER TABLE "Organization" ADD COLUMN IF NOT EXISTS "tradeName" TEXT,
-ADD COLUMN IF NOT EXISTS "zipCode" TEXT;
+ALTER TABLE "Organization" ADD COLUMN IF NOT EXISTS "zipCode" TEXT;
 
 -- CreateTable
 CREATE TABLE IF NOT EXISTS "TaxEntry" (

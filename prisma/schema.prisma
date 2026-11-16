@@ -19,8 +19,8 @@ model Organization {
   tin            String?  // BIR Taxpayer Identification Number, e.g. 000-000-000-00000
   rdoCode        String?  // BIR Revenue District Office
   registeredAddress String?
+  tradeName      String?  // business style / trade name printed on invoices
   vatRegistered  Boolean  @default(true)
-  tradeName      String?  // BIR "trade name" (RELIEF header); blank = same as registered name
   zipCode        String?  // BIR returns and 2307 ask for the ZIP code
   baseCurrency   String   @default("PHP")
   fiscalYearStartMonth Int @default(1) // 1 = January (calendar year)
@@ -468,6 +468,8 @@ model Customer {
   vatRegistered  Boolean      @default(true)
   withholdsTax   Boolean      @default(false) // customer deducts CWT and issues BIR 2307
   currencyCode   String       @default("PHP")
+  businessStyle  String?      // trade name / business style printed on the invoice
+  invoiceEmails  String?      // where invoices and statements are emailed, separated by ; or ,
   isActive       Boolean      @default(true)
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
@@ -1083,4 +1085,234 @@ model AssetScan {
   audit          AssetAudit @relation(fields: [auditId], references: [id], onDelete: Cascade)
 
   @@index([auditId, assetId])
+}
+
+// ---------- Receivables and billing ----------
+
+// A BIR-registered serial range: the Authority to Print (ATP) for pre-printed or loose-leaf invoices,
+// or the CAS / CRM-POS / EIS permit for system-generated ones. Serials are assigned when a document is issued.
+model DocumentSeries {
+  id             String    @id @default(cuid())
+  organizationId String
+  docType        String    // SALES_INVOICE | CREDIT_MEMO | COLLECTION_RECEIPT | POS_INVOICE
+  name           String
+  prefix         String    @default("")
+  startNo        Int       @default(1)
+  endNo          Int?      // last serial allowed by the permit; null = open-ended (CAS)
+  nextNo         Int       @default(1)
+  padding        Int       @default(6)
+  branchCode     String    @default("00000") // BIR branch code shown after the TIN
+  authorityType  String    @default("ATP")   // ATP | CAS | CRM_POS | EIS
+  authorityNo    String?
+  authorityDate  DateTime? @db.Date
+  validUntil     DateTime? @db.Date
+  printerName    String?
+  printerTin     String?
+  printerAddress String?
+  printerAccreditationNo   String?
+  printerAccreditationDate DateTime? @db.Date
+  isDefault      Boolean   @default(false)
+  isActive       Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+
+  @@index([organizationId, docType])
+}
+
+// Sales invoice or credit memo. Draft -> for approval -> posted (issued, gets its serial) -> void.
+model SalesInvoice {
+  id               String    @id @default(cuid())
+  organizationId   String
+  kind             String    @default("INVOICE") // INVOICE | CREDIT_MEMO
+  number           String?   // serial, assigned when issued
+  seriesId         String?
+  status           String    @default("DRAFT") // DRAFT | PENDING_APPROVAL | POSTED | VOID
+  customerId       String
+  customerName     String
+  customerTin      String?
+  customerAddress  String?
+  customerBusinessStyle String?
+  date             DateTime  @db.Date
+  dueDate          DateTime  @db.Date
+  termsDays        Int       @default(0)
+  currencyCode     String    @default("PHP")
+  fxRate           Decimal   @db.Decimal(18, 6) @default(1)
+  pricesIncludeVat Boolean   @default(false)
+  reference        String?   // customer PO, delivery receipt, contract no.
+  memo             String?
+  vatableSales     Decimal   @db.Decimal(18, 2) @default(0)
+  vatAmount        Decimal   @db.Decimal(18, 2) @default(0)
+  zeroRatedSales   Decimal   @db.Decimal(18, 2) @default(0)
+  exemptSales      Decimal   @db.Decimal(18, 2) @default(0)
+  discountAmount   Decimal   @db.Decimal(18, 2) @default(0)
+  totalAmount      Decimal   @db.Decimal(18, 2) @default(0) // amount the customer owes, VAT included
+  ewtTaxCodeId     String?   // tax the customer is expected to withhold (BIR 2307)
+  ewtAmount        Decimal   @db.Decimal(18, 2) @default(0)
+  appliedAmount    Decimal   @db.Decimal(18, 2) @default(0) // invoice: collected + credited; credit memo: used against invoices
+  creditForId      String?   // credit memo: the invoice it adjusts
+  reason           String?   // credit memo: returns, price adjustment, discount
+  source           String    @default("MANUAL") // MANUAL | CONTRACT | SCAN | POS
+  sourceRef        String?
+  contractId       String?
+  journalEntryId   String?
+  createdById      String
+  updatedById      String?
+  submittedById    String?
+  submittedAt      DateTime?
+  approvedById     String?
+  approvedAt       DateTime?
+  rejectReason     String?
+  voidedById       String?
+  voidedAt         DateTime?
+  voidReason       String?
+  emailedAt        DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  lines            SalesInvoiceLine[]
+
+  @@unique([organizationId, kind, number])
+  @@index([organizationId, customerId, status])
+  @@index([organizationId, kind, status, date])
+}
+
+model SalesInvoiceLine {
+  id          String       @id @default(cuid())
+  invoiceId   String
+  lineNo      Int
+  productId   String?
+  description String
+  quantity    Decimal      @db.Decimal(18, 4) @default(1)
+  unit        String?
+  unitPrice   Decimal      @db.Decimal(18, 4)
+  discount    Decimal      @db.Decimal(18, 2) @default(0)
+  vatType     String       @default("VATABLE") // VATABLE | ZERO_RATED | EXEMPT
+  accountId   String
+  netAmount   Decimal      @db.Decimal(18, 2) // after discount, before VAT
+  vatAmount   Decimal      @db.Decimal(18, 2) @default(0)
+  dims        Json?
+  invoice     SalesInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+}
+
+// Collection (official receipt / collection receipt): cash received + tax withheld, applied to invoices.
+// Whatever is not applied is a customer advance until it is applied to a later invoice.
+model ArReceipt {
+  id               String    @id @default(cuid())
+  organizationId   String
+  number           String?   // receipt serial, assigned when posted
+  seriesId         String?
+  status           String    @default("DRAFT")
+  customerId       String
+  customerName     String
+  date             DateTime  @db.Date
+  bankAccountId    String
+  method           String    @default("CHECK")
+  checkNo          String?
+  checkDate        DateTime? @db.Date
+  checkBank        String?
+  reference        String?
+  memo             String?
+  currencyCode     String    @default("PHP")
+  fxRate           Decimal   @db.Decimal(18, 6) @default(1)
+  cashAmount       Decimal   @db.Decimal(18, 2)
+  withholdingTaxCodeId String?
+  withholdingAmount Decimal  @db.Decimal(18, 2) @default(0)
+  plan             Json      // [{ invoiceId, amount }] what the draft will apply when posted
+  appliedAmount    Decimal   @db.Decimal(18, 2) @default(0)
+  journalEntryId   String?
+  createdById      String
+  updatedById      String?
+  submittedById    String?
+  submittedAt      DateTime?
+  approvedById     String?
+  approvedAt       DateTime?
+  rejectReason     String?
+  voidedById       String?
+  voidedAt         DateTime?
+  voidReason       String?
+  emailedAt        DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  applications     ArApplication[]
+
+  @@index([organizationId, customerId, status])
+}
+
+// One payment or credit applied to one invoice.
+model ArApplication {
+  id             String     @id @default(cuid())
+  organizationId String
+  invoiceId      String
+  receiptId      String?
+  creditMemoId   String?
+  amount         Decimal    @db.Decimal(18, 2) // in the invoice currency
+  date           DateTime   @db.Date
+  journalEntryId String?    // applying a customer advance later moves it from Advances to AR
+  createdById    String
+  createdAt      DateTime   @default(now())
+  receipt        ArReceipt? @relation(fields: [receiptId], references: [id])
+
+  @@index([organizationId, invoiceId])
+  @@index([receiptId])
+  @@index([creditMemoId])
+}
+
+// Contract, subscription or project billing. Recurring kinds bill their lines every period;
+// project billing bills milestones (a % or amount of the contract value).
+model BillingContract {
+  id               String    @id @default(cuid())
+  organizationId   String
+  number           String
+  kind             String    // SUBSCRIPTION | CONTRACT | PROJECT
+  name             String
+  customerId       String
+  startDate        DateTime  @db.Date
+  endDate          DateTime? @db.Date
+  frequency        String?   // MONTHLY | QUARTERLY | SEMI_ANNUAL | ANNUAL (recurring kinds)
+  nextBillDate     DateTime? @db.Date
+  termsDays        Int?
+  currencyCode     String    @default("PHP")
+  contractValue    Decimal   @db.Decimal(18, 2) @default(0)
+  pricesIncludeVat Boolean   @default(false)
+  ewtTaxCodeId     String?
+  lines            Json      // invoice lines billed every period
+  autoSubmit       Boolean   @default(true)
+  status           String    @default("ACTIVE") // ACTIVE | PAUSED | ENDED
+  invoiceCount     Int       @default(0)
+  lastBilledAt     DateTime?
+  memo             String?
+  createdById      String
+  createdAt        DateTime  @default(now())
+  milestones       BillingMilestone[]
+
+  @@unique([organizationId, number])
+}
+
+model BillingMilestone {
+  id          String          @id @default(cuid())
+  contractId  String
+  lineNo      Int
+  description String
+  percent     Decimal?        @db.Decimal(7, 4)
+  amount      Decimal         @db.Decimal(18, 2)
+  dueDate     DateTime?       @db.Date
+  vatType     String          @default("VATABLE")
+  accountId   String?
+  invoiceId   String?
+  billedAt    DateTime?
+  contract    BillingContract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+}
+
+// Every invoice, receipt or statement emailed to a customer.
+model DocumentEmail {
+  id             String   @id @default(cuid())
+  organizationId String
+  docType        String   // INVOICE | CREDIT_MEMO | RECEIPT | STATEMENT
+  docId          String
+  to             String
+  subject        String
+  status         String   // SENT | FAILED
+  error          String?
+  sentById       String
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId, docType, docId])
 }

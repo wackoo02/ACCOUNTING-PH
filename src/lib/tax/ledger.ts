@@ -92,6 +92,64 @@ export async function taxLines(organizationId: string, from: Date, to: Date, f: 
     }
   }
 
+  // 2a'. Receivables: sales invoices and credit memos (output VAT, or percentage tax for non-VAT sellers)
+  //      and collections with tax the customer withheld (BIR 2307 received).
+  const toBase = (amt: { mul(x: unknown): { toFixed(n: number): string } }, rate: unknown) => toCentavos(amt.mul(rate).toFixed(2));
+  if (want("OUTPUT_VAT") || want("PERCENTAGE")) {
+    const org = await prisma.organization.findUniqueOrThrow({ where: { id: organizationId }, select: { vatRegistered: true } });
+    const invs = await prisma.salesInvoice.findMany({
+      where: { organizationId, status: "POSTED", date: { gte: from, lte: to } }, include: { lines: true }, orderBy: [{ date: "asc" }, { number: "asc" }],
+    });
+    const ist = await entryStates(invs.map((i) => i.journalEntryId));
+    for (const inv of invs) {
+      if (fed.has(`SALES:${inv.id}`)) continue;
+      const st = inv.journalEntryId ? ist.get(inv.journalEntryId) : undefined;
+      if (!live(st)) continue;
+      const sign = inv.kind === "CREDIT_MEMO" ? -1n : 1n;
+      const cust = parties.get(`CUSTOMER:${inv.customerId}`);
+      const party: Party = { ...blankParty(), type: "CUSTOMER", id: inv.customerId, tin: inv.customerTin ?? cust?.tin ?? null, name: inv.customerName, address: inv.customerAddress ?? cust?.address ?? null };
+      const common = { source: "SALES", sourceId: inv.id, journalEntryId: st!.id, journalNumber: st!.number, journalLineId: null, docType: inv.kind === "CREDIT_MEMO" ? "CM" : "SI", docNumber: inv.number, description: inv.memo, date: inv.date, party, atcCode: null };
+      const byType = new Map<string, { base: bigint; tax: bigint }>();
+      for (const l of inv.lines) {
+        const t = byType.get(l.vatType) ?? { base: 0n, tax: 0n };
+        t.base += toBase(l.netAmount, inv.fxRate); t.tax += toBase(l.vatAmount, inv.fxRate);
+        byType.set(l.vatType, t);
+      }
+      for (const [vt, t] of byType) {
+        if (org.vatRegistered) {
+          if (!want("OUTPUT_VAT")) continue;
+          out.push({ ...common, key: `SI:${inv.id}:${vt}`, kind: "OUTPUT_VAT", vatClass: vt === "ZERO_RATED" || vt === "EXEMPT" ? vt : "VATABLE", rate: vt === "VATABLE" ? 12 : 0, base: sign * t.base, tax: sign * t.tax });
+        } else if (want("PERCENTAGE")) {
+          // Non-VAT seller: 3% percentage tax on gross sales (NIRC Sec. 116).
+          const base = t.base + t.tax;
+          out.push({ ...common, key: `SI:${inv.id}:${vt}`, kind: "PERCENTAGE", vatClass: null, atcCode: "PT010", rate: 3, base: sign * base, tax: sign * ((base * 3n + 50n) / 100n) });
+        }
+      }
+    }
+  }
+  if (want("CWT") || want("VAT_WITHHELD") || want("PT_WITHHELD")) {
+    const recs = await prisma.arReceipt.findMany({ where: { organizationId, status: "POSTED", date: { gte: from, lte: to }, withholdingAmount: { gt: 0 } }, orderBy: { date: "asc" } });
+    const rst = await entryStates(recs.map((r) => r.journalEntryId));
+    for (const r of recs) {
+      if (fed.has(`SALES:${r.id}`)) continue;
+      const st = r.journalEntryId ? rst.get(r.journalEntryId) : undefined;
+      if (!live(st)) continue;
+      const tc = r.withholdingTaxCodeId ? taxCodes.get(r.withholdingTaxCodeId) : undefined;
+      const atc = (tc?.atcCode ?? tc?.code ?? "").toUpperCase();
+      // VAT withheld by government agencies uses WV ATCs; percentage tax withheld uses PT ATCs.
+      const kind: TaxKind = atc.startsWith("WV") ? "VAT_WITHHELD" : atc.startsWith("PT") ? "PT_WITHHELD" : "CWT";
+      if (!want(kind)) continue;
+      const tax = toBase(r.withholdingAmount, r.fxRate);
+      const rate = tc ? Number(tc.rate) : 0;
+      const cust = parties.get(`CUSTOMER:${r.customerId}`);
+      out.push({
+        key: `OR:${r.id}`, kind, vatClass: null, atcCode: atc || null, rate, base: rate > 0 ? (tax * 20000n + BigInt(Math.round(rate * 100))) / (2n * BigInt(Math.round(rate * 100))) : 0n, tax,
+        date: r.date, source: "SALES", sourceId: r.id, journalEntryId: st!.id, journalNumber: st!.number, journalLineId: null, docType: "OR", docNumber: r.number, description: r.memo,
+        party: cust ?? { ...blankParty(), type: "CUSTOMER", id: r.customerId, name: r.customerName },
+      });
+    }
+  }
+
   // 2b. Petty cash vouchers (mobile app) once their replenishment batch is posted.
   if (want("INPUT_VAT") || want("EWT")) {
     const v = await prisma.pettyCashVoucher.findMany({
@@ -193,10 +251,13 @@ export async function tieOut(organizationId: string, from: Date, to: Date) {
   for (const gl of glLines) {
     const a = accts.get(gl.accountId)!;
     const amt = a.side === "debit" ? c(gl.debit) - c(gl.credit) : c(gl.credit) - c(gl.debit);
-    if (amt <= 0n) continue; // payments, applications and refunds move the balance the other way
     if (excluded.has(gl.id)) continue;
+    const explained = explainedLines.has(gl.id) || !!explainedEntries.get(gl.journalEntryId)?.has(a.kind);
+    // The other direction is a payment, application or refund, unless a document with tax details
+    // made it (e.g. a credit memo reducing output VAT, which the tax ledger carries as a negative).
+    if (amt <= 0n) { if (explained) bump(a.kind, "gl", amt); continue; }
     bump(a.kind, "gl", amt);
-    if (explainedLines.has(gl.id) || explainedEntries.get(gl.journalEntryId)?.has(a.kind)) continue;
+    if (explained) continue;
     const others = gl.journalEntry.lines.filter((x) => x.id !== gl.id && !accts.has(x.accountId));
     // VAT sits on the same side as the sale/purchase it belongs to; withholding sits opposite the expense/income.
     const vat = a.kind === "OUTPUT_VAT" || a.kind === "INPUT_VAT" || a.kind === "PERCENTAGE";

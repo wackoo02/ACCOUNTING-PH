@@ -73,7 +73,7 @@ export const PH_IFRS_TEMPLATE: TemplateAccount[] = [
   { code: "2070", name: "Salaries and Wages Payable", type: L, ifrsGroup: "Trade and other payables", isCurrent: true, parent: "2000", systemRole: "SALARIES_PAYABLE" },
   { code: "2075", name: "13th Month Pay Payable", type: L, ifrsGroup: "Trade and other payables", isCurrent: true, parent: "2000" },
   { code: "2080", name: "Income Tax Payable", type: L, ifrsGroup: "Income tax payable", isCurrent: true, parent: "2000", systemRole: "INCOME_TAX_PAYABLE" },
-  { code: "2090", name: "Advances from Customers", type: L, ifrsGroup: "Contract liabilities", isCurrent: true, parent: "2000" },
+  { code: "2090", name: "Advances from Customers", type: L, ifrsGroup: "Contract liabilities", isCurrent: true, parent: "2000", systemRole: "CUSTOMER_ADVANCES" },
   { code: "2095", name: "Loans Payable - Current Portion", type: L, ifrsGroup: "Loans and borrowings", isCurrent: true, parent: "2000" },
   { code: "2098", name: "Lease Liability - Current Portion", type: L, ifrsGroup: "Lease liabilities", isCurrent: true, parent: "2000" },
   { code: "2099", name: "Due to Officers / Partners", type: L, ifrsGroup: "Trade and other payables", isCurrent: true, parent: "2000" },
@@ -97,7 +97,7 @@ export const PH_IFRS_TEMPLATE: TemplateAccount[] = [
   { code: "4000", name: "Revenue", type: I, ifrsGroup: "Revenue", header: true },
   { code: "4010", name: "Sales - Goods", type: I, ifrsGroup: "Revenue", parent: "4000", systemRole: "SALES" },
   { code: "4020", name: "Service Income", type: I, ifrsGroup: "Revenue", parent: "4000", systemRole: "SERVICE_INCOME" },
-  { code: "4030", name: "Sales Returns and Allowances", type: I, ifrsGroup: "Revenue", parent: "4000" },
+  { code: "4030", name: "Sales Returns and Allowances", type: I, ifrsGroup: "Revenue", parent: "4000", systemRole: "SALES_RETURNS" },
   { code: "4040", name: "Sales Discounts", type: I, ifrsGroup: "Revenue", parent: "4000" },
 
   { code: "5000", name: "Cost of Sales", type: X, ifrsGroup: "Cost of sales", header: true },
