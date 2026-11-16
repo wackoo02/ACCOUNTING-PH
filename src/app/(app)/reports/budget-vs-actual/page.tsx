@@ -1,3 +1,4 @@
+import { CustomizeLink } from "@/components/reporting/CustomizeLink";
 import { Fragment } from "react";
 import { requireCtx } from "@/lib/auth";
 import { prisma } from "@/lib/db";
@@ -27,7 +28,7 @@ export default async function BudgetVsActual({ searchParams }: { searchParams: S
   const pct = (v: bigint, b: bigint) => (b === 0n ? "—" : `${(Number((v * 10000n) / (b < 0n ? -b : b)) / 100).toFixed(1)}%`);
   return (
     <>
-      <div className="top"><h1>Budget vs Actual · FY{fy}</h1>
+      <div className="top"><h1>Budget vs Actual · FY{fy}</h1><CustomizeLink template="budget_vs_actual" />
         <a className="btn secondary noprint" href={`/api/budgets/${fy}`}>Download budget template (Excel)</a></div>
       {can(ctx.role, "masters.manage") && (
         <ActionForm action={uploadBudget} className="card noprint">
