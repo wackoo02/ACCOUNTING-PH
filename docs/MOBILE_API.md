@@ -1,6 +1,6 @@
-# Petty Cash Mobile API
+# Veritus Mobility API
 
-JSON API used by the Veritus petty cash app for iPhone and Android. Base path: `/api/mobile`.
+JSON API used by the Veritus Mobility app (`/m`, installable on iPhone and Android) and by any future native app for iPhone and Android. Base path: `/api/mobile`.
 
 - **Auth:** `POST /auth/login` returns a `token`. Send it as `Authorization: Bearer <token>` on every other call. Tokens last 30 days and use the same sessions table as the web login.
 - **Company:** send `X-Company-Id: <companyId>` to work in a company other than the one chosen at sign-in.
@@ -45,7 +45,26 @@ Approvals also apply the company's **segregation of duties** (the preparer canno
 | GET / PUT | `/vouchers/:id` | Read / edit a draft or returned voucher |
 | POST | `/vouchers/:id/submit` | Send for approval |
 | POST | `/vouchers/:id/approve` | Approve |
-| POST | `/vouchers/:id/reject` | `{ reason }` → returned to the preparer |
+| POST | `/vouchers/:id/return` | `{ reason }` → RETURNED, the employee fixes and resubmits (manager while submitted, finance while approved / on hold) |
+| POST | `/vouchers/:id/reject` | `{ reason }` → REJECTED (final) |
+| GET | `/vouchers/:id/checks` | Finance checks: receipt, tax compliance, duplicates |
+| POST | `/vouchers/:id/clear` | Finance: `{ note?, overrideDuplicates? }` → CLEARED and posted (non-fund payers) |
+| POST | `/vouchers/:id/hold` | Finance: `{ reason }` → HOLD |
+| GET | `/mobility/setup` | Modules, providers, transaction types with mapped accounts, payment methods with corporate accounts, employees, customers, currencies, the signed-in employee |
+| GET | `/reports/dashboard?from=&to=` | KPIs: transport, delivery, by department / employee / project / provider / payment, top travelers and delivery users, unapproved, unreconciled, budget vs actual |
+| GET | `/reports/employees?from=&to=&employeeId=&includePending=1` | Employee expense report |
+| GET | `/reconciliation` | Corporate wallets and cards: claims matched / not matched, statement charges with no claim |
+| POST | `/reconciliation/:bankAccountId/auto` | Auto-match posted claims to statement lines |
+| POST | `/reconciliation/exceptions` | `{ statementLineId, employeeId, module, note? }` → a returned claim for the employee to complete |
+| GET / POST | `/reimbursements` | Outstanding per employee / pay `{ employeeId, bankAccountId, voucherIds?, date?, method?, checkNo? }` |
+| POST | `/sales-invoices/scan` | `{ imageBase64, mediaType }` → what the AI read from an issued sales invoice, plus customer match |
+| POST | `/sales-invoices/preview` / `/sales-invoices` | Preview / post the sales journal (source SALES, for approval) |
+| GET | `/assets?location=&q=` · `/assets/lookup?tag=` | Fixed asset register / one asset by QR text |
+| POST | `/assets/map-tag` | `{ tagText, assetId }` → link an old or unknown sticker to an asset |
+| GET / POST | `/asset-audits` | List / start a count `{ name?, location? }` |
+| GET | `/asset-audits/:id` | Count summary: found, wrong location, unknown, missing, by location and category |
+| POST | `/asset-audits/:id/scans` | `{ tagText, location?, condition?, note? }` → FOUND / WRONG_LOCATION / UNKNOWN, updates the register |
+| POST | `/asset-audits/:id/close` | `{ markMissing? }` → close; unscanned assets become MISSING |
 | GET / POST | `/purchase-orders` | List (`?status=APPROVED`) / create `{ number?, poDate?, vendorId?, vendorName?, description, amount }` |
 | POST | `/purchase-orders/:id/approve` | Approve |
 | GET / POST | `/batches` | List / create a replenishment batch `{ fundId, voucherIds?, date? }` from approved vouchers |
