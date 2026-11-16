@@ -1,4 +1,6 @@
-# PH Accounting — General Ledger (Phase 1–2)
+# Veritus ERP
+
+_Intelligent. Integrated. Compliant._
 
 Multi-company, web-based accounting for Philippine businesses. PFRS/IFRS-aligned general ledger that every later module (AR, AP, bank reconciliation, payroll, expense claims, fixed assets, leases, inventory, BIR) posts into.
 
