@@ -6,11 +6,18 @@ import { can } from "../permissions";
 import { LedgerError } from "../ledger/service";
 import { ApiError, issueToken, requireApiCtx, revokeToken } from "./auth";
 import {
-  approvePurchaseOrder, approveVoucher, createBatch, createFund, createPurchaseOrder, createVoucher, getBatch, getVoucher,
+  approvePurchaseOrder, approveVoucher, createBatch, financeClear, holdVoucher, isManagerOf, outstandingReimbursements, payReimbursement, returnVoucher, reviewChecks, createFund, createPurchaseOrder, createVoucher, getBatch, getVoucher,
   listBatches, listPurchaseOrders, listVouchers, postBatch, previewVoucher, rejectVoucher, setupData, submitVoucher, updateVoucher,
   type VoucherInput,
 } from "../pettycash/service";
 import { extractReceipt, saveReceiptImage, suggestAccount } from "../pettycash/extract";
+
+async function assertManager(organizationId: string, userId: string, voucherId: string) {
+  const v = await prisma.pettyCashVoucher.findFirst({ where: { id: voucherId, organizationId }, select: { employeeId: true } });
+  if (!v) throw new ApiError(404, ["Voucher not found"]);
+  const r = await prisma.$transaction((tx) => isManagerOf(tx, organizationId, userId, v.employeeId));
+  if (!r.ok) throw new ApiError(403, ["Only an approver or this employee's supervisor can approve"]);
+}
 
 type Handler = (req: Request, params: string[], url: URL) => Promise<Response>;
 const json = (data: unknown, status = 200) => Response.json(data, { status, headers: { "cache-control": "no-store" } });
@@ -42,7 +49,7 @@ const routes: [string, RegExp, Handler][] = [
     const ms = await prisma.membership.findMany({ where: { userId: ctx.user.id }, include: { organization: true }, orderBy: { createdAt: "asc" } });
     return json({
       user: ctx.user, company: ctx.org, role: ctx.role, approvalLimit: ctx.approvalLimit,
-      can: { capture: can(ctx.role, "pettycash.capture"), approve: can(ctx.role, "pettycash.approve"), replenish: can(ctx.role, "pettycash.replenish"), postJournal: can(ctx.role, "journal.post"), manage: can(ctx.role, "masters.manage") },
+      can: { capture: can(ctx.role, "pettycash.capture"), approve: can(ctx.role, "pettycash.approve"), finance: can(ctx.role, "expense.finance"), replenish: can(ctx.role, "pettycash.replenish"), postJournal: can(ctx.role, "journal.post"), manage: can(ctx.role, "masters.manage") },
       companies: ms.map((m) => ({ id: m.organizationId, name: m.organization.name, role: m.role })),
     });
   }],
@@ -81,10 +88,14 @@ const routes: [string, RegExp, Handler][] = [
   }],
 
   // Vouchers
-  ["POST", /^vouchers\/preview$/, async (req) => json(await previewVoucher((await requireApiCtx(req, "pettycash.capture")).org.id, await body<VoucherInput>(req)))],
+  ["POST", /^vouchers\/preview$/, async (req) => {
+    const ctx = await requireApiCtx(req, "pettycash.capture");
+    return json(await previewVoucher(ctx.org.id, await body<VoucherInput>(req), ctx.user.id));
+  }],
   ["GET", /^vouchers$/, async (req, _, url) => {
     const ctx = await requireApiCtx(req);
-    return json(await listVouchers(ctx.org.id, { status: url.searchParams.get("status"), fundId: url.searchParams.get("fundId"), mine: url.searchParams.get("mine"), userId: ctx.user.id }));
+    const q = (k: string) => url.searchParams.get(k);
+    return json(await listVouchers(ctx.org.id, { status: q("status"), fundId: q("fundId"), mine: q("mine"), module: q("module"), queue: q("queue"), employeeId: q("employeeId"), paymentMethod: q("paymentMethod"), from: q("from"), to: q("to"), userId: ctx.user.id }));
   }],
   ["POST", /^vouchers$/, async (req, _, url) => {
     const ctx = await requireApiCtx(req, "pettycash.capture");
@@ -99,13 +110,35 @@ const routes: [string, RegExp, Handler][] = [
     const ctx = await requireApiCtx(req, "pettycash.capture");
     return json(await submitVoucher(ctx.org.id, ctx.user.id, id));
   }],
+  // Manager approval: approvers, or the employee's named supervisor.
   ["POST", /^vouchers\/([^/]+)\/approve$/, async (req, [id]) => {
-    const ctx = await requireApiCtx(req, "pettycash.approve");
+    const ctx = await requireApiCtx(req);
+    await assertManager(ctx.org.id, ctx.user.id, id);
     return json(await approveVoucher(ctx.org.id, ctx.user.id, id));
   }],
+  ["POST", /^vouchers\/([^/]+)\/return$/, async (req, [id]) => {
+    const ctx = await requireApiCtx(req);
+    return json(await returnVoucher(ctx.org.id, ctx.user.id, id, (await body<{ reason: string }>(req)).reason));
+  }],
   ["POST", /^vouchers\/([^/]+)\/reject$/, async (req, [id]) => {
-    const ctx = await requireApiCtx(req, "pettycash.approve");
+    const ctx = await requireApiCtx(req);
     return json(await rejectVoucher(ctx.org.id, ctx.user.id, id, (await body<{ reason: string }>(req)).reason));
+  }],
+  // Finance review
+  ["GET", /^vouchers\/([^/]+)\/checks$/, async (req, [id]) => json(await reviewChecks((await requireApiCtx(req, "expense.finance")).org.id, id))],
+  ["POST", /^vouchers\/([^/]+)\/clear$/, async (req, [id], url) => {
+    const ctx = await requireApiCtx(req, "expense.finance");
+    return json(await financeClear(ctx.org.id, ctx.user.id, id, await body<{ note?: string; overrideDuplicates?: boolean }>(req), url.origin));
+  }],
+  ["POST", /^vouchers\/([^/]+)\/hold$/, async (req, [id]) => {
+    const ctx = await requireApiCtx(req, "expense.finance");
+    return json(await holdVoucher(ctx.org.id, ctx.user.id, id, (await body<{ reason: string }>(req)).reason));
+  }],
+  // Employee reimbursements
+  ["GET", /^reimbursements$/, async (req) => json(await outstandingReimbursements((await requireApiCtx(req, "expense.finance")).org.id))],
+  ["POST", /^reimbursements$/, async (req) => {
+    const ctx = await requireApiCtx(req, "expense.finance");
+    return json(await payReimbursement(ctx.org.id, ctx.user.id, await body(req)), 201);
   }],
 
   // Purchase orders

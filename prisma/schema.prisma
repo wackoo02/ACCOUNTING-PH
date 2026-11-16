@@ -419,6 +419,11 @@ model Employee {
   payBasis       String?      // MONTHLY | DAILY
   basicRate      Decimal      @db.Decimal(18, 2) @default(0)
   isPartner      Boolean      @default(false) // owners/partners for expense summary
+  // Expense & mobility: defaults for the employee's claims, by dimension code.
+  costCenter     String?
+  projectCode    String?
+  businessUnit   String?
+  supervisorCode String?      // employee no. of the manager who approves this person's claims
   isActive       Boolean      @default(true)
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
@@ -612,7 +617,7 @@ model BankAccount {
   organizationId String
   code           String   // e.g. BDO-CA-001
   name           String
-  kind           String   @default("CURRENT") // CURRENT | SAVINGS | PETTY_CASH | CASH_ON_HAND | EWALLET
+  kind           String   @default("CURRENT") // CURRENT | SAVINGS | PETTY_CASH | CASH_ON_HAND | EWALLET | CREDIT_CARD
   bankName       String?
   branchName     String?
   accountNumber  String?
@@ -783,18 +788,75 @@ model PurchaseOrder {
 
 enum PettyCashStatus {
   DRAFT
-  SUBMITTED   // waiting for approval
-  APPROVED    // ready to include in a replenishment batch
-  REJECTED    // returned to the preparer with a reason
-  BATCHED     // in a replenishment batch whose journal is not yet posted
-  REPLENISHED // the batch journal is posted
+  SUBMITTED   // waiting for manager approval
+  APPROVED    // manager approved; waiting for finance review
+  RETURNED    // sent back to the preparer to fix (editable)
+  REJECTED    // declined for good (not editable)
+  CLEARED     // finance review passed; corporate / employee-paid claims are posted to the GL
+  HOLD        // finance review on hold (e.g. receipt or duplicate question)
+  BATCHED     // petty cash: in a replenishment batch whose journal is not yet posted
+  REPLENISHED // petty cash: the batch journal is posted
+  REIMBURSED  // employee-paid: the reimbursement disbursement is posted
+}
+
+// Which app tile the voucher was captured under. All share one voucher table and one number series.
+enum ExpenseModule {
+  PETTY_CASH
+  TRAVEL     // local and international travel
+  TRANSPORT  // Grab, inDrive, JoyRide, Angkas, taxi
+  DELIVERY   // Lalamove, Transportify, couriers ("Sent Package")
+}
+
+// Who paid the provider.
+enum ExpensePayment {
+  PETTY_CASH_FUND  // custodian paid from the fund; replenished in a batch
+  EMPLOYEE         // employee paid personally; reimbursed later
+  GCASH            // corporate GCash wallet
+  MAYA             // corporate Maya Business wallet
+  CREDIT_CARD      // corporate credit card
+  DEBIT_CARD       // corporate debit card (draws on a bank account)
+  CORPORATE_WALLET // other corporate e-wallet / prepaid business wallet
+  COMPANY_ACCOUNT  // billed to the company by the provider (e.g. monthly business account invoice)
+}
+
+// Debit account for each mobility transaction type (Automatic GL Mapping), per company.
+model ExpenseMapping {
+  id              String   @id @default(cuid())
+  organizationId  String
+  transactionType String   // e.g. RIDE, CLIENT_VISIT, STAFF_SHUTTLE, DELIVERY, INVENTORY_DELIVERY
+  accountId       String
+  updatedAt       DateTime @updatedAt
+
+  @@unique([organizationId, transactionType])
 }
 
 model PettyCashVoucher {
   id                  String          @id @default(cuid())
   organizationId      String
-  fundId              String
+  fundId              String?         // required when paid from a petty cash fund
   number              String          // e.g. PCV-2026-000001
+  module              ExpenseModule   @default(PETTY_CASH)
+  paymentMethod       ExpensePayment  @default(PETTY_CASH_FUND)
+  paymentAccountId    String?         // BankAccount for GCash / Maya / card / wallet payments
+  employeeId          String?         // who incurred the expense (employee or partner)
+  purpose             String?         // business purpose
+  transactionType     String?         // GL mapping key (see ExpenseMapping)
+  provider            String?         // GRAB, INDRIVE, JOYRIDE, ANGKAS, LALAMOVE, TRANSPORTIFY, ...
+  bookingNumber       String?         // booking / delivery number from the provider
+  tripAt              DateTime?       // trip or delivery date and time
+  details             Json?           // travel / trip / delivery fields (pickup, drop-off, distance, receiver, ...)
+  noReceipt           Boolean         @default(false)
+  noReceiptReason     String?
+  currencyCode        String          @default("PHP") // receipt currency (international travel)
+  fxRate              Decimal         @db.Decimal(18, 6) @default(1)
+  foreignTotal        Decimal?        @db.Decimal(18, 2) // receipt total in its own currency
+  checks              Json?           // last approval / finance review checks
+  financeById         String?
+  financeAt           DateTime?
+  financeNote         String?
+  journalEntryId      String?         @unique // corporate / employee-paid claim journal
+  reimbursementId     String?         // CashTransaction that paid the employee back
+  statementLineId     String?         // corporate statement line this claim was created from
   status              PettyCashStatus @default(DRAFT)
   receiptDate         DateTime        @db.Date
   docType             String          @default("OR") // OR | SI | CASH_INVOICE | AR | OTHER
@@ -831,13 +893,15 @@ model PettyCashVoucher {
   createdAt           DateTime        @default(now())
   updatedAt           DateTime        @updatedAt
   organization        Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  fund                PettyCashFund   @relation(fields: [fundId], references: [id])
+  fund                PettyCashFund?  @relation(fields: [fundId], references: [id])
   purchaseOrder       PurchaseOrder?  @relation(fields: [purchaseOrderId], references: [id])
   batch               PettyCashBatch? @relation(fields: [batchId], references: [id])
   lines               PettyCashVoucherLine[]
 
   @@unique([organizationId, number])
   @@index([organizationId, status])
+  @@index([organizationId, bookingNumber])
+  @@index([organizationId, employeeId])
 }
 
 model PettyCashVoucherLine {
@@ -880,4 +944,66 @@ model ReceiptImage {
   uploadedById   String
   createdAt      DateTime     @default(now())
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+// ---------- Fixed asset register (minimal; the Fixed Assets module will add depreciation) ----------
+
+model FixedAsset {
+  id               String    @id @default(cuid())
+  organizationId   String
+  code             String    // asset number, printed as a QR sticker
+  name             String
+  category         String?   // e.g. IT equipment, furniture, vehicles
+  location         String?   // where it should be
+  custodianCode    String?   // employee no. accountable for it
+  serialNo         String?
+  acquisitionDate  DateTime? @db.Date
+  cost             Decimal   @db.Decimal(18, 2) @default(0)
+  accountCode      String?   // property and equipment GL account
+  tagCode          String?   // an older / supplier sticker mapped to this asset
+  status           String    @default("ACTIVE") // ACTIVE | FOR_REPAIR | MISSING | DISPOSED
+  condition        String?   // GOOD | FAIR | DAMAGED | FOR_REPAIR (last audit)
+  taggedAt         DateTime? // when the sticker was first scanned / mapped
+  lastSeenAt       DateTime?
+  lastSeenLocation String?
+  lastAuditId      String?
+  isActive         Boolean   @default(true)
+  createdAt        DateTime  @default(now())
+
+  @@unique([organizationId, code])
+  @@index([organizationId, tagCode])
+}
+
+model AssetAudit {
+  id             String    @id @default(cuid())
+  organizationId String
+  number         String    // AA-2026-000001
+  name           String
+  location       String?   // blank = all locations
+  status         String    @default("OPEN") // OPEN | CLOSED
+  createdById    String
+  createdAt      DateTime  @default(now())
+  closedById     String?
+  closedAt       DateTime?
+  scans          AssetScan[]
+
+  @@unique([organizationId, number])
+}
+
+model AssetScan {
+  id             String     @id @default(cuid())
+  organizationId String
+  auditId        String
+  assetId        String?
+  tagText        String     // what the QR code said
+  result         String     // FOUND | WRONG_LOCATION | UNKNOWN
+  location       String?
+  condition      String?
+  note           String?
+  imageId        String?
+  scannedById    String
+  scannedAt      DateTime   @default(now())
+  audit          AssetAudit @relation(fields: [auditId], references: [id], onDelete: Cascade)
+
+  @@index([auditId, assetId])
 }
