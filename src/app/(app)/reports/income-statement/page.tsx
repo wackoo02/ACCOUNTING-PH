@@ -1,3 +1,4 @@
+import { CustomizeLink } from "@/components/reporting/CustomizeLink";
 import { requireCtx } from "@/lib/auth";
 import { incomeStatement } from "@/lib/ledger/reports";
 import { firstOfYear, parseDateParam, today } from "@/lib/format";
@@ -15,7 +16,7 @@ export default async function IncomeStatement({ searchParams }: { searchParams: 
   const qs = `&from=${from}&to=${to}${dimsQs(sp)}`;
   return (
     <>
-      <div className="top"><h1>Statement of Profit or Loss</h1><span className="muted">{ctx.org.name} · {from} to {to}</span></div>
+      <div className="top"><h1>Statement of Profit or Loss</h1><CustomizeLink template="income_statement" from={from} to={to} qs={dimsQs(sp)} /><span className="muted">{ctx.org.name} · {from} to {to}</span></div>
       <form className="card row noprint">
         <div><label>From</label><input type="date" name="from" defaultValue={from} /></div>
         <div><label>To</label><input type="date" name="to" defaultValue={to} /></div>

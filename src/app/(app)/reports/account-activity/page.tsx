@@ -1,3 +1,4 @@
+import { CustomizeLink } from "@/components/reporting/CustomizeLink";
 import Link from "next/link";
 import { requireCtx } from "@/lib/auth";
 import { accountActivity } from "@/lib/ledger/reports";
@@ -15,7 +16,7 @@ export default async function AccountActivity({ searchParams }: { searchParams: 
   const opening = r.rows.reduce((s, x) => s + x.opening, 0n);
   return (
     <>
-      <div className="top"><h1>Account Activity Report</h1><span className="muted">{ctx.org.name} · {from} to {to}</span></div>
+      <div className="top"><h1>Account Activity Report</h1><CustomizeLink template="account_activity" from={from} to={to} /><span className="muted">{ctx.org.name} · {from} to {to}</span></div>
       <form className="card row noprint">
         <div><label>From</label><input type="date" name="from" defaultValue={from} /></div>
         <div><label>To</label><input type="date" name="to" defaultValue={to} /></div>

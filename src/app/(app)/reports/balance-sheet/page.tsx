@@ -1,3 +1,4 @@
+import { CustomizeLink } from "@/components/reporting/CustomizeLink";
 import { requireCtx } from "@/lib/auth";
 import { balanceSheet } from "@/lib/ledger/reports";
 import { parseDateParam, today } from "@/lib/format";
@@ -15,7 +16,7 @@ export default async function BalanceSheet({ searchParams }: { searchParams: SP 
   const qs = `&to=${asOf}`;
   return (
     <>
-      <div className="top"><h1>Statement of Financial Position</h1><span className="muted">{ctx.org.name} · as of {asOf}</span></div>
+      <div className="top"><h1>Statement of Financial Position</h1><CustomizeLink template="balance_sheet" to={asOf} /><span className="muted">{ctx.org.name} · as of {asOf}</span></div>
       <form className="card row noprint">
         <div><label>As of</label><input type="date" name="asOf" defaultValue={asOf} /></div>
         <DimFilter organizationId={ctx.org.id} sp={sp} />
