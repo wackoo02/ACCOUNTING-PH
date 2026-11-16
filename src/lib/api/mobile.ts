@@ -10,6 +10,8 @@ import {
   listBatches, listPurchaseOrders, listVouchers, postBatch, previewVoucher, rejectVoucher, setupData, submitVoucher, updateVoucher,
   type VoucherInput,
 } from "../pettycash/service";
+import { autoReconcile, claimFromStatementLine, employeeExpenseReport, mobilityDashboard, mobilitySetup, reconciliationStatus } from "../expense/service";
+import { auditSummary, closeAudit, listAssets, listAudits, lookupAsset, mapTag, scanAsset, startAudit } from "../assets/audit";
 import { extractReceipt, saveReceiptImage, suggestAccount } from "../pettycash/extract";
 
 async function assertManager(organizationId: string, userId: string, voucherId: string) {
@@ -49,11 +51,42 @@ const routes: [string, RegExp, Handler][] = [
     const ms = await prisma.membership.findMany({ where: { userId: ctx.user.id }, include: { organization: true }, orderBy: { createdAt: "asc" } });
     return json({
       user: ctx.user, company: ctx.org, role: ctx.role, approvalLimit: ctx.approvalLimit,
-      can: { capture: can(ctx.role, "pettycash.capture"), approve: can(ctx.role, "pettycash.approve"), finance: can(ctx.role, "expense.finance"), replenish: can(ctx.role, "pettycash.replenish"), postJournal: can(ctx.role, "journal.post"), manage: can(ctx.role, "masters.manage") },
+      can: { capture: can(ctx.role, "pettycash.capture"), approve: can(ctx.role, "pettycash.approve"), finance: can(ctx.role, "expense.finance"), assetAudit: can(ctx.role, "assets.audit"), reports: can(ctx.role, "reports.view"), replenish: can(ctx.role, "pettycash.replenish"), postJournal: can(ctx.role, "journal.post"), manage: can(ctx.role, "masters.manage") },
       companies: ms.map((m) => ({ id: m.organizationId, name: m.organization.name, role: m.role })),
     });
   }],
   ["GET", /^setup$/, async (req) => json(await setupData((await requireApiCtx(req, "pettycash.capture")).org.id))],
+
+  ["GET", /^mobility\/setup$/, async (req) => { const ctx = await requireApiCtx(req, "pettycash.capture"); return json(await mobilitySetup(ctx.org.id, ctx.user.id)); }],
+
+  // Reports (management KPIs and expense summary per employee / partner)
+  ["GET", /^reports\/dashboard$/, async (req, _, url) => json(await mobilityDashboard((await requireApiCtx(req, "reports.view")).org.id, { from: url.searchParams.get("from"), to: url.searchParams.get("to") }))],
+  ["GET", /^reports\/employees$/, async (req, _, url) => {
+    const ctx = await requireApiCtx(req, "reports.view");
+    return json(await employeeExpenseReport(ctx.org.id, { from: url.searchParams.get("from"), to: url.searchParams.get("to"), employeeId: url.searchParams.get("employeeId"), includePending: url.searchParams.get("pending") === "1" }));
+  }],
+
+  // Corporate GCash / Maya / card reconciliation
+  ["GET", /^reconciliation$/, async (req) => json(await reconciliationStatus((await requireApiCtx(req, "expense.finance")).org.id))],
+  ["POST", /^reconciliation\/([^/]+)\/auto$/, async (req, [id]) => { const ctx = await requireApiCtx(req, "expense.finance"); return json({ matched: await autoReconcile(ctx.org.id, ctx.user.id, id) }); }],
+  ["POST", /^reconciliation\/exceptions$/, async (req) => { const ctx = await requireApiCtx(req, "expense.finance"); return json(await claimFromStatementLine(ctx.org.id, ctx.user.id, await body(req)), 201); }],
+
+  // Asset audit (QR stickers)
+  ["GET", /^assets$/, async (req, _, url) => json(await listAssets((await requireApiCtx(req, "assets.audit")).org.id, { location: url.searchParams.get("location"), q: url.searchParams.get("q") }))],
+  ["GET", /^assets\/lookup$/, async (req, _, url) => {
+    const a = await lookupAsset((await requireApiCtx(req, "assets.audit")).org.id, url.searchParams.get("tag") ?? "");
+    if (!a) throw new ApiError(404, ["No asset has this sticker. Map it to an asset or check the register."]);
+    return json(a);
+  }],
+  ["POST", /^assets\/map-tag$/, async (req) => { const ctx = await requireApiCtx(req, "assets.audit"); return json(await mapTag(ctx.org.id, ctx.user.id, await body(req))); }],
+  ["GET", /^asset-audits$/, async (req) => json(await listAudits((await requireApiCtx(req, "assets.audit")).org.id))],
+  ["POST", /^asset-audits$/, async (req) => { const ctx = await requireApiCtx(req, "assets.audit"); return json(await startAudit(ctx.org.id, ctx.user.id, await body(req)), 201); }],
+  ["GET", /^asset-audits\/([^/]+)$/, async (req, [id]) => json(await auditSummary((await requireApiCtx(req, "assets.audit")).org.id, id))],
+  ["POST", /^asset-audits\/([^/]+)\/scans$/, async (req, [id]) => { const ctx = await requireApiCtx(req, "assets.audit"); return json(await scanAsset(ctx.org.id, ctx.user.id, id, await body(req)), 201); }],
+  ["POST", /^asset-audits\/([^/]+)\/close$/, async (req, [id]) => {
+    const ctx = await requireApiCtx(req, "journal.post");
+    return json(await closeAudit(ctx.org.id, ctx.user.id, id, ((await body<{ markMissing?: boolean }>(req).catch(() => ({}))) as { markMissing?: boolean }).markMissing !== false));
+  }],
 
   // Funds (admins)
   ["POST", /^funds$/, async (req) => {
@@ -64,18 +97,18 @@ const routes: [string, RegExp, Handler][] = [
   // Receipts: upload a photo, then let the AI read it.
   ["POST", /^receipts$/, async (req) => {
     const ctx = await requireApiCtx(req, "pettycash.capture");
-    const b = await body<{ imageBase64: string; mediaType: string; extract?: boolean }>(req);
+    const b = await body<{ imageBase64: string; mediaType: string; extract?: boolean; module?: string }>(req);
     const img = await saveReceiptImage(ctx.org.id, ctx.user.id, b.imageBase64, b.mediaType);
     if (b.extract === false) return json({ imageId: img.id }, 201);
     try {
-      return json(await extractReceipt(ctx.org.id, img.id), 201);
+      return json(await extractReceipt(ctx.org.id, img.id, b.module), 201);
     } catch (e) {
       if (e instanceof LedgerError) return json({ imageId: img.id, extractionError: e.errors[0] }, 201);
       console.error(e);
       return json({ imageId: img.id, extractionError: "The photo could not be read right now. Enter the details by hand or try again." }, 201);
     }
   }],
-  ["POST", /^receipts\/([^/]+)\/extract$/, async (req, [id]) => json(await extractReceipt((await requireApiCtx(req, "pettycash.capture")).org.id, id))],
+  ["POST", /^receipts\/([^/]+)\/extract$/, async (req, [id], url) => json(await extractReceipt((await requireApiCtx(req, "pettycash.capture")).org.id, id, url.searchParams.get("module")))],
   ["GET", /^receipts\/([^/]+)\/image$/, async (req, [id]) => {
     const ctx = await requireApiCtx(req);
     const img = await prisma.receiptImage.findFirst({ where: { id, organizationId: ctx.org.id } });
