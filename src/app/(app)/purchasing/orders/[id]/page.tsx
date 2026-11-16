@@ -25,6 +25,8 @@ export default async function PoView({ params }: { params: Promise<{ id: string 
     poProgress(prisma, po.id),
     prisma.apBill.findMany({ where: { purchaseOrderId: po.id, status: { not: "VOID" } }, orderBy: { date: "asc" } }),
   ]);
+  const stocked = new Map((await prisma.product.findMany({ where: { organizationId: ctx.org.id, isStocked: true, id: { in: progress.map((p) => p.line.productId).filter(Boolean) as string[] } } })).map((p) => [p.id, p]));
+  const warehouses = stocked.size ? await prisma.warehouse.findMany({ where: { organizationId: ctx.org.id, isActive: true }, orderBy: { code: "asc" } }) : [];
   const accounts = new Map((await prisma.account.findMany({ where: { id: { in: progress.map((p) => p.line.accountId) } } })).map((a) => [a.id, a]));
   const who = await userNames([po.createdById, po.approvedById]);
   const total = roundDiv(cents(po.amount) * q4of(po.fxRate), 10000n);
@@ -87,10 +89,11 @@ export default async function PoView({ params }: { params: Promise<{ id: string 
           <div><label>Date received</label><input type="date" name="date" defaultValue={today()} required /></div>
           <div><label>Supplier&apos;s delivery receipt no.</label><input name="deliveryRef" /></div>
           <div style={{ flex: 2 }}><label>Notes</label><input name="notes" /></div>
+          {warehouses.length > 0 && <div><label>Receive stock into</label><select name="warehouseId" defaultValue=""><option value="">Item default warehouse</option>{warehouses.map((w) => <option key={w.id} value={w.id}>{w.code} · {w.name}</option>)}</select></div>}
         </div>
         <table style={{ marginTop: 8 }}><thead><tr><th>Item</th><th className="num">Still to receive</th><th className="num" style={{ width: 140 }}>Received now</th><th>Remarks (damaged, short)</th></tr></thead>
-          <tbody>{progress.filter((p) => p.received < p.ordered).map((p) => <tr key={p.line.id}><td>{p.line.description}</td><td className="num">{fromQ4(p.ordered - p.received)} {p.line.unit}</td><td><input name={`qty_${p.line.id}`} className="num" defaultValue={fromQ4(p.ordered - p.received)} /></td><td><input name={`rem_${p.line.id}`} /></td></tr>)}</tbody></table>
-        <p className="muted">Posting books the cost as received and not yet invoiced (Dr expense / inventory / asset, Cr Goods Received Not Yet Invoiced). The supplier&apos;s invoice clears it.</p>
+          <tbody>{progress.filter((p) => p.received < p.ordered).map((p) => <tr key={p.line.id}><td>{p.line.description}</td><td className="num">{fromQ4(p.ordered - p.received)} {p.line.unit}</td><td><input name={`qty_${p.line.id}`} className="num" defaultValue={fromQ4(p.ordered - p.received)} /></td><td><input name={`rem_${p.line.id}`} />{p.line.productId && stocked.get(p.line.productId)?.costingMethod === "SPECIFIC" && <input name={`lot_${p.line.id}`} placeholder="Lot / serial no." required style={{ marginTop: 4 }} />}</td></tr>)}</tbody></table>
+        <p className="muted">Posting books the cost as received and not yet invoiced (Dr expense / inventory / asset, Cr Goods Received Not Yet Invoiced). The supplier&apos;s invoice clears it.{stocked.size > 0 && " Inventory items are added to stock in the warehouse at the PO cost."}</p>
         <button>Post receiving report</button>
       </ActionForm>}
 

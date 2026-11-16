@@ -15,13 +15,13 @@ export type Field = {
   list?: boolean; // show in list table
 };
 
-export type MasterKind = "accounts" | "dimensions" | "taxes" | "banks" | "products" | "employees" | "vendors" | "customers" | "currencies" | "assets" | "asset-categories";
+export type MasterKind = "accounts" | "dimensions" | "taxes" | "banks" | "products" | "employees" | "vendors" | "customers" | "currencies" | "assets" | "asset-categories" | "warehouses" | "locations";
 
 export type MasterDef = {
   kind: MasterKind;
   title: string;
   singular: string;
-  model: "account" | "dimensionValue" | "taxCode" | "bankAccount" | "product" | "employee" | "vendor" | "customer" | "currency" | "fixedAsset" | "assetCategory";
+  model: "account" | "dimensionValue" | "taxCode" | "bankAccount" | "product" | "employee" | "vendor" | "customer" | "currency" | "fixedAsset" | "assetCategory" | "warehouse" | "warehouseLocation";
   fields: Field[];
 };
 
@@ -99,6 +99,37 @@ export const MASTERS: Record<MasterKind, MasterDef> = {
       { key: "vatType", header: "VAT Type", type: "enum", options: ["VATABLE", "ZERO_RATED", "EXEMPT"], example: "VATABLE", list: true },
       { key: "salesAccountCode", header: "Sales Account Code", type: "text", example: "4010" },
       { key: "expenseAccountCode", header: "Cost/Expense Account Code", type: "text", example: "5010" },
+      { key: "isStocked", header: "Track Inventory", type: "bool", example: true, list: true, help: "TRUE = an inventory item: tracked by warehouse in the stock ledger and costed under PAS 2. Default FALSE." },
+      { key: "category", header: "Item Category", type: "text", example: "Office supplies", list: true },
+      { key: "barcode", header: "Barcode", type: "text", example: "4800016644108", help: "EAN/UPC or your own code. A barcode scanner can type it into any item box." },
+      { key: "costingMethod", header: "Costing Method", type: "enum", options: ["WEIGHTED_AVERAGE", "FIFO", "SPECIFIC"], example: "WEIGHTED_AVERAGE", list: true, help: "PAS 2: WEIGHTED_AVERAGE (moving average per warehouse), FIFO, or SPECIFIC identification (each lot/serial no. keeps its own cost). LIFO is not allowed. Cannot change once the item has stock movements." },
+      { key: "standardCost", header: "Standard Cost", type: "number", example: 190, help: "Reference cost per unit. Used as the default cost of receipts and count gains when there is no other cost." },
+      { key: "reorderPoint", header: "Reorder Point", type: "number", example: 20, help: "Stock status flags the item when on hand falls to or below this." },
+      { key: "reorderQty", header: "Reorder Quantity", type: "number", example: 100 },
+      { key: "defaultWarehouseCode", header: "Default Warehouse", type: "text", example: "WH-MAIN" },
+      { key: "defaultLocationCode", header: "Default Location / Bin", type: "text", example: "A-01" },
+      { key: "defaultVendorCode", header: "Default Vendor Code", type: "text", example: "V-0001" },
+      { key: "inventoryAccountCode", header: "Inventory GL Account", type: "text", example: "1200", help: "Blank = the account with the INVENTORY role (1200 Merchandise Inventory)." },
+      { key: "cogsAccountCode", header: "COGS Account", type: "text", example: "5010", help: "Charged when the item is sold or issued. Blank = Cost/Expense Account Code, then 5010 Cost of Goods Sold." },
+      active,
+    ],
+  },
+  warehouses: {
+    kind: "warehouses", title: "Warehouses", singular: "Warehouse", model: "warehouse",
+    fields: [
+      { key: "code", header: "Warehouse Code", type: "text", required: true, example: "WH-MAIN", list: true },
+      { key: "name", header: "Warehouse Name", type: "text", required: true, example: "Main Warehouse - Valenzuela", list: true },
+      { key: "address", header: "Address", type: "text", example: "Km 14 MacArthur Hwy, Valenzuela City", list: true },
+      { key: "branchCode", header: "Branch Code", type: "text", example: "", list: true, help: "Optional BRANCH dimension code. Inventory GL lines of this warehouse are tagged with it." },
+      active,
+    ],
+  },
+  locations: {
+    kind: "locations", title: "Warehouse Locations (Bins)", singular: "Location", model: "warehouseLocation",
+    fields: [
+      { key: "warehouseCode", header: "Warehouse Code", type: "text", required: true, example: "WH-MAIN", list: true },
+      { key: "code", header: "Location Code", type: "text", required: true, example: "A-01", list: true, help: "Rack / shelf / bin, e.g. A-01-03. Unique within the warehouse." },
+      { key: "name", header: "Description", type: "text", required: true, example: "Aisle A, rack 1", list: true },
       active,
     ],
   },

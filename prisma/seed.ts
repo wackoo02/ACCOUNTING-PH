@@ -13,6 +13,7 @@ import { importStatement, statementTemplate } from "../src/lib/bank/recon";
 import ExcelJS from "exceljs";
 import { approveVoucher, createFund, createVoucher, financeClear } from "../src/lib/pettycash/service";
 import { scanAsset, startAudit } from "../src/lib/assets/audit";
+import { approveInventory, saveInventoryTransaction } from "../src/lib/inventory/service";
 import { addAsset, disposeAsset, runDepreciation } from "../src/lib/assets/service";
 
 async function main() {
@@ -192,6 +193,30 @@ async function main() {
   const audit = await startAudit(P, bk.id, { name: "Q1 asset count", location: "Makati HQ" });
   await scanAsset(P, bk.id, audit.id, { tagText: "VFA:FA-000101", condition: "GOOD" });
   await scanAsset(P, bk.id, audit.id, { tagText: "VFA:FA-000102", condition: "FOR_REPAIR" });
+  // Inventory: two warehouses, bins, items under each costing method, and some movements.
+  await importMasters("warehouses", P, owner.id, [{ code: "WH-MNL", name: "Main Warehouse - Valenzuela" }, { code: "WH-CEB", name: "Cebu Branch Stockroom" }]);
+  await importMasters("locations", P, owner.id, [
+    { warehouseCode: "WH-MNL", code: "A-01", name: "Aisle A rack 1" }, { warehouseCode: "WH-MNL", code: "B-01", name: "Aisle B rack 1" }, { warehouseCode: "WH-CEB", code: "S-01", name: "Shelf 1" },
+  ]);
+  await importMasters("products", P, owner.id, [
+    { code: "INV-001", name: "Bond paper A4 70gsm (ream)", kind: "GOODS", unit: "ream", sellingPrice: "260", purchaseCost: "195", isStocked: true, category: "Paper", barcode: "4800016644108", costingMethod: "WEIGHTED_AVERAGE", standardCost: "195", reorderPoint: "50", reorderQty: "200", defaultWarehouseCode: "WH-MNL", defaultLocationCode: "A-01" },
+    { code: "INV-002", name: "Laser toner cartridge 85A", kind: "GOODS", unit: "pc", sellingPrice: "3200", purchaseCost: "2450", isStocked: true, category: "Printer supplies", costingMethod: "FIFO", standardCost: "2450", reorderPoint: "5", reorderQty: "10", defaultWarehouseCode: "WH-MNL", defaultLocationCode: "B-01" },
+    { code: "INV-003", name: "Thermal receipt printer", kind: "GOODS", unit: "unit", sellingPrice: "9800", purchaseCost: "7200", isStocked: true, category: "Equipment", costingMethod: "SPECIFIC", standardCost: "7200", defaultWarehouseCode: "WH-MNL" },
+  ]);
+  const wh = async (code: string) => (await prisma.warehouse.findFirstOrThrow({ where: { organizationId: P, code } })).id;
+  const item = async (code: string) => (await prisma.product.findFirstOrThrow({ where: { organizationId: P, code } })).id;
+  const MNL = await wh("WH-MNL"), CEB = await wh("WH-CEB");
+  const inv = (x: Omit<Parameters<typeof saveInventoryTransaction>[0], "organizationId" | "userId">) => saveInventoryTransaction({ organizationId: P, userId: bk.id, ...x });
+  await inv({ type: "RECEIPT", date: dt("01-06"), warehouseId: MNL, partyType: "VENDOR", partyId: "V-0001", reference: "DR 5521", memo: "Delivery from supplier", action: "post",
+    lines: [{ itemId: await item("INV-001"), qty: "200", unitCost: "190" }, { itemId: await item("INV-002"), qty: "10", unitCost: "2400" },
+      { itemId: await item("INV-003"), qty: "1", unitCost: "7000", lotNo: "TP-24-0001" }, { itemId: await item("INV-003"), qty: "1", unitCost: "7350", lotNo: "TP-24-0002" }] });
+  await inv({ type: "RECEIPT", date: dt("01-20"), warehouseId: MNL, partyType: "VENDOR", partyId: "V-0001", reference: "DR 5580", memo: "Second delivery", action: "post",
+    lines: [{ itemId: await item("INV-001"), qty: "100", unitCost: "205" }, { itemId: await item("INV-002"), qty: "5", unitCost: "2500" }] });
+  await inv({ type: "ISSUE", date: dt("01-22"), warehouseId: MNL, reference: "SI 0003", memo: "Sale to customer", action: "post",
+    lines: [{ itemId: await item("INV-001"), qty: "180" }, { itemId: await item("INV-002"), qty: "12" }, { itemId: await item("INV-003"), qty: "1", lotNo: "TP-24-0002" }] });
+  await inv({ type: "TRANSFER", date: dt("01-25"), warehouseId: MNL, toWarehouseId: CEB, memo: "Stock for Cebu branch", action: "post", lines: [{ itemId: await item("INV-001"), qty: "40" }] });
+  const adj = await inv({ type: "ADJUSTMENT", date: dt("01-31"), warehouseId: MNL, memo: "Water-damaged reams", action: "submit", lines: [{ itemId: await item("INV-001"), qty: "-3", description: "Leak in aisle A" }] });
+  await approveInventory(P, acc.id, adj.id);
   // Fixed assets: a purchase posted through AP, three monthly depreciation runs and a sale.
   const mac = await addAsset(P, owner.id, { name: "MacBook Pro 14 (design)", categoryCode: "IT", location: "Makati HQ", custodianCode: "E-003", costCenterCode: "CC-SALES",
     acquisitionDate: new Date(`${y}-02-03`), cost: "128000", postToGl: true, offsetAccountCode: "2010", reference: "SI 88412" });

@@ -87,6 +87,25 @@ One-time setup for the whole Veritus service (platform operator only):
 2. Set the stream's webhook URL to `https://veritus:<secret>@<your-app>/api/inbound/ap-email`. Emails are routed to the company by recipient address.
 3. In Vercel set `AP_INBOX_DOMAIN` (e.g. inbox.veritus.ph), `INBOUND_WEBHOOK_SECRET` (the same random secret, 16+ characters) and `ANTHROPIC_API_KEY` (optional `AP_INVOICE_MODEL`). Without a key, documents still arrive and are keyed in by hand.
 
+## What's in Phase 6: Inventory and warehouse (PAS 2)
+**Master data** (Master Lists, Excel upload): Products and Prices gains Track Inventory, category, barcode, costing method, standard cost, reorder point and quantity, default warehouse / bin / vendor, inventory GL account and COGS account. New lists: Warehouses (optionally tagged to a branch) and Warehouse Locations (bins).
+
+**Costing** (`src/lib/inventory/engine.ts`): FIFO, moving weighted average per warehouse, and specific identification by lot / serial no. (no LIFO). Every inbound quantity is a cost layer keeping its receipt date through transfers; taking the last unit always takes the exact remaining value; stock can never go negative.
+
+**Documents** (draft → post; adjustments need approval with segregation of duties), each posting to the GL as source INVENTORY:
+- Receipt RR: Dr Inventory / Cr Goods Received Not Yet Invoiced (or a chosen account)
+- Issue IS: Dr COGS (item's account, or a chosen expense account with dimensions) / Cr Inventory
+- Transfer ST between warehouses or bins: no GL, cost and age move with the stock
+- Adjustment IA (+/−): against 5030 Inventory Losses and Count Adjustments
+- Customer return CRT (Dr Inventory / Cr COGS) and return to vendor VRT (Dr GRNI or AP / Cr Inventory)
+- Void restores the stock and reverses the GL entry (a receipt only while its stock is unused); inventory GL entries cannot be reversed from the journal screen.
+
+**Counts**: cycle counts (by category, bin or items) and full physical counts with a printable, optionally blind count sheet; items found can be added; variances post as one approved adjustment.
+
+**Reports**: stock status with bins/lots and reorder flags, inventory valuation as of any date reconciled to the inventory GL accounts, aging by receipt date, slow-moving / non-moving, turnover and days on hand, and a stock card per item. **Barcodes**: scan box on every document (USB/Bluetooth scanners), printable Code 128 labels.
+
+**Hooks for Purchasing and Sales** (`src/lib/inventory/hooks.ts`): `receiveGoodsTx`, `issueGoodsTx`, `returnFromCustomerTx`, `returnToVendorTx`, `voidBySourceTx`, `onHand`. Call them inside your own transaction; documents they create can only be voided from the source document.
+
 ## Veritus Mobility app and Expense & Mobility (Phase 7, part)
 **Mobile app** at `/m`: an installable web app (PWA). On iPhone open it in Safari → Share → Add to Home Screen; on Android Chrome offers "Install app". Same login as the web ERP. Tiles: Petty Cash, Travel (local and international, foreign receipts translated to English and converted at the day's rate), Transport (Grab, inDrive, JoyRide, Angkas, taxi), Sent Package (Lalamove, Transportify, couriers), Sales Invoice (scan an issued invoice and post the sale) and Asset Audit (scan QR stickers).
 
@@ -119,6 +138,20 @@ One-time setup for the whole Veritus service (platform operator only):
 **PDF and email**: BIR-format sales invoice, credit memo, collection receipt and statement PDFs (`/api/receivables/pdf`). Email to the customer's Invoice Emails with the PDF attached needs `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `MAIL_FROM` on the server; every send is logged.
 
 **Contract billing**: subscriptions and retainer contracts invoice every month/quarter/half/year (catching up missed periods, never billing a period twice); project contracts bill milestones by % or amount of the contract value. Hooks for POS (series type POS_INVOICE, invoice source POS) and scanned invoices (source SCAN) are in place.
+
+## Debt: loans and borrowings
+**Loan master** (Debt → Loans and Borrowings): loan number, lender (optionally linked to a vendor), loan type (term loan, revolving line, notes payable, related party), original principal or credit limit, rate (fixed or floating) and day count (Actual/365, Actual/360, 30/360), start, first payment and maturity dates, payment terms (monthly to annual or single payment; equal installments, equal principal, or bullet; principal grace months), and the current portion, non-current portion, interest expense, accrued interest and (optional) unamortized transaction cost accounts.
+
+**Transactions** (all post to the GL as source DEBT; undo is only from the loan page):
+- Drawdown: bank receives the proceeds net of transaction costs; the loan is credited and split into current / non-current; the repayment schedule and effective interest rate are computed from the drawdown date. Revolving lines can be drawn again up to the limit.
+- Interest accrual by the effective interest method (PFRS 9): expense at the EIR on the carrying amount, payable at the contract rate, the difference amortizes the transaction costs.
+- Principal and interest payments create a **cash disbursement voucher** (approval workflow, checks, bank reconciliation). Interest is accrued to the payment date first; principal settles the current portion first; the loan updates when the voucher is posted or voided. Fully repaid loans are settled and leftover costs written off.
+- Period-end run: accrues every loan to the date, then moves principal due within 12 months from non-current to current (PAS 1). An unwaived covenant breach at the date makes the whole loan current.
+- Modification: PFRS 9 10% test. Non-substantial: carrying amount adjusted to the new cash flows at the original EIR, gain or loss recognized, fees amortized. Substantial: old loan derecognized, unamortized costs and fees expensed. Floating-rate resets and re-amortization after a prepayment change the EIR going forward with no gain or loss.
+
+**Reports**: debt schedule with GL agreement per account, debt aging (contractual maturity buckets with undiscounted interest per PFRS 7, and past-due installments by days), amortization table per loan (contract and EIR columns, paid / overdue status), covenant monitoring (current ratio, debt to equity, liabilities to equity, interest coverage, DSCR, net debt to EBITDA, minimum net worth, or a manual value; pass / watch / breach / waived).
+
+Loans are in the company's base currency for now. Code: `src/lib/debt/schedule.ts` (pure schedule and EIR math), `src/lib/debt/service.ts`.
 
 ## What's in Fixed Assets (PAS 16)
 **Master data** (Fixed Assets → Asset Register, or Excel upload under Master Lists): asset no. (auto-numbered per category prefix, e.g. IT-000001), description, category, serial no., location, department, cost center, custodian, vendor, PO / invoice no., purchase and in-service dates, acquisition cost, useful life, salvage value, depreciation method (straight-line, double declining balance, sum-of-the-years' digits, none for land), GL asset / accumulated depreciation / depreciation expense accounts. **Asset categories** carry the defaults (accounts, life, method, salvage %, number prefix); new companies get Land, Building, IT, Office equipment, Vehicles, Furniture.

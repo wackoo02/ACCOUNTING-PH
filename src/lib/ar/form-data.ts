@@ -4,7 +4,7 @@ import { toCentavos } from "../money";
 
 /** Options for the invoice, credit memo and billing contract forms. */
 export async function invoiceFormData(organizationId: string) {
-  const [customers, products, accounts, dimValues, taxCodes, currencies, org] = await Promise.all([
+  const [customers, products, accounts, dimValues, taxCodes, currencies, org, warehouses] = await Promise.all([
     prisma.customer.findMany({ where: { organizationId, isActive: true }, orderBy: { name: "asc" } }),
     prisma.product.findMany({ where: { organizationId, isActive: true }, orderBy: { code: "asc" } }),
     prisma.account.findMany({ where: { organizationId, isPostable: true, isActive: true, type: { in: ["INCOME", "LIABILITY", "ASSET"] } }, select: { id: true, code: true, name: true, type: true, systemRole: true }, orderBy: { code: "asc" } }),
@@ -12,11 +12,14 @@ export async function invoiceFormData(organizationId: string) {
     prisma.taxCode.findMany({ where: { organizationId, isActive: true, taxType: "EWT" }, orderBy: { code: "asc" } }),
     prisma.currency.findMany({ where: { organizationId, isActive: true } }),
     prisma.organization.findUniqueOrThrow({ where: { id: organizationId } }),
+    prisma.warehouse.findMany({ where: { organizationId, isActive: true }, orderBy: { code: "asc" } }),
   ]);
   const skip = new Set(["AR_CONTROL", "OUTPUT_VAT", "CUSTOMER_ADVANCES"]);
   return {
     customers: customers.map((c) => ({ id: c.id, code: c.code, name: c.name, termsDays: c.paymentTermsDays, currencyCode: c.currencyCode, withholdsTax: c.withholdsTax, invoiceEmails: c.invoiceEmails ?? c.email ?? "" })),
-    products: products.map((p) => ({ id: p.id, code: p.code, name: p.name, unit: p.unit ?? "", price: p.sellingPrice.toString(), vatType: p.vatType, kind: p.kind })),
+    products: products.map((p) => ({ id: p.id, code: p.code, name: p.name, unit: p.unit ?? "", price: p.sellingPrice.toString(), vatType: p.vatType, kind: p.kind,
+      isStocked: p.isStocked, specific: p.isStocked && p.costingMethod === "SPECIFIC", defaultWarehouseCode: p.defaultWarehouseCode ?? "" })),
+    warehouses: warehouses.map((w) => ({ id: w.id, code: w.code, name: w.name })),
     accounts: accounts.filter((a) => !(a.systemRole && skip.has(a.systemRole))),
     dims: DIMENSIONS.map((d) => ({ key: d.key, label: d.label, values: dimValues.filter((v) => v.type === d.type).map((v) => ({ id: v.id, code: v.code, name: v.name })) })).filter((d) => d.values.length),
     taxCodes: taxCodes.map((t) => ({ id: t.id, code: t.code, name: t.name, rate: t.rate.toString() })),

@@ -89,7 +89,7 @@ export async function nextNumber(tx: Tx, organizationId: string, prefix: string,
   return `${key}-${String(seq.next - 1).padStart(6, "0")}`;
 }
 
-async function assertPeriodOpen(tx: Tx, organizationId: string, date: Date) {
+export async function assertPeriodOpen(tx: Tx, organizationId: string, date: Date) {
   const year = date.getUTCFullYear();
   const month = date.getUTCMonth() + 1;
   const p = await tx.fiscalPeriod.findUnique({ where: { organizationId_year_month: { organizationId, year, month } } });
@@ -324,6 +324,12 @@ export async function voidOrReverseTx(tx: Tx, organizationId: string, userId: st
     }
     if (e.source === "FIXED_ASSETS" && e.sourceId && !fromSubledger) {
       throw new LedgerError(["This entry came from Fixed Assets. Undo the asset transaction or the depreciation run there instead."]);
+    }
+    if (e.source === "INVENTORY" && e.sourceId && !fromSubledger) {
+      throw new LedgerError(["This entry came from Inventory. Void the inventory document instead, so the stock ledger and the GL stay in agreement."]);
+    }
+    if (e.source === "DEBT" && e.sourceId && !fromSubledger) {
+      throw new LedgerError(["This entry came from the Debt module. Undo it from the loan's page instead."]);
     }
     if (e.source === "PURCHASES" && e.sourceId && !fromSubledger) {
       throw new LedgerError(["This entry came from Purchasing / Payables. Void the supplier bill or receiving report instead."]);

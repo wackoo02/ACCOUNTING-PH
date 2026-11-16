@@ -8,7 +8,7 @@ export type { NavItem, NavSection };
 
 const MASTER_ICON: Record<string, IconName> = {
   accounts: "accounts", dimensions: "dimensions", taxes: "taxes", banks: "banks", products: "products",
-  employees: "employees", vendors: "vendors", customers: "customers", currencies: "currencies", assets: "fixed-assets",
+  employees: "employees", vendors: "vendors", customers: "customers", currencies: "currencies", assets: "fixed-assets", warehouses: "inventory", locations: "inventory",
 };
 
 export const NAV: NavSection[] = [
@@ -70,6 +70,31 @@ export const NAV: NavSection[] = [
       { href: "/ap/payments", label: "Payment Vouchers", icon: "cash-out" },
       { href: "/ap/aging", label: "AP Aging", icon: "aging" },
       { href: "/ap/2307", label: "BIR 2307 Certificates", icon: "bir" },
+    ],
+  },
+  {
+    title: "Debt",
+    items: [
+      { href: "/debt", label: "Loans and Borrowings", icon: "debt" },
+      { href: "/debt/period-end", label: "Debt Period-end Run", icon: "periods", perm: "journal.post" },
+      { href: "/debt/reports/schedule", label: "Debt Schedule", icon: "gl-listing" },
+      { href: "/debt/reports/aging", label: "Debt Aging and Maturity", icon: "activity" },
+      { href: "/debt/reports/covenants", label: "Covenant Monitoring", icon: "ratio" },
+    ],
+  },
+  {
+    title: "Inventory",
+    items: [
+      { href: "/inventory", label: "Stock Status", icon: "inventory" },
+      { href: "/inventory/transactions", label: "Inventory Transactions", icon: "journal" },
+      { href: "/inventory/transactions/new?type=RECEIPT", label: "Receive Stock", icon: "journal-new", perm: "inventory.transact" },
+      { href: "/inventory/transactions?status=PENDING_APPROVAL", label: "Adjustment Approvals", icon: "approvals", perm: "inventory.approve" },
+      { href: "/inventory/counts", label: "Cycle and Physical Counts", icon: "checks" },
+      { href: "/inventory/reports/valuation", label: "Inventory Valuation", icon: "balance-sheet" },
+      { href: "/inventory/reports/aging", label: "Inventory Aging", icon: "periods" },
+      { href: "/inventory/reports/slow-moving", label: "Slow Moving Inventory", icon: "activity" },
+      { href: "/inventory/reports/turnover", label: "Inventory Turnover", icon: "ratio" },
+      { href: "/inventory/labels", label: "Barcode Labels", icon: "products" },
     ],
   },
   {
@@ -135,8 +160,6 @@ export const COMING_NEXT: { label: string; icon: IconName }[] = [
   { label: "Payroll", icon: "payroll" },
   { label: "Prepaid expenses", icon: "prepaid" },
   { label: "Leases (PFRS 16)", icon: "leases" },
-  { label: "Debt", icon: "debt" },
-  { label: "Inventory", icon: "inventory" },
   { label: "BIR reports", icon: "bir" },
 ];
 

@@ -25,7 +25,7 @@ type Row = { t: "opt"; o: LookupOption; fuzzy?: boolean } | { t: "add"; target: 
 
 const NOUN: Record<MasterKind, string> = {
   accounts: "account", dimensions: "value", taxes: "tax code", banks: "bank / cash account", products: "product",
-  employees: "employee", vendors: "vendor", customers: "customer", currencies: "currency", assets: "asset", "asset-categories": "asset category",
+  employees: "employee", vendors: "vendor", customers: "customer", currencies: "currency", assets: "asset", "asset-categories": "asset category", warehouses: "warehouse", locations: "location",
 };
 
 function rank(o: LookupOption, q: string): number {

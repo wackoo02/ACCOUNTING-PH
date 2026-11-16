@@ -4,10 +4,10 @@ import { saveInvoiceAction } from "@/app/(app)/ar-actions";
 import type { InvoiceFormData } from "@/lib/ar/form-data";
 import { Errors } from "./Errors";
 
-export type InvLine = { productId: string; description: string; quantity: string; unit: string; unitPrice: string; discount: string; vatType: string; accountId: string; dims: Record<string, string> };
+export type InvLine = { productId: string; description: string; quantity: string; unit: string; unitPrice: string; discount: string; vatType: string; accountId: string; dims: Record<string, string>; lotNo?: string };
 export type InvoiceInitial = {
   id?: string; kind: "INVOICE" | "CREDIT_MEMO"; customerId: string; date: string; termsDays: string; dueDate: string; fxRate: string; pricesIncludeVat: boolean;
-  reference: string; memo: string; ewtTaxCodeId: string; creditForId: string; reason: string; lines: InvLine[];
+  reference: string; memo: string; ewtTaxCodeId: string; creditForId: string; reason: string; lines: InvLine[]; warehouseId?: string;
 };
 export const blankLine = (): InvLine => ({ productId: "", description: "", quantity: "1", unit: "", unitPrice: "", discount: "", vatType: "VATABLE", accountId: "", dims: {} });
 const num = (s: string) => { const n = Number(String(s).replace(/,/g, "")); return Number.isFinite(n) ? n : 0; };
@@ -47,7 +47,8 @@ export function LineEditor({ lines, setLines, data, showAccounts }: { lines: Inv
           <Fragment key={i}>
             <tr>
               <td><select value={l.productId} onChange={(e) => pick(i, e.target.value)} aria-label={`Product line ${i + 1}`}><option value="">—</option>{products.map((p) => <option key={p.id} value={p.id}>{p.code} · {p.name}</option>)}</select></td>
-              <td><input value={l.description} onChange={(e) => set(i, { description: e.target.value })} aria-label={`Description line ${i + 1}`} /></td>
+              <td><input value={l.description} onChange={(e) => set(i, { description: e.target.value })} aria-label={`Description line ${i + 1}`} />
+                {products.find((p) => p.id === l.productId)?.specific && <input value={l.lotNo ?? ""} onChange={(e) => set(i, { lotNo: e.target.value })} placeholder="Lot / serial no." aria-label={`Lot line ${i + 1}`} style={{ marginTop: 4 }} />}</td>
               <td><input className="num" inputMode="decimal" value={l.quantity} onChange={(e) => set(i, { quantity: e.target.value })} /></td>
               <td><input value={l.unit} onChange={(e) => set(i, { unit: e.target.value })} /></td>
               <td><input className="num" inputMode="decimal" value={l.unitPrice} onChange={(e) => set(i, { unitPrice: e.target.value })} aria-label={`Unit price line ${i + 1}`} /></td>
@@ -113,6 +114,8 @@ export function InvoiceForm(props: { data: InvoiceFormData; initial: InvoiceInit
               {creditable.filter((c) => c.customerId === h.customerId).map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}</select></div>}
           {cm && <div style={{ flex: 2 }}><label>Reason</label><input value={h.reason} onChange={(e) => setH({ ...h, reason: e.target.value })} placeholder="e.g. Returned 2 units, price adjustment" required /></div>}
           <div><label>Reference (customer PO, DR no.)</label><input value={h.reference} onChange={(e) => setH({ ...h, reference: e.target.value })} /></div>
+          {!cm && data.warehouses.length > 0 && lines.some((l) => data.products.find((p) => p.id === l.productId)?.isStocked) && <div><label>Ship from warehouse</label>
+            <select value={h.warehouseId ?? ""} onChange={(e) => setH({ ...h, warehouseId: e.target.value })}><option value="">Item default</option>{data.warehouses.map((w) => <option key={w.id} value={w.id}>{w.code} · {w.name}</option>)}</select></div>}
           {!cm && <div style={{ flex: 2 }}><label>Tax the customer will withhold (BIR 2307)</label>
             <select value={h.ewtTaxCodeId} onChange={(e) => setH({ ...h, ewtTaxCodeId: e.target.value })}><option value="">None</option>{taxCodes.map((x) => <option key={x.id} value={x.id}>{x.code} · {x.name}</option>)}</select></div>}
         </div>

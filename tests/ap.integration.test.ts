@@ -6,7 +6,7 @@ import { importMasters } from "@/lib/masters/store";
 import { recordJournal } from "@/lib/ledger/service";
 import { saveApprovalRule, canApproveNow } from "@/lib/approvals";
 import {
-  approvePo, approvePurchaseRequest, awardRfq, createRfq, recordGoodsReceipt, saveQuote, savePurchaseRequest, submitPurchaseOrder, voidGoodsReceipt,
+  approvePo, approvePurchaseRequest, awardRfq, createRfq, recordGoodsReceipt, saveQuote, savePurchaseOrder, savePurchaseRequest, submitPurchaseOrder, voidGoodsReceipt,
 } from "@/lib/purchasing/service";
 import { approveBill, saveBill, voidBill } from "@/lib/ap/bills";
 import { approvePayment, certificatesForPayment, createPaymentRun, savePayment, voidPayment } from "@/lib/ap/payments";
@@ -52,6 +52,11 @@ afterAll(async () => {
     const m = (prisma as any)[t];
     await m.deleteMany(t.endsWith("Line") || t === "rfqQuote" ? {} : { where: { organizationId: org } }).catch(() => undefined);
   }
+  await prisma.inventoryMove.deleteMany({ where: { organizationId: org } });
+  await prisma.inventoryLayer.deleteMany({ where: { organizationId: org } });
+  await prisma.inventoryBalance.deleteMany({ where: { organizationId: org } });
+  await prisma.inventoryTransaction.deleteMany({ where: { organizationId: org } });
+  await prisma.warehouse.deleteMany({ where: { organizationId: org } });
   await prisma.journalLine.deleteMany({ where: { organizationId: org } });
   await prisma.journalEntry.updateMany({ where: { organizationId: org }, data: { reversalOfId: null } });
   await prisma.journalEntry.deleteMany({ where: { organizationId: org } });
@@ -214,5 +219,40 @@ describe("procure to pay", () => {
     await saveInboxSettings(org, owner, { alias: "acme-ap", address: "", senders: "", enabled: false });
     const off = await prisma.organization.findUniqueOrThrow({ where: { id: org } });
     expect((await receiveInboundEmail(off, mail)).ids).toHaveLength(0);
+  });
+});
+
+describe("receiving inventory items", () => {
+  it("adds stocked PO lines to the warehouse through inventory, once, and voids them with the receiving report", async () => {
+    await importMasters("warehouses", org, owner, [{ code: "WH1", name: "Main" }]);
+    await importMasters("products", org, owner, [{ code: "STK", name: "Toner", kind: "GOODS", isStocked: true, costingMethod: "FIFO", defaultWarehouseCode: "WH1" }]);
+    const item = await prisma.product.findFirstOrThrow({ where: { organizationId: org, code: "STK" } });
+    const wh = await prisma.warehouse.findFirstOrThrow({ where: { organizationId: org, code: "WH1" } });
+    const inv = (await prisma.account.findUniqueOrThrow({ where: { organizationId_systemRole: { organizationId: org, systemRole: "INVENTORY" } } })).code;
+    const po = await savePurchaseOrder({ organizationId: org, userId: clerk, vendorId: vendorB, poDate: d("04-01"), description: "Toner", vatInclusive: true, lines: [
+      { productId: item.id, description: "Toner", quantity: "10", unitPrice: "112", category: "INVENTORY", accountId: await acct(inv) },
+      { description: "Delivery", quantity: "1", unitPrice: "560", category: "EXPENSE", accountId: await acct("6060") },
+    ] });
+    await submitPurchaseOrder(org, clerk, po.id);
+    await approvePo(org, accountant, po.id);
+    const [l1, l2] = await prisma.purchaseOrderLine.findMany({ where: { purchaseOrderId: po.id }, orderBy: { lineNo: "asc" } });
+    const grni0 = await balance("2012"), inv0 = await balance(inv), exp0 = await balance("6060");
+
+    const rr = await recordGoodsReceipt(org, clerk, { purchaseOrderId: po.id, date: d("04-03"), lines: [{ poLineId: l1.id, quantity: "4" }, { poLineId: l2.id, quantity: "1" }] });
+    const docs = await prisma.inventoryTransaction.findMany({ where: { organizationId: org, sourceModule: "PURCHASES", sourceId: rr.id } });
+    expect(docs).toHaveLength(1);
+    expect(docs[0].warehouseId).toBe(wh.id);
+    const bal = async () => Number((await prisma.inventoryBalance.findUnique({ where: { itemId_warehouseId: { itemId: item.id, warehouseId: wh.id } } }))?.qty ?? 0);
+    expect(await bal()).toBe(4);
+    expect(Number(docs[0].totalValue)).toBe(400); // 112 VAT-inclusive = 100 net
+    expect(await balance(inv)).toBeCloseTo(inv0 + 400, 2); // booked once, by inventory
+    expect(await balance("6060")).toBeCloseTo(exp0 + 500, 2);
+    expect(await balance("2012")).toBeCloseTo(grni0 - 900, 2);
+
+    await voidGoodsReceipt(org, clerk, rr.id, "Wrong delivery");
+    expect(await bal()).toBe(0);
+    expect(await balance(inv)).toBeCloseTo(inv0, 2);
+    expect(await balance("2012")).toBeCloseTo(grni0, 2);
+    expect((await prisma.inventoryTransaction.findUniqueOrThrow({ where: { id: docs[0].id } })).status).toBe("VOID");
   });
 });
