@@ -77,6 +77,10 @@ export const ICONS = {
   bir: [p("M9 3h6v4.5c0 1.5 1 2.5 2 3.5H7c1-1 2-2 2-3.5z"), rr(4, 11, 16, 5, 1.5), p("M5 20h14", true)],
   wallet: [p("M19 7V5.5A1.5 1.5 0 0 0 17.5 4h-12A2.5 2.5 0 0 0 3 6.5v11A2.5 2.5 0 0 0 5.5 20h13a1.5 1.5 0 0 0 1.5-1.5v-10A1.5 1.5 0 0 0 18.5 7h-13"), p("M21 11.5h-4a1.5 1.5 0 0 0 0 3h4z", true)],
   "cash-out": [p("M12 4v12"), p("M8 12l4 4 4-4"), p("M4 20h16", true)],
+  inbox: [p("M3 13l3-8h12l3 8v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"), p("M3 13h5l1.5 2.5h5L16 13h5", true)],
+  cart: [p("M3 4h2.5l2.2 10.5a1.5 1.5 0 0 0 1.5 1.2h8.3a1.5 1.5 0 0 0 1.5-1.1L21 8H6.3"), circle(9.5, 19.5, 1.5, true), circle(17, 19.5, 1.5, true)],
+  receive: [p("M3 8l9-5 9 5v8l-9 5-9-5z"), p("M3 8l9 5 9-5M12 13v8", true)],
+  aging: [circle(12, 12, 8.5), p("M12 7v5l3.5 2", true)],
   ratio: [p("M5 19L19 5"), circle(7, 7, 2.5, true), circle(17, 17, 2.5, true)],
 } satisfies Record<string, IconDef>;
 
