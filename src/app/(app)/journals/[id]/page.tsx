@@ -13,7 +13,7 @@ import { makeRecurring } from "../../actions";
 
 const SOURCE_LABELS: Record<string, string> = {
   MANUAL: "Manual journal", SALES: "Accounts Receivable (Sales)", PURCHASES: "Accounts Payable (Purchases)", BANK: "Bank", INVENTORY: "Inventory",
-  FIXED_ASSETS: "Fixed Assets", PREPAID: "Prepaid Expenses", LEASE: "Leases", DEBT: "Debt", PAYROLL: "Payroll", EXPENSE_CLAIM: "Expense Claims",
+  FIXED_ASSETS: "Fixed Assets", PREPAID: "Prepaid Expenses", LEASE: "Leases", DEBT: "Debt", PAYROLL: "Payroll", EXPENSE_CLAIM: "Expense Claims", PETTY_CASH: "Petty Cash",
   TAX: "Tax", OPENING_BALANCE: "Opening balance", CLOSING: "Year-end closing", REVERSAL: "Reversal", INTERCOMPANY: "Intercompany",
   CONSOLIDATION: "Consolidation adjustment", FX_REVALUATION: "FX revaluation",
 };

@@ -48,6 +48,8 @@ Turn `SEED_DEMO` off and change or remove the demo users before real company dat
 
 **Reports**: Trial balance, balance sheet, income statement, cash flow (indirect), GL listing, account ledger, account activity, budget vs actual, consolidated TB, KPI dashboard (revenue, gross margin, opex, net profit, current ratio, debt-to-equity, working capital, cash, budget variance, cost per department/project). All filterable by dimension; print to PDF from the browser.
 
+**Petty cash (mobile app API)**: funds, vouchers from receipt photos (AI reads supplier, TIN, items, VAT, tips and proposes the account), VAT/EWT computation, fixed asset threshold with approved PO, approvals, and replenishment batches that post a Petty Cash journal. See [docs/MOBILE_API.md](docs/MOBILE_API.md).
+
 ## Design notes for later modules
 - **One entry point:** `src/lib/ledger/service.ts` → `recordJournal({ source, sourceId, lines, action })`. Sub-ledgers pass their own `source` (SALES, PURCHASES, BANK, PAYROLL, EXPENSE_CLAIM, FIXED_ASSETS, …) and skip the manual approval controls.
 - Find control accounts with `accountByRole(org, "AR_CONTROL")` etc., never hard-coded codes.
