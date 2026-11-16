@@ -87,6 +87,25 @@ One-time setup for the whole Veritus service (platform operator only):
 2. Set the stream's webhook URL to `https://veritus:<secret>@<your-app>/api/inbound/ap-email`. Emails are routed to the company by recipient address.
 3. In Vercel set `AP_INBOX_DOMAIN` (e.g. inbox.veritus.ph), `INBOUND_WEBHOOK_SECRET` (the same random secret, 16+ characters) and `ANTHROPIC_API_KEY` (optional `AP_INVOICE_MODEL`). Without a key, documents still arrive and are keyed in by hand.
 
+## What's in Phase 6: Inventory and warehouse (PAS 2)
+**Master data** (Master Lists, Excel upload): Products and Prices gains Track Inventory, category, barcode, costing method, standard cost, reorder point and quantity, default warehouse / bin / vendor, inventory GL account and COGS account. New lists: Warehouses (optionally tagged to a branch) and Warehouse Locations (bins).
+
+**Costing** (`src/lib/inventory/engine.ts`): FIFO, moving weighted average per warehouse, and specific identification by lot / serial no. (no LIFO). Every inbound quantity is a cost layer keeping its receipt date through transfers; taking the last unit always takes the exact remaining value; stock can never go negative.
+
+**Documents** (draft → post; adjustments need approval with segregation of duties), each posting to the GL as source INVENTORY:
+- Receipt RR: Dr Inventory / Cr Goods Received Not Yet Invoiced (or a chosen account)
+- Issue IS: Dr COGS (item's account, or a chosen expense account with dimensions) / Cr Inventory
+- Transfer ST between warehouses or bins: no GL, cost and age move with the stock
+- Adjustment IA (+/−): against 5030 Inventory Losses and Count Adjustments
+- Customer return CRT (Dr Inventory / Cr COGS) and return to vendor VRT (Dr GRNI or AP / Cr Inventory)
+- Void restores the stock and reverses the GL entry (a receipt only while its stock is unused); inventory GL entries cannot be reversed from the journal screen.
+
+**Counts**: cycle counts (by category, bin or items) and full physical counts with a printable, optionally blind count sheet; items found can be added; variances post as one approved adjustment.
+
+**Reports**: stock status with bins/lots and reorder flags, inventory valuation as of any date reconciled to the inventory GL accounts, aging by receipt date, slow-moving / non-moving, turnover and days on hand, and a stock card per item. **Barcodes**: scan box on every document (USB/Bluetooth scanners), printable Code 128 labels.
+
+**Hooks for Purchasing and Sales** (`src/lib/inventory/hooks.ts`): `receiveGoodsTx`, `issueGoodsTx`, `returnFromCustomerTx`, `returnToVendorTx`, `voidBySourceTx`, `onHand`. Call them inside your own transaction; documents they create can only be voided from the source document.
+
 ## Veritus Mobility app and Expense & Mobility (Phase 7, part)
 **Mobile app** at `/m`: an installable web app (PWA). On iPhone open it in Safari → Share → Add to Home Screen; on Android Chrome offers "Install app". Same login as the web ERP. Tiles: Petty Cash, Travel (local and international, foreign receipts translated to English and converted at the day's rate), Transport (Grab, inDrive, JoyRide, Angkas, taxi), Sent Package (Lalamove, Transportify, couriers), Sales Invoice (scan an issued invoice and post the sale) and Asset Audit (scan QR stickers).
 

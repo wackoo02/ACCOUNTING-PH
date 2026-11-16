@@ -14,6 +14,8 @@ export default async function RrView({ params }: { params: Promise<{ id: string 
   if (!rr) notFound();
   const org = await prisma.organization.findUniqueOrThrow({ where: { id: ctx.org.id } });
   const who = await userNames([rr.receivedById, rr.voidedById]);
+  const stockDocs = await prisma.inventoryTransaction.findMany({ where: { organizationId: ctx.org.id, sourceModule: "PURCHASES", sourceId: rr.id }, orderBy: { createdAt: "asc" } });
+  const whs = new Map((await prisma.warehouse.findMany({ where: { id: { in: stockDocs.map((d) => d.warehouseId) } } })).map((w) => [w.id, w.code]));
   const je = rr.journalEntryId ? await prisma.journalEntry.findUnique({ where: { id: rr.journalEntryId } }) : null;
   return (<>
     <div className="top"><h1>Receiving Report {rr.number} <span className={`badge ${rr.status}`}>{rr.status}</span></h1>
@@ -26,6 +28,7 @@ export default async function RrView({ params }: { params: Promise<{ id: string 
       <div><label>Supplier</label>{rr.purchaseOrder.vendorName}</div>
       <div><label>Delivery receipt no.</label>{rr.deliveryRef || "—"}</div>
       {je && <div><label>GL entry</label><Link href={`/journals/${je.id}`}>{je.number}</Link></div>}
+      {stockDocs.map((d) => <div key={d.id}><label>Stock received into {whs.get(d.warehouseId)}</label><Link href={`/inventory/transactions/${d.id}`}>{d.number}</Link>{d.status === "VOID" && " (void)"}</div>)}
     </div>
     {rr.notes && <p>{rr.notes}</p>}
     <div className="table-wrap"><table>

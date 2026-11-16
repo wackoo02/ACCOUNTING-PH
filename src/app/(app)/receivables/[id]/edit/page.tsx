@@ -25,8 +25,8 @@ export default async function EditInvoice({ params }: { params: Promise<{ id: st
         initial={{
           id: inv.id, kind: inv.kind as "INVOICE" | "CREDIT_MEMO", customerId: inv.customerId, date: fmtDate(inv.date), termsDays: String(inv.termsDays), dueDate: fmtDate(inv.dueDate),
           fxRate: inv.fxRate.toString(), pricesIncludeVat: inv.pricesIncludeVat, reference: inv.reference ?? "", memo: inv.memo ?? "", ewtTaxCodeId: inv.ewtTaxCodeId ?? "",
-          creditForId: inv.creditForId ?? "", reason: inv.reason ?? "",
-          lines: inv.lines.map((l) => ({ productId: l.productId ?? "", description: l.description, quantity: l.quantity.toString(), unit: l.unit ?? "", unitPrice: l.unitPrice.toString(), discount: l.discount.toString() === "0" ? "" : l.discount.toString(), vatType: l.vatType, accountId: l.accountId, dims: (l.dims ?? {}) as Record<string, string> })),
+          creditForId: inv.creditForId ?? "", reason: inv.reason ?? "", warehouseId: inv.warehouseId ?? "",
+          lines: inv.lines.map((l) => ({ productId: l.productId ?? "", description: l.description, quantity: l.quantity.toString(), unit: l.unit ?? "", unitPrice: l.unitPrice.toString(), discount: l.discount.toString() === "0" ? "" : l.discount.toString(), vatType: l.vatType, accountId: l.accountId, dims: (l.dims ?? {}) as Record<string, string>, lotNo: l.lotNo ?? "" })),
         }} />
     </>
   );

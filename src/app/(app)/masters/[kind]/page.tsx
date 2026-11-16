@@ -49,7 +49,7 @@ export default async function MasterList({ params, searchParams }: { params: Pro
           {rows.map((r) => (
             <tr key={String(r.id)} className={kind === "accounts" && r.isPostable === false ? "header" : ""}>
               {cols.map((f) => <td key={f.key} className={f.type === "number" || f.type === "int" ? "num" : ""}>{show(f, r[f.key])}</td>)}
-              {admin && <td><Link href={`/masters/${kind}/edit?code=${encodeURIComponent(String(r.code))}${kind === "dimensions" ? `&type=${r.type}` : ""}`}>Edit</Link></td>}
+              {admin && <td><Link href={`/masters/${kind}/edit?code=${encodeURIComponent(String(r.code))}${kind === "dimensions" ? `&type=${r.type}` : kind === "locations" ? `&type=${encodeURIComponent(String(r.warehouseCode))}` : ""}`}>Edit</Link></td>}
             </tr>
           ))}
           {rows.length === 0 && <tr><td colSpan={cols.length + 1} className="muted">No records yet. Add one, or download the template, fill it in and upload it.</td></tr>}
