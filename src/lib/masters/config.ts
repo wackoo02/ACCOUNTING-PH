@@ -15,13 +15,13 @@ export type Field = {
   list?: boolean; // show in list table
 };
 
-export type MasterKind = "accounts" | "dimensions" | "taxes" | "products" | "employees" | "vendors" | "customers" | "currencies";
+export type MasterKind = "accounts" | "dimensions" | "taxes" | "banks" | "products" | "employees" | "vendors" | "customers" | "currencies";
 
 export type MasterDef = {
   kind: MasterKind;
   title: string;
   singular: string;
-  model: "account" | "dimensionValue" | "taxCode" | "product" | "employee" | "vendor" | "customer" | "currency";
+  model: "account" | "dimensionValue" | "taxCode" | "bankAccount" | "product" | "employee" | "vendor" | "customer" | "currency";
   fields: Field[];
 };
 
@@ -66,6 +66,23 @@ export const MASTERS: Record<MasterKind, MasterDef> = {
       { key: "atcCode", header: "BIR ATC", type: "text", example: "WC158", list: true },
       { key: "accountCode", header: "GL Account Code", type: "text", example: "2045", list: true },
       { key: "description", header: "Notes", type: "text", example: "" },
+      active,
+    ],
+  },
+  banks: {
+    kind: "banks", title: "Bank and Cash Accounts", singular: "Bank / cash account", model: "bankAccount",
+    fields: [
+      { key: "code", header: "Code", type: "text", required: true, example: "BDO-CA", list: true, help: "Short code, e.g. BDO-CA, BPI-SA, PCF-ADMIN." },
+      { key: "name", header: "Name", type: "text", required: true, example: "BDO Current Account - Makati", list: true },
+      { key: "kind", header: "Kind", type: "enum", required: true, options: ["CURRENT", "SAVINGS", "PETTY_CASH", "CASH_ON_HAND", "EWALLET"], example: "CURRENT", list: true, help: "CURRENT/SAVINGS = bank (reconciled against statements), PETTY_CASH = imprest fund, CASH_ON_HAND = undeposited collections, EWALLET = GCash/Maya." },
+      { key: "glAccountCode", header: "GL Account Code", type: "text", required: true, example: "1020", list: true, help: "The cash account in the chart of accounts (Cash and cash equivalents). Each bank/cash account needs its own GL account." },
+      { key: "bankName", header: "Bank", type: "text", example: "BDO Unibank", list: true },
+      { key: "branchName", header: "Bank Branch", type: "text", example: "Makati Ayala" },
+      { key: "accountNumber", header: "Account Number", type: "text", example: "0012-3456-7890", list: true },
+      { key: "currencyCode", header: "Currency", type: "text", example: "PHP", list: true, help: "Must match the GL account's currency. Default PHP." },
+      { key: "nextCheckNo", header: "Next Check No.", type: "int", example: 1001, help: "Current accounts: the next check number in the checkbook. Check vouchers are numbered from here." },
+      { key: "custodian", header: "Custodian", type: "text", example: "Maria Santos", help: "Petty cash: the person accountable for the fund." },
+      { key: "fundLimit", header: "Fund Amount (Imprest)", type: "number", example: 10000, help: "Petty cash: the fixed fund amount." },
       active,
     ],
   },

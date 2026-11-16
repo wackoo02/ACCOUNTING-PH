@@ -13,6 +13,10 @@ export async function listMasters(kind: MasterKind, organizationId: string, code
     const rows = await prisma.dimensionValue.findMany({ where, orderBy: [{ type: "asc" }, { code: "asc" }], include: { parent: { select: { code: true } } } });
     return rows.map((r) => ({ ...r, parentCode: r.parent?.code ?? null }));
   }
+  if (kind === "banks") {
+    const rows = await prisma.bankAccount.findMany({ where, orderBy: { code: "asc" }, include: { glAccount: { select: { code: true } } } });
+    return rows.map((r) => ({ ...r, glAccountCode: r.glAccount.code }));
+  }
   const delegate = (prisma as unknown as Record<string, { findMany: (a: unknown) => Promise<Record<string, unknown>[]> }>)[model];
   return delegate.findMany({ where, orderBy: { code: "asc" } });
 }

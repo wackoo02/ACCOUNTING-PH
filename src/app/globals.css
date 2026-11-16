@@ -58,6 +58,14 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 .badge.PENDING_APPROVAL { background: #ddf4ff; color: #0969da; }
 .badge.LOCKED { background: #eee; color: #444; }
 .side nav { padding-bottom: 20px; }
+.print-only { display: none; }
+@media print { .print-only { display: block; } }
+.badge.RECONCILED { background: #dafbe1; color: var(--ok); }
+.badge.high { background: #dafbe1; color: var(--ok); }
+.badge.medium { background: #fff8c5; color: var(--warn); }
+.badge.low { background: #eee; color: #444; }
+td.check, th.check { width: 28px; }
+td.check input, th.check input { width: auto; }
 
 .logo { display: flex; align-items: center; gap: 10px; }
 .logo-name { font-weight: 700; font-size: 16px; letter-spacing: .14em; line-height: 1.1; }

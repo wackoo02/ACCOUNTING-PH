@@ -145,6 +145,7 @@ model Account {
   parent         Account?      @relation("AccountTree", fields: [parentId], references: [id])
   children       Account[]     @relation("AccountTree")
   lines          JournalLine[]
+  bankAccounts   BankAccount[]
 
   @@unique([organizationId, code])
   @@unique([organizationId, systemRole])
@@ -202,7 +203,7 @@ enum JournalSource {
   OPENING_BALANCE
   SALES        // AR invoices / collections
   PURCHASES    // AP bills / payments
-  BANK         // bank reconciliation adjustments
+  BANK         // cash receipts/disbursements, petty cash, fund transfers, bank reconciliation adjustments
   INVENTORY
   FIXED_ASSETS
   PREPAID
@@ -323,6 +324,8 @@ model JournalLine {
   @@index([organizationId, costCenterId])
   @@index([organizationId, profitCenterId])
   @@index([organizationId, partyType, partyId])
+  @@index([organizationId, accountId, clearedAt])
+  @@index([clearingRef])
 }
 
 // Supporting documents (scanned invoice, OR, contract) as links. File storage comes with cloud hosting.
@@ -600,6 +603,133 @@ model AllocationRule {
   isActive        Boolean  @default(true)
   createdById     String
   createdAt       DateTime @default(now())
+}
+
+// ---------- Cash and treasury ----------
+// A bank, cash-on-hand, petty cash or e-wallet account, linked one-to-one to its GL cash account.
+model BankAccount {
+  id             String   @id @default(cuid())
+  organizationId String
+  code           String   // e.g. BDO-CA-001
+  name           String
+  kind           String   @default("CURRENT") // CURRENT | SAVINGS | PETTY_CASH | CASH_ON_HAND | EWALLET
+  bankName       String?
+  branchName     String?
+  accountNumber  String?
+  currencyCode   String   @default("PHP")
+  glAccountId    String
+  custodian      String?  // petty cash custodian
+  fundLimit      Decimal  @db.Decimal(18, 2) @default(0) // petty cash imprest amount
+  nextCheckNo    Int?     // next check number in the current checkbook
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+
+  glAccount      Account  @relation(fields: [glAccountId], references: [id])
+
+  @@unique([organizationId, code])
+  @@unique([organizationId, glAccountId])
+}
+
+// Cash receipt, cash/check disbursement, petty cash voucher or fund transfer.
+// Goes draft -> for approval -> posted, and posts to the GL with source BANK.
+model CashTransaction {
+  id               String    @id @default(cuid())
+  organizationId   String
+  number           String    // CR-2026-000001, CD-, PCV-, FT-
+  type             String    // RECEIPT | DISBURSEMENT | TRANSFER
+  bankAccountId    String    // receipt: deposited to; disbursement: paid from; transfer: from
+  toBankAccountId  String?   // transfer: to
+  date             DateTime  @db.Date
+  payee            String?   // payee (disbursement) or payor (receipt)
+  partyType        String?   // CUSTOMER | VENDOR | EMPLOYEE | PARTNER
+  partyId          String?   // code of the customer / vendor / employee
+  method           String    @default("CASH") // CASH | CHECK | BANK_TRANSFER | ONLINE | EWALLET
+  checkNo          String?
+  checkDate        DateTime? @db.Date
+  checkReleasedAt  DateTime? @db.Date // date the check was handed to the payee
+  reference        String?
+  memo             String
+  currencyCode     String    @default("PHP")
+  fxRate           Decimal   @db.Decimal(18, 6) @default(1)
+  amount           Decimal   @db.Decimal(18, 2) // net cash in the bank account's currency
+  toAmount         Decimal?  @db.Decimal(18, 2) // transfer: amount received, in the receiving account's currency
+  toFxRate         Decimal?  @db.Decimal(18, 6)
+  withholdingTaxCodeId String?
+  withholdingAmount Decimal  @db.Decimal(18, 2) @default(0)
+  lines            Json      // [{ accountId, amount, description, dims }] the other side of the cash entry
+  isReplenishment  Boolean   @default(false) // transfer that replenishes a petty cash fund
+  replenishedById  String?   // petty cash voucher: the replenishment that refilled it
+  status           String    @default("DRAFT") // DRAFT | PENDING_APPROVAL | POSTED | VOID
+  journalEntryId   String?
+  createdById      String
+  updatedById      String?
+  submittedById    String?
+  submittedAt      DateTime?
+  approvedById     String?
+  approvedAt       DateTime?
+  rejectReason     String?
+  voidedById       String?
+  voidedAt         DateTime?
+  voidReason       String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@unique([organizationId, number])
+  @@index([organizationId, bankAccountId])
+  @@index([organizationId, type, status])
+}
+
+// An uploaded bank statement (from the Excel template).
+model BankStatement {
+  id             String    @id @default(cuid())
+  organizationId String
+  bankAccountId  String
+  periodFrom     DateTime  @db.Date
+  periodTo       DateTime  @db.Date
+  openingBalance Decimal   @db.Decimal(18, 2)
+  closingBalance Decimal   @db.Decimal(18, 2)
+  fileName       String?
+  status         String    @default("OPEN") // OPEN | RECONCILED
+  reconciledById String?
+  reconciledAt   DateTime?
+  uploadedById   String
+  createdAt      DateTime  @default(now())
+  lines          BankStatementLine[]
+
+  @@index([organizationId, bankAccountId, periodTo])
+}
+
+model BankStatementLine {
+  id             String        @id @default(cuid())
+  statementId    String
+  organizationId String
+  bankAccountId  String
+  lineNo         Int
+  date           DateTime      @db.Date
+  description    String
+  reference      String?
+  checkNo        String?
+  amount         Decimal       @db.Decimal(18, 2) // + deposit / credit memo, - withdrawal / debit memo
+  runningBalance Decimal?      @db.Decimal(18, 2)
+  fingerprint    String        // detects the same line uploaded twice
+  matchId        String?
+  statement      BankStatement @relation(fields: [statementId], references: [id], onDelete: Cascade)
+  match          BankMatch?    @relation(fields: [matchId], references: [id])
+
+  @@unique([bankAccountId, fingerprint])
+  @@index([organizationId, bankAccountId, matchId])
+}
+
+// Links bank statement lines to the GL cash lines they clear (JournalLine.clearingRef = match id).
+model BankMatch {
+  id             String   @id @default(cuid())
+  organizationId String
+  bankAccountId  String
+  method         String   // SUGGESTED | MANUAL | ADJUSTMENT | NO_STATEMENT
+  note           String?
+  createdById    String
+  createdAt      DateTime @default(now())
+  statementLines BankStatementLine[]
 }
 
 // ---------- Petty cash (mobile app) ----------
