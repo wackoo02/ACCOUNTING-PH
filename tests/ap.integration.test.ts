@@ -222,6 +222,26 @@ describe("procure to pay", () => {
   });
 });
 
+describe("BIR tax engine picks up payables", () => {
+  it("lists the bill's input VAT and EWT, matching AP's own 2307 and the GL", async () => {
+    const { tieOut, taxLines } = await import("@/lib/tax/ledger");
+    const { qap, slsp } = await import("@/lib/tax/lists");
+    const { quarter } = await import("@/lib/tax/periods");
+    const p = quarter(2026, 1);
+    const t = await tieOut(org, p.from, p.to);
+    expect(t.unexplained.filter((u) => u.kind === "INPUT_VAT" || u.kind === "EWT")).toEqual([]);
+    for (const k of t.kinds.filter((x) => x.kind === "INPUT_VAT" || x.kind === "EWT")) expect(k.difference).toBe(0n);
+    const vat = await taxLines(org, p.from, p.to, { kinds: ["INPUT_VAT"] });
+    expect(vat.find((l) => l.vatClass === "CAPITAL_GOODS")).toMatchObject({ base: 10000000n, tax: 1200000n });
+    expect(vat.find((l) => l.vatClass === "GOODS")?.tax).toBe(26786n);
+    const q = await qap(org, "1601EQ", 2026, 1);
+    expect(q.rows).toHaveLength(1);
+    expect(q.rows[0]).toMatchObject({ tin9: "123456789", atcCode: "WC158", tax: 102232n });
+    const s = await slsp(org, p);
+    expect(s.purchases[0]).toMatchObject({ capitalGoods: 10000000n, goods: 223214n });
+  });
+});
+
 describe("receiving inventory items", () => {
   it("adds stocked PO lines to the warehouse through inventory, once, and voids them with the receiving report", async () => {
     await importMasters("warehouses", org, owner, [{ code: "WH1", name: "Main" }]);

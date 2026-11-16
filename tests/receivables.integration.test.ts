@@ -269,3 +269,25 @@ describe("documents", () => {
     expect(Buffer.from((await statementPdf(org, xyz, d("10-01"), d("12-31"))).bytes).subarray(0, 4).toString()).toBe("%PDF");
   });
 });
+
+describe("BIR tax engine picks up receivables", () => {
+  it("lists invoices in the SLSP / 2550Q and customer 2307s in the SAWT, with nothing left to classify", async () => {
+    const { tieOut, taxLines } = await import("@/lib/tax/ledger");
+    const { sawt } = await import("@/lib/tax/lists");
+    const { quarter } = await import("@/lib/tax/periods");
+    const p = quarter(Y, 4);
+    const t = await tieOut(org, p.from, p.to);
+    expect(t.unexplained.filter((u) => u.kind === "OUTPUT_VAT" || u.kind === "CWT")).toEqual([]);
+    for (const k of t.kinds.filter((x) => x.kind === "OUTPUT_VAT" || x.kind === "CWT")) expect(k.difference).toBe(0n);
+    const out = await taxLines(org, p.from, p.to, { kinds: ["OUTPUT_VAT"] });
+    expect(out.some((l) => l.party.name === "XYZ Trading Corp." && l.vatClass === "VATABLE" && l.tax > 0n)).toBe(true);
+    // The voided collection's 2307 is not in the SAWT; a new advance collection with tax withheld is.
+    expect((await sawt(org, p, "1702Q")).rows).toEqual([]);
+    const r = await saveReceipt({ organizationId: org, userId: clerk, customerId: xyz, date: d("11-05"), bankAccountId: bdo, method: "CHECK", checkNo: "990011",
+      cashAmount: "49000", withholdingTaxCodeId: wc160, withholdingAmount: "1000", applications: [], action: "submit" });
+    await approveReceipt(org, accountant, r.id);
+    const s = await sawt(org, p, "1702Q");
+    expect(s.rows.find((x) => x.tin9 === "000987654")).toMatchObject({ atcCode: "WC160", tax: 100000n, base: 5000000n });
+    expect((await tieOut(org, p.from, p.to)).unexplained.filter((u) => u.kind === "CWT")).toEqual([]);
+  });
+});

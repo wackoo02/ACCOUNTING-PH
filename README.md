@@ -207,3 +207,10 @@ Loans are in the company's base currency for now. Code: `src/lib/debt/schedule.t
 Access rules: a report is shared only inside its company, and each person only sees data for entities they are a member of.
 
 For developers: definitions are JSON validated by `src/lib/reporting/definition.ts`. Each report type is a source in `src/lib/reporting/sources/`, listed in `catalog.ts` (what the builder shows) and `run.ts` (how it runs). Later modules (AR/AP invoices, payroll, fixed assets) add a source there and return the common `ReportResult` shape, and get columns, saving, sharing, Excel and printing for free.
+
+## What's in Phase 9: BIR tax engine
+VAT, expanded and final withholding, percentage tax, and taxes withheld by customers, kept in one tax ledger that AR, AP, payroll, cash vouchers and petty cash feed (see [docs/TAX_ENGINE.md](docs/TAX_ENGINE.md)).
+- Returns: 2550Q, 2550M (optional), 2551Q, 0619-E / 1601-EQ, 0619-F / 1601-FQ, with manual items, record of filing (reference no., payment) and the 2550Q VAT closing entry
+- Attachments: SLSP / RELIEF (sales and purchases DAT), QAP, SAWT, 1604-E and 1604-F alphalists (DAT and CSV), BIR 2307 certificates; 1604-C / 2316 hook for payroll
+- Filing calendar with due dates, tax ledger vs GL tie-out, review screen for GL tax lines without details
+- Books of accounts: General Journal, Cash Receipts, Cash Disbursements, Sales and Purchase journals (print / CSV)
