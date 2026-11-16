@@ -5,6 +5,9 @@ import { prisma } from "../src/lib/db";
 import { provisionOrganization } from "../src/lib/org";
 import { postJournal, recordIntercompany, recordJournal, setupIntercompany } from "../src/lib/ledger/service";
 import { importMasters } from "../src/lib/masters/store";
+import { approvePo, approvePurchaseRequest, awardRfq, createRfq, recordGoodsReceipt, saveQuote, savePurchaseRequest, submitPurchaseOrder } from "../src/lib/purchasing/service";
+import { approveBill, saveBill } from "../src/lib/ap/bills";
+import { savePayment } from "../src/lib/ap/payments";
 import { approveCash, saveCashTransaction } from "../src/lib/bank/cash";
 import { importStatement, statementTemplate } from "../src/lib/bank/recon";
 import ExcelJS from "exceljs";
@@ -117,6 +120,34 @@ async function main() {
     [`${y}-01-31`, "W/TAX ON INTEREST", "", "", 17.1, "", 1708718.4],
   ].forEach((r, i) => { ws.getRow(i + 2).values = r; });
   await importStatement({ organizationId: P, userId: bk.id, bankAccountId: BDO, buf: (await wb.xlsx.writeBuffer()) as ArrayBuffer, fileName: "BDO-January.xlsx", openingBalance: "0" });
+  // ---- Purchasing and payables ----
+  await importMasters("vendors", P, owner.id, [
+    { code: "V-0002", name: "TechHub Computers Corp.", tin: "201-555-019-00000", address: "Gilmore Ave, Quezon City", paymentTermsDays: 30, ewtRate: "1", atcCode: "WC158" },
+    { code: "V-0003", name: "Prime Facilities Services Inc.", tin: "305-118-442-00000", paymentTermsDays: 15, ewtRate: "2", atcCode: "WC160" },
+  ]);
+  const vend = async (code: string) => (await prisma.vendor.findFirstOrThrow({ where: { organizationId: P, code } })).id;
+  const ewt = async (code: string) => (await prisma.taxCode.findFirstOrThrow({ where: { organizationId: P, code } })).id;
+  const pr = await savePurchaseRequest({ organizationId: P, userId: bk.id, date: dt("02-02"), neededBy: dt("02-15"), purpose: "Laptops for two new accountants", departmentId: await dim("ADMIN"), action: "submit",
+    lines: [{ description: "Laptop 14in, 16GB RAM", quantity: "2", unit: "pc", estUnitCost: "58000", category: "FIXED_ASSET", accountId: await id("1530") }, { description: "Laptop bag", quantity: "2", unit: "pc", estUnitCost: "1200", category: "EXPENSE", accountId: await id("6060") }] });
+  await approvePurchaseRequest(P, acc.id, pr.id);
+  const rfq = await createRfq(P, bk.id, { requestId: pr.id, date: dt("02-03"), dueDate: dt("02-06") });
+  const q1 = await saveQuote(P, bk.id, rfq.id, { vendorId: await vend("V-0002"), quoteRef: "Q-2231", leadTimeDays: 3, vatInclusive: true, prices: [{ lineNo: 1, unitPrice: "56500" }, { lineNo: 2, unitPrice: "1100" }] });
+  await saveQuote(P, bk.id, rfq.id, { vendorId: await vend("V-0001"), quoteRef: "ABC-77", leadTimeDays: 10, vatInclusive: true, prices: [{ lineNo: 1, unitPrice: "57900" }, { lineNo: 2, unitPrice: "950" }] });
+  const po = await awardRfq(P, bk.id, rfq.id, q1.id);
+  await submitPurchaseOrder(P, bk.id, po.id);
+  await approvePo(P, acc.id, po.id);
+  const pol = await prisma.purchaseOrderLine.findMany({ where: { purchaseOrderId: po.id }, orderBy: { lineNo: "asc" } });
+  await recordGoodsReceipt(P, bk.id, { purchaseOrderId: po.id, date: dt("02-07"), deliveryRef: "DR 50021", lines: pol.map((l) => ({ poLineId: l.id, quantity: l.quantity.toString() })) });
+  const wc158 = await ewt("WC158");
+  const bill1 = await saveBill({ organizationId: P, userId: bk.id, vendorId: await vend("V-0002"), supplierInvoiceNo: "SI 008812", invoiceDate: dt("02-07"), purchaseOrderId: po.id, vatInclusive: true, action: "submit",
+    lines: pol.map((l) => ({ description: l.description, category: l.category, accountId: l.accountId, quantity: l.quantity.toString(), unitPrice: l.unitPrice.toString(), poLineId: l.id })).map((l) => ({ ...l, ewtTaxCodeId: wc158 })) });
+  await approveBill(P, acc.id, bill1.id);
+  const bill2 = await saveBill({ organizationId: P, userId: bk.id, vendorId: await vend("V-0003"), supplierInvoiceNo: "BS-2026-0142", invoiceDate: dt("01-31"), vatInclusive: true, action: "submit",
+    memo: "Janitorial services, January", lines: [{ description: "Janitorial and maintenance services, January", category: "EXPENSE", accountId: await id("6065"), unitPrice: "44800", ewtTaxCodeId: await ewt("WC160"), dims: { departmentId: await dim("ADMIN") } }] });
+  await approveBill(P, acc.id, bill2.id);
+  await saveBill({ organizationId: P, userId: bk.id, vendorId: await vend("V-0003"), supplierInvoiceNo: "BS-2026-0201", invoiceDate: dt("02-28"), vatInclusive: true, action: "submit",
+    memo: "Janitorial services, February", lines: [{ description: "Janitorial and maintenance services, February", category: "EXPENSE", accountId: await id("6065"), unitPrice: "44800", ewtTaxCodeId: await ewt("WC160") }] });
+  await savePayment({ organizationId: P, userId: bk.id, vendorId: await vend("V-0003"), bankAccountId: BDO, date: dt("02-14"), method: "CHECK", lines: [{ billId: bill2.id, amount: (await prisma.apBill.findUniqueOrThrow({ where: { id: bill2.id } })).netPayable.toString() }], action: "submit" });
   // ---- Veritus Mobility: employees linked to the demo users, corporate wallets / card, assets ----
   await importMasters("dimensions", P, owner.id, [{ type: "COST_CENTER", code: "CC-SALES", name: "Sales" }, { type: "COST_CENTER", code: "CC-ADMIN", name: "Administration" }]);
   await importMasters("employees", P, owner.id, [

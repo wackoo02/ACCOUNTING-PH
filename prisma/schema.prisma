@@ -27,12 +27,12 @@ model Organization {
   requireApproval      Boolean @default(true)  // manual entries need approval before posting
   segregationOfDuties  Boolean @default(true)  // the preparer cannot approve/post their own entry
   // Petty cash: an item at or above this unit cost is a fixed asset and needs an approved PO.
-  fixedAssetThreshold  Decimal @db.Decimal(18, 2) @default(5000)
+  fixedAssetThreshold  Decimal  @default(5000) @db.Decimal(18, 2)
   // Entity hierarchy: a holding company is the root; subsidiaries/branches point to their parent.
   // A "group" is the root entity plus all its descendants (used for consolidation).
   parentId       String?
   entityType     String   @default("COMPANY") // COMPANY | SUBSIDIARY | BRANCH | DIVISION
-  ownershipPct   Decimal  @db.Decimal(5, 2) @default(100) // parent's % ownership
+  ownershipPct         Decimal  @default(100) @db.Decimal(5, 2) // parent's % ownership
   createdAt      DateTime @default(now())
 
   parent         Organization?  @relation("EntityTree", fields: [parentId], references: [id])
@@ -57,6 +57,16 @@ model Organization {
   pettyCashBatches  PettyCashBatch[]
   purchaseOrders    PurchaseOrder[]
   receiptImages     ReceiptImage[]
+  // AP invoice inbox, managed by the company's own admin (Payables → AP Invoice Inbox → Email set-up).
+  // apInboxAlias: the company's own Veritus address <alias>@<AP_INBOX_DOMAIN>, routed by the shared webhook.
+  // apInboxAddress: the company's own AP address (e.g. ap@client.ph) that forwards to the Veritus address.
+  // apInboxSenders: optional allow-list of sender emails or @domains (comma separated); blank = anyone.
+  // apInboxToken: optional private webhook for a company that uses its own inbound-email service.
+  apInboxAlias      String?            @unique
+  apInboxEnabled    Boolean            @default(true)
+  apInboxSenders    String?
+  apInboxToken      String?            @unique
+  apInboxAddress    String?
 }
 
 model User {
@@ -247,8 +257,8 @@ model JournalEntry {
   reversalOfId   String?       @unique
   // Both sides of an intercompany transaction share this id (one entry per entity).
   intercompanyGroupId String?
-  totalDebit     Decimal       @db.Decimal(18, 2) @default(0)
-  totalCredit    Decimal       @db.Decimal(18, 2) @default(0)
+  totalDebit          Decimal       @default(0) @db.Decimal(18, 2)
+  totalCredit         Decimal       @default(0) @db.Decimal(18, 2)
   createdById    String
   updatedById    String?
   submittedById  String?
@@ -280,13 +290,13 @@ model JournalLine {
   accountId      String
   description    String?
   // debit/credit are always in the entity's base (local reporting) currency, e.g. PHP.
-  debit          Decimal      @db.Decimal(18, 2) @default(0)
-  credit         Decimal      @db.Decimal(18, 2) @default(0)
+  debit             Decimal   @default(0) @db.Decimal(18, 2)
+  credit            Decimal   @default(0) @db.Decimal(18, 2)
   // Original transaction (forex) amount, currency and the rate used (1 unit = fxRate base).
   currencyCode   String       @default("PHP")
-  fxRate         Decimal      @db.Decimal(18, 6) @default(1)
-  fxDebit        Decimal      @db.Decimal(18, 2) @default(0)
-  fxCredit       Decimal      @db.Decimal(18, 2) @default(0)
+  fxRate            Decimal   @default(1) @db.Decimal(18, 6)
+  fxDebit           Decimal   @default(0) @db.Decimal(18, 2)
+  fxCredit          Decimal   @default(0) @db.Decimal(18, 2)
   // Optional sub-ledger tags so later modules can report by party:
   // customer/vendor (AR/AP aging), employee/partner (expense summary).
   partyType      String?      // CUSTOMER | VENDOR | EMPLOYEE | PARTNER
@@ -376,7 +386,7 @@ model Currency {
   code           String       // ISO 4217, e.g. PHP, USD
   name           String
   symbol         String?
-  rateToBase     Decimal      @db.Decimal(18, 6) @default(1) // 1 unit = X PHP
+  rateToBase     Decimal      @default(1) @db.Decimal(18, 6) // 1 unit = X PHP
   isActive       Boolean      @default(true)
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
@@ -390,8 +400,8 @@ model Product {
   name           String
   kind           String       @default("GOODS") // GOODS | SERVICE
   unit           String?      // pc, box, hr ...
-  sellingPrice   Decimal      @db.Decimal(18, 2) @default(0)
-  purchaseCost   Decimal      @db.Decimal(18, 2) @default(0)
+  sellingPrice       Decimal      @default(0) @db.Decimal(18, 2)
+  purchaseCost       Decimal      @default(0) @db.Decimal(18, 2)
   currencyCode   String       @default("PHP")
   vatType        String       @default("VATABLE") // VATABLE | ZERO_RATED | EXEMPT
   salesAccountCode    String?
@@ -419,7 +429,7 @@ model Employee {
   dateHired      DateTime?    @db.Date
   employmentStatus String?    // REGULAR | PROBATIONARY | CONTRACTUAL | PROJECT
   payBasis       String?      // MONTHLY | DAILY
-  basicRate      Decimal      @db.Decimal(18, 2) @default(0)
+  basicRate        Decimal      @default(0) @db.Decimal(18, 2)
   isPartner      Boolean      @default(false) // owners/partners for expense summary
   // Expense & mobility: defaults for the employee's claims, by dimension code.
   costCenter     String?
@@ -697,7 +707,7 @@ model Vendor {
   phone          String?
   paymentTermsDays Int        @default(30)
   vatRegistered  Boolean      @default(true)
-  ewtRate        Decimal      @db.Decimal(5, 2) @default(0) // expanded withholding %, e.g. 1, 2, 5, 10
+  ewtRate          Decimal      @default(0) @db.Decimal(5, 2) // expanded withholding %, e.g. 1, 2, 5, 10
   atcCode        String?      // BIR alphanumeric tax code, e.g. WC158
   currencyCode   String       @default("PHP")
   isActive       Boolean      @default(true)
@@ -717,7 +727,7 @@ model Customer {
   email          String?
   phone          String?
   paymentTermsDays Int        @default(30)
-  creditLimit    Decimal      @db.Decimal(18, 2) @default(0)
+  creditLimit      Decimal      @default(0) @db.Decimal(18, 2)
   vatRegistered  Boolean      @default(true)
   withholdsTax   Boolean      @default(false) // customer deducts CWT and issues BIR 2307
   currencyCode   String       @default("PHP")
@@ -780,18 +790,18 @@ model Budget {
   fiscalYear       Int
   accountId        String
   dimensionValueId String?      // optional: budget for one department/project/etc.
-  m1  Decimal @db.Decimal(18, 2) @default(0)
-  m2  Decimal @db.Decimal(18, 2) @default(0)
-  m3  Decimal @db.Decimal(18, 2) @default(0)
-  m4  Decimal @db.Decimal(18, 2) @default(0)
-  m5  Decimal @db.Decimal(18, 2) @default(0)
-  m6  Decimal @db.Decimal(18, 2) @default(0)
-  m7  Decimal @db.Decimal(18, 2) @default(0)
-  m8  Decimal @db.Decimal(18, 2) @default(0)
-  m9  Decimal @db.Decimal(18, 2) @default(0)
-  m10 Decimal @db.Decimal(18, 2) @default(0)
-  m11 Decimal @db.Decimal(18, 2) @default(0)
-  m12 Decimal @db.Decimal(18, 2) @default(0)
+  m1               Decimal  @default(0) @db.Decimal(18, 2)
+  m2               Decimal  @default(0) @db.Decimal(18, 2)
+  m3               Decimal  @default(0) @db.Decimal(18, 2)
+  m4               Decimal  @default(0) @db.Decimal(18, 2)
+  m5               Decimal  @default(0) @db.Decimal(18, 2)
+  m6               Decimal  @default(0) @db.Decimal(18, 2)
+  m7               Decimal  @default(0) @db.Decimal(18, 2)
+  m8               Decimal  @default(0) @db.Decimal(18, 2)
+  m9               Decimal  @default(0) @db.Decimal(18, 2)
+  m10              Decimal  @default(0) @db.Decimal(18, 2)
+  m11              Decimal  @default(0) @db.Decimal(18, 2)
+  m12              Decimal  @default(0) @db.Decimal(18, 2)
   updatedAt        DateTime     @updatedAt
 
   @@unique([organizationId, fiscalYear, accountId, dimensionValueId])
@@ -881,7 +891,7 @@ model BankAccount {
   currencyCode   String   @default("PHP")
   glAccountId    String
   custodian      String?  // petty cash custodian
-  fundLimit      Decimal  @db.Decimal(18, 2) @default(0) // petty cash imprest amount
+  fundLimit      Decimal  @default(0) @db.Decimal(18, 2) // petty cash imprest amount
   nextCheckNo    Int?     // next check number in the current checkbook
   isActive       Boolean  @default(true)
   createdAt      DateTime @default(now())
@@ -912,12 +922,12 @@ model CashTransaction {
   reference        String?
   memo             String
   currencyCode     String    @default("PHP")
-  fxRate           Decimal   @db.Decimal(18, 6) @default(1)
+  fxRate               Decimal   @default(1) @db.Decimal(18, 6)
   amount           Decimal   @db.Decimal(18, 2) // net cash in the bank account's currency
   toAmount         Decimal?  @db.Decimal(18, 2) // transfer: amount received, in the receiving account's currency
   toFxRate         Decimal?  @db.Decimal(18, 6)
   withholdingTaxCodeId String?
-  withholdingAmount Decimal  @db.Decimal(18, 2) @default(0)
+  withholdingAmount    Decimal   @default(0) @db.Decimal(18, 2)
   lines            Json      // [{ accountId, amount, description, dims }] the other side of the cash entry
   isReplenishment  Boolean   @default(false) // transfer that replenishes a petty cash fund
   replenishedById  String?   // petty cash voucher: the replenishment that refilled it
@@ -1006,7 +1016,7 @@ model PettyCashFund {
   // Account credited by the replenishment journal. Null = the fund account itself
   // (the disbursement that refills the fund then debits the fund and credits the bank).
   replenishAccountId String?
-  imprestAmount      Decimal      @db.Decimal(18, 2) @default(0)
+  imprestAmount      Decimal            @default(0) @db.Decimal(18, 2)
   isActive           Boolean      @default(true)
   createdAt          DateTime     @default(now())
   organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -1018,6 +1028,7 @@ model PettyCashFund {
 
 enum PurchaseOrderStatus {
   DRAFT
+  PENDING_APPROVAL
   APPROVED
   CLOSED
   CANCELLED
@@ -1031,14 +1042,35 @@ model PurchaseOrder {
   vendorId       String?
   vendorName     String?
   description    String
-  amount         Decimal             @db.Decimal(18, 2)
+  amount           Decimal             @db.Decimal(18, 2) // total incl. VAT
   status         PurchaseOrderStatus @default(DRAFT)
   createdById    String
   approvedById   String?
   approvedAt     DateTime?
   createdAt      DateTime            @default(now())
+  // Purchasing module (petty cash POs leave these blank and have no lines)
+  requestId        String?
+  rfqId            String?
+  deliveryDate     DateTime?           @db.Date
+  deliverTo        String?
+  paymentTermsDays Int?
+  currencyCode     String              @default("PHP")
+  fxRate           Decimal             @default(1) @db.Decimal(18, 6)
+  vatInclusive     Boolean             @default(false) // unit prices include 12% VAT
+  subtotal         Decimal             @default(0) @db.Decimal(18, 2) // net of VAT
+  vatAmount        Decimal             @default(0) @db.Decimal(18, 2)
+  notes            String?
+  updatedById      String?
+  submittedById    String?
+  submittedAt      DateTime?
+  rejectReason     String?
+  closedAt         DateTime?
+  closeReason      String?
   organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   vouchers       PettyCashVoucher[]
+  lines            PurchaseOrderLine[]
+  receipts         GoodsReceipt[]
+  request          PurchaseRequest?    @relation(fields: [requestId], references: [id])
 
   @@unique([organizationId, number])
 }
@@ -1105,7 +1137,7 @@ model PettyCashVoucher {
   noReceipt           Boolean         @default(false)
   noReceiptReason     String?
   currencyCode        String          @default("PHP") // receipt currency (international travel)
-  fxRate              Decimal         @db.Decimal(18, 6) @default(1)
+  fxRate              Decimal                @default(1) @db.Decimal(18, 6)
   foreignTotal        Decimal?        @db.Decimal(18, 2) // receipt total in its own currency
   checks              Json?           // last approval / finance review checks
   financeById         String?
@@ -1125,15 +1157,15 @@ model PettyCashVoucher {
   vendorVatRegistered Boolean         @default(true)
   description         String
   // Amounts as printed on the receipt (VAT-inclusive), in base currency.
-  grossAmount         Decimal         @db.Decimal(18, 2) @default(0)
-  vatAmount           Decimal         @db.Decimal(18, 2) @default(0)
-  vatExemptAmount     Decimal         @db.Decimal(18, 2) @default(0)
-  zeroRatedAmount     Decimal         @db.Decimal(18, 2) @default(0)
+  grossAmount         Decimal                @default(0) @db.Decimal(18, 2)
+  vatAmount           Decimal                @default(0) @db.Decimal(18, 2)
+  vatExemptAmount     Decimal                @default(0) @db.Decimal(18, 2)
+  zeroRatedAmount     Decimal                @default(0) @db.Decimal(18, 2)
   ewtTaxCodeId        String?
-  ewtAmount           Decimal         @db.Decimal(18, 2) @default(0)
-  tipAmount           Decimal         @db.Decimal(18, 2) @default(0)
+  ewtAmount           Decimal                @default(0) @db.Decimal(18, 2)
+  tipAmount           Decimal                @default(0) @db.Decimal(18, 2)
   tipHandwritten      Boolean         @default(false)
-  totalPaid           Decimal         @db.Decimal(18, 2) @default(0) // gross + tip - EWT
+  totalPaid           Decimal                @default(0) @db.Decimal(18, 2) // gross + tip - EWT
   purchaseOrderId     String?
   departmentId        String?
   costCenterId        String?
@@ -1166,7 +1198,7 @@ model PettyCashVoucherLine {
   voucherId          String
   lineNo             Int
   description        String
-  quantity           Decimal          @db.Decimal(18, 4) @default(1)
+  quantity           Decimal          @default(1) @db.Decimal(18, 4)
   unitPrice          Decimal          @db.Decimal(18, 2)
   amount             Decimal          @db.Decimal(18, 2) // VAT-inclusive, as on the receipt
   accountId          String
@@ -1215,7 +1247,7 @@ model FixedAsset {
   custodianCode    String?   // employee no. accountable for it
   serialNo         String?
   acquisitionDate  DateTime? @db.Date
-  cost             Decimal   @db.Decimal(18, 2) @default(0)
+  cost             Decimal   @default(0) @db.Decimal(18, 2)
   accountCode      String?   // property and equipment GL account
   tagCode          String?   // an older / supplier sticker mapped to this asset
   status           String    @default("ACTIVE") // ACTIVE | FOR_REPAIR | MISSING | DISPOSED
@@ -1493,4 +1525,318 @@ model DocumentEmail {
   createdAt      DateTime @default(now())
 
   @@index([organizationId, docType, docId])
+}
+
+// ---------- Approval matrix ----------
+// Rules per document type (PR, PO, BILL, PAYMENT). A document needs every level whose minAmount
+// is at or below its total, in order. Each level is approved by a named person or anyone with a role.
+// No active rules for a type = one approval by an accountant/admin within their approval limit.
+model ApprovalRule {
+  id             String   @id @default(cuid())
+  organizationId String
+  docType        String // PR | PO | BILL | PAYMENT
+  level          Int // 1 = first approver
+  name           String? // e.g. "Department head", "CFO"
+  minAmount      Decimal  @default(0) @db.Decimal(18, 2)
+  approverRole   Role?
+  approverUserId String?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId, docType])
+}
+
+// Approval history of a document. Approvals in the current round are the APPROVED steps after the last SUBMITTED.
+model ApprovalStep {
+  id             String   @id @default(cuid())
+  organizationId String
+  docType        String
+  docId          String
+  level          Int      @default(0)
+  userId         String
+  decision       String // SUBMITTED | APPROVED | RETURNED
+  comment        String?
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId, docType, docId])
+}
+
+// ---------- Purchasing ----------
+model PurchaseRequest {
+  id             String                @id @default(cuid())
+  organizationId String
+  number         String // PR-2026-000001
+  date           DateTime              @db.Date
+  neededBy       DateTime?             @db.Date
+  purpose        String
+  requestedById  String
+  departmentId   String?
+  costCenterId   String?
+  projectId      String?
+  branchId       String?
+  estimatedTotal Decimal               @default(0) @db.Decimal(18, 2)
+  status         String                @default("DRAFT") // DRAFT | PENDING_APPROVAL | APPROVED | ORDERED | CLOSED | CANCELLED
+  submittedAt    DateTime?
+  approvedById   String?
+  approvedAt     DateTime?
+  rejectReason   String?
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+  lines          PurchaseRequestLine[]
+  rfqs           Rfq[]
+  orders         PurchaseOrder[]
+
+  @@unique([organizationId, number])
+  @@index([organizationId, status])
+}
+
+model PurchaseRequestLine {
+  id          String          @id @default(cuid())
+  requestId   String
+  lineNo      Int
+  productId   String?
+  description String
+  quantity    Decimal         @db.Decimal(18, 4)
+  unit        String?
+  estUnitCost Decimal         @default(0) @db.Decimal(18, 2)
+  category    String          @default("EXPENSE") // EXPENSE | INVENTORY | FIXED_ASSET | PREPAYMENT
+  accountId   String?
+  request     PurchaseRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+}
+
+// Request for quotation / canvass: the same items quoted by several suppliers, one is awarded the PO.
+model Rfq {
+  id              String           @id @default(cuid())
+  organizationId  String
+  number          String // RFQ-2026-000001
+  requestId       String?
+  date            DateTime         @db.Date
+  dueDate         DateTime?        @db.Date
+  notes           String?
+  lines           Json // [{ lineNo, description, quantity, unit, productId, category, accountId }]
+  status          String           @default("OPEN") // OPEN | AWARDED | CANCELLED
+  awardedQuoteId  String?
+  awardReason     String?
+  purchaseOrderId String?
+  createdById     String
+  createdAt       DateTime         @default(now())
+  request         PurchaseRequest? @relation(fields: [requestId], references: [id])
+  quotes          RfqQuote[]
+
+  @@unique([organizationId, number])
+}
+
+model RfqQuote {
+  id               String    @id @default(cuid())
+  rfqId            String
+  vendorId         String
+  quoteRef         String?
+  quoteDate        DateTime? @db.Date
+  validUntil       DateTime? @db.Date
+  leadTimeDays     Int?
+  paymentTermsDays Int?
+  vatInclusive     Boolean   @default(true)
+  prices           Json // [{ lineNo, unitPrice }] ; a missing line = not offered
+  total            Decimal   @db.Decimal(18, 2) // incl. VAT
+  remarks          String?
+  createdAt        DateTime  @default(now())
+  rfq              Rfq       @relation(fields: [rfqId], references: [id], onDelete: Cascade)
+
+  @@unique([rfqId, vendorId])
+}
+
+model PurchaseOrderLine {
+  id              String             @id @default(cuid())
+  purchaseOrderId String
+  lineNo          Int
+  productId       String?
+  description     String
+  quantity        Decimal            @db.Decimal(18, 4)
+  unit            String?
+  unitPrice       Decimal            @db.Decimal(18, 4) // as entered (VAT-inclusive if the PO says so)
+  vatType         String             @default("VATABLE") // VATABLE | ZERO_RATED | EXEMPT
+  netAmount       Decimal            @db.Decimal(18, 2) // net of VAT
+  vatAmount       Decimal            @default(0) @db.Decimal(18, 2)
+  category        String             @default("EXPENSE") // EXPENSE | INVENTORY | FIXED_ASSET | PREPAYMENT
+  accountId       String
+  dims            Json?
+  purchaseOrder   PurchaseOrder      @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  receiptLines    GoodsReceiptLine[]
+  billLines       ApBillLine[]
+}
+
+// Receiving report (goods) or service acceptance. Posts Dr expense/inventory/asset, Cr Goods Received Not Yet Invoiced.
+model GoodsReceipt {
+  id              String             @id @default(cuid())
+  organizationId  String
+  number          String // RR-2026-000001
+  purchaseOrderId String
+  date            DateTime           @db.Date
+  deliveryRef     String? // supplier's delivery receipt no.
+  notes           String?
+  status          String             @default("POSTED") // POSTED | VOID
+  journalEntryId  String?
+  receivedById    String
+  voidedById      String?
+  voidedAt        DateTime?
+  voidReason      String?
+  createdAt       DateTime           @default(now())
+  purchaseOrder   PurchaseOrder      @relation(fields: [purchaseOrderId], references: [id])
+  lines           GoodsReceiptLine[]
+
+  @@unique([organizationId, number])
+}
+
+model GoodsReceiptLine {
+  id        String            @id @default(cuid())
+  receiptId String
+  poLineId  String
+  quantity  Decimal           @db.Decimal(18, 4)
+  remarks   String?
+  receipt   GoodsReceipt      @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  poLine    PurchaseOrderLine @relation(fields: [poLineId], references: [id])
+}
+
+// ---------- Accounts payable ----------
+// Supplier invoice (AP voucher). Posts Dr expense / GRNI / Input VAT, Cr EWT payable and AP control (per vendor).
+model ApBill {
+  id                String          @id @default(cuid())
+  organizationId    String
+  number            String // APV-2026-000001
+  vendorId          String
+  supplierInvoiceNo String
+  invoiceDate       DateTime        @db.Date
+  date              DateTime        @db.Date // posting date
+  dueDate           DateTime        @db.Date
+  purchaseOrderId   String?
+  memo              String
+  currencyCode      String          @default("PHP")
+  fxRate            Decimal         @default(1) @db.Decimal(18, 6)
+  vatInclusive      Boolean         @default(false)
+  subtotal          Decimal         @default(0) @db.Decimal(18, 2) // net of VAT
+  vatAmount         Decimal         @default(0) @db.Decimal(18, 2)
+  total             Decimal         @default(0) @db.Decimal(18, 2) // invoice total = subtotal + VAT
+  ewtAmount         Decimal         @default(0) @db.Decimal(18, 2)
+  netPayable        Decimal         @default(0) @db.Decimal(18, 2) // total - EWT: what the supplier is paid
+  matchNotes        Json? // 3-way match warnings shown to approvers
+  status            String          @default("DRAFT") // DRAFT | PENDING_APPROVAL | POSTED | VOID
+  scheduledPayDate  DateTime?       @db.Date
+  onHold            Boolean         @default(false)
+  journalEntryId    String?
+  inboxDocumentId   String?         @unique
+  createdById       String
+  updatedById       String?
+  submittedById     String?
+  submittedAt       DateTime?
+  approvedById      String?
+  approvedAt        DateTime?
+  rejectReason      String?
+  voidedById        String?
+  voidedAt          DateTime?
+  voidReason        String?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  lines             ApBillLine[]
+  paymentLines      ApPaymentLine[]
+
+  @@unique([organizationId, number])
+  @@index([organizationId, vendorId, status])
+  @@index([organizationId, status, dueDate])
+}
+
+model ApBillLine {
+  id           String             @id @default(cuid())
+  billId       String
+  lineNo       Int
+  description  String
+  category     String             @default("EXPENSE") // EXPENSE | INVENTORY | FIXED_ASSET | PREPAYMENT
+  accountId    String
+  quantity     Decimal            @default(1) @db.Decimal(18, 4)
+  unitPrice    Decimal            @db.Decimal(18, 4)
+  vatType      String             @default("VATABLE") // VATABLE | ZERO_RATED | EXEMPT
+  netAmount    Decimal            @db.Decimal(18, 2)
+  vatAmount    Decimal            @default(0) @db.Decimal(18, 2)
+  ewtTaxCodeId String?
+  ewtAmount    Decimal            @default(0) @db.Decimal(18, 2)
+  poLineId     String?
+  dims         Json?
+  prepaidStart DateTime?          @db.Date // prepayment coverage, for the prepaid expenses module
+  prepaidEnd   DateTime?          @db.Date
+  bill         ApBill             @relation(fields: [billId], references: [id], onDelete: Cascade)
+  poLine       PurchaseOrderLine? @relation(fields: [poLineId], references: [id])
+}
+
+// Payment voucher to a supplier. When approved it creates a posted cash disbursement (check or transfer),
+// so it shows in check monitoring and bank reconciliation.
+model ApPayment {
+  id                String          @id @default(cuid())
+  organizationId    String
+  number            String // PV-2026-000001
+  vendorId          String
+  bankAccountId     String
+  date              DateTime        @db.Date
+  method            String          @default("CHECK") // CHECK | BANK_TRANSFER | ONLINE | EWALLET | CASH
+  checkNo           String?
+  checkDate         DateTime?       @db.Date
+  reference         String?
+  memo              String
+  currencyCode      String          @default("PHP")
+  fxRate            Decimal         @default(1) @db.Decimal(18, 6)
+  amount            Decimal         @db.Decimal(18, 2)
+  status            String          @default("DRAFT") // DRAFT | PENDING_APPROVAL | POSTED | VOID
+  cashTransactionId String?         @unique
+  createdById       String
+  updatedById       String?
+  submittedById     String?
+  submittedAt       DateTime?
+  approvedById      String?
+  approvedAt        DateTime?
+  rejectReason      String?
+  voidedById        String?
+  voidedAt          DateTime?
+  voidReason        String?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  lines             ApPaymentLine[]
+
+  @@unique([organizationId, number])
+  @@index([organizationId, vendorId, status])
+}
+
+model ApPaymentLine {
+  id        String    @id @default(cuid())
+  paymentId String
+  billId    String
+  amount    Decimal   @db.Decimal(18, 2) // part of the bill's net payable settled
+  payment   ApPayment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  bill      ApBill    @relation(fields: [billId], references: [id])
+}
+
+// A supplier invoice that arrived by email (or was uploaded) and is waiting to be read and reviewed.
+model ApInboxDocument {
+  id              String    @id @default(cuid())
+  organizationId  String
+  source          String // EMAIL | UPLOAD
+  fromEmail       String?
+  subject         String?
+  receivedAt      DateTime  @default(now())
+  fileName        String
+  mediaType       String
+  data            Bytes
+  sha256          String // detects the same file sent twice
+  status          String    @default("NEW") // NEW | READING | READY | FAILED | BILLED | REJECTED
+  extraction      Json? // what the AI read, kept for audit
+  vendorId        String?
+  purchaseOrderId String?
+  duplicateOfId   String? // bill or document already recorded for the same supplier invoice
+  error           String?
+  billId          String?
+  reviewedById    String?
+  reviewedAt      DateTime?
+  rejectReason    String?
+  uploadedById    String?
+  createdAt       DateTime  @default(now())
+
+  @@index([organizationId, status])
+  @@index([organizationId, sha256])
 }
