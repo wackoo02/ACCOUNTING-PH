@@ -19,7 +19,7 @@ export default async function LiabilitySchedule({ searchParams }: { searchParams
       <form className="card row noprint"><div><label>From</label><input type="date" name="from" defaultValue={from} /></div><div><label>To</label><input type="date" name="to" defaultValue={to} /></div><div style={{ flex: 0 }}><button>Show</button></div></form>
       {byCur.map((cur) => { const rows = r.rows.filter((x) => x.currency === cur); return (
         <div key={cur} className="table-wrap"><table>
-          <thead><tr><th>Lease ({cur})</th><th>Asset</th>{cols.map(([k, l]) => <th key={k} className="num">{l}</th>)}</tr></thead>
+          <thead><tr><th>Lease ({cur})</th><th style={{ minWidth: 200 }}>Asset</th>{cols.map(([k, l]) => <th key={k} className="num">{l}</th>)}</tr></thead>
           <tbody>
             {rows.map((x) => <tr key={x.id}><td><Link href={`/leases/${x.id}`}>{x.number}</Link></td><td>{x.asset}</td>{cols.map(([k]) => <td key={k} className="num">{a(x[k])}</td>)}</tr>)}
             <tr className="total"><td colSpan={2}>Total {cur}</td>{cols.map(([k]) => <td key={k} className="num">{a(rows.reduce((s, x) => s + x[k], 0n))}</td>)}</tr>

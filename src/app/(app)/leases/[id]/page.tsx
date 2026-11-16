@@ -45,14 +45,14 @@ export default async function LeaseView({ params }: { params: Promise<{ id: stri
     <>
       <div className="top">
         <h1>Lease {l.number} <span className={`badge ${l.status === "ACTIVE" ? "POSTED" : l.status === "DRAFT" ? "DRAFT" : "VOID"}`}>{STATUS_LABELS[l.status]}</span></h1>
-        <div className="row noprint" style={{ gap: 8, flex: 0 }}>
+      </div>
+      <div className="row noprint" style={{ gap: 8, marginBottom: 12, alignItems: "flex-start" }}>
           {l.status === "DRAFT" && can(ctx.role, "journal.create") && <Link className="btn secondary" href={`/leases/${l.id}/edit`}>Edit</Link>}
           <LeaseActions id={l.id} status={l.status} exempt={exempt} canEdit={can(ctx.role, "journal.create")}
             canApprove={can(ctx.role, "journal.post") && !(org.segregationOfDuties && isPreparer)} canPost={can(ctx.role, "journal.post")} canUndo={can(ctx.role, "journal.void")}
             hasEvents={events.length > 0} nextStart={next?.periodStart ?? null} monthEnd={monthEnd} endDate={fmtDate(l.endDate)}
             payment={l.paymentAmount.toString()} rate={l.discountRate.toString().replace(/\.?0+$/, "")} escalation={l.escalationPct.toString().replace(/\.?0+$/, "")} />
         </div>
-      </div>
       {l.status === "DRAFT" && <div className="notice">Draft: check the measurement and schedule below. {org.segregationOfDuties && isPreparer ? "Someone other than the preparer approves it." : "Approve it to post the opening entry."}</div>}
       <div className="card grid">
         <div><label>Lessor</label>{l.lessorName}{l.lessorVendorCode && <div className="muted">vendor {l.lessorVendorCode}</div>}</div>

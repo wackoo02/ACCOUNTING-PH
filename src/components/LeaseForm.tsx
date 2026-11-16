@@ -66,7 +66,7 @@ export function LeaseForm({ data, initial }: { data: LeaseFormData; initial: Lea
           </select>
         </div>
         {currency !== data.baseCurrency && <div><label>Rate at start date</label><input name="fxRate" defaultValue={v("fxRate") || data.currencies.find((c) => c.code === currency)?.rate} /></div>}
-        <div><label><input type="checkbox" name="vatable" defaultChecked={!!initial.vatable} /> 12% VAT on payments</label></div>
+        <div><label>&nbsp;</label><label style={{ display: "flex", gap: 6, alignItems: "center", color: "var(--ink)" }}><input type="checkbox" name="vatable" defaultChecked={!!initial.vatable} style={{ width: "auto" }} /> 12% VAT on payments</label></div>
         <div><label>Expanded withholding tax</label>
           <select name="ewtTaxCodeId" defaultValue={v("ewtTaxCodeId")}><option value="">(none)</option>{data.taxCodes.map((t) => <option key={t.id} value={t.id}>{t.code} · {t.name} ({t.rate}%)</option>)}</select>
           <div className="muted">Rent of real or personal property is usually 5%.</div>
@@ -82,7 +82,7 @@ export function LeaseForm({ data, initial }: { data: LeaseFormData; initial: Lea
           <div><label>Initial direct costs</label><input name="initialDirectCosts" defaultValue={v("initialDirectCosts")} inputMode="decimal" placeholder="0.00" /><div className="muted">e.g. broker&apos;s commission</div></div>
           <div><label>Lease incentives received</label><input name="leaseIncentives" defaultValue={v("leaseIncentives")} inputMode="decimal" placeholder="0.00" /></div>
           <div><label>Estimated restoration cost</label><input name="restorationCost" defaultValue={v("restorationCost")} inputMode="decimal" placeholder="0.00" /></div>
-          <div><label><input type="checkbox" name="transfersOwnership" checked={owns} onChange={(e) => setOwns(e.target.checked)} /> Ownership transfers / purchase option reasonably certain</label></div>
+          <div><label>&nbsp;</label><label style={{ display: "flex", gap: 6, alignItems: "center", color: "var(--ink)" }}><input type="checkbox" name="transfersOwnership" checked={owns} onChange={(e) => setOwns(e.target.checked)} style={{ width: "auto" }} /> Ownership transfers or purchase option reasonably certain</label></div>
           {owns && <div><label>Useful life of the asset (months)</label><input name="usefulLifeMonths" defaultValue={v("usefulLifeMonths")} inputMode="numeric" /></div>}
         </div>
       </>}

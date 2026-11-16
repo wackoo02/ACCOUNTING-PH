@@ -15,8 +15,8 @@ export function LeaseActions(p: Props) {
   );
   const active = p.status === "ACTIVE";
   return (
-    <div className="noprint">
-      <div className="row" style={{ gap: 8 }}>
+    <div className="noprint" style={{ flex: 1 }}>
+      <div className="row" style={{ gap: 8, flexWrap: "wrap", alignItems: "flex-start" }}>
         {p.status === "DRAFT" && p.canApprove && op("commence", "Approve and start lease", "", "Post the opening entry for this lease?")}
         {p.status === "DRAFT" && p.canEdit && op("delete", "Delete draft", "danger", "Delete this draft lease?")}
         {active && p.canPost && op("post", `Post through ${p.monthEnd}`, "secondary", undefined, <input type="hidden" name="through" value={p.monthEnd} />)}

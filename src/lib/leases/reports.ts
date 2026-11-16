@@ -105,7 +105,10 @@ export async function maturityAnalysis(organizationId: string, asOf: string) {
     if (!evs.length || ymd(evs[0].date) > asOf) continue;
     const term = evs.find((e) => e.type === "TERMINATION");
     if (term && ymd(term.date) <= asOf) continue;
-    const pays = paymentsOf(l).filter((p) => !term || p.date <= ymd(term.date));
+    // Terms in force at the reporting date: a later modification keeps the payments it replaced.
+    const laterMod = evs.find((e) => e.type === "MODIFICATION" && ymd(e.date) > asOf);
+    const terms = laterMod ? { payments: (laterMod.details as { previous: { payments: unknown } }).previous.payments as typeof l.payments } : l;
+    const pays = paymentsOf(terms).filter((p) => !term || p.date <= ymd(term.date));
     const buckets = maturityBuckets(pays, asOf);
     const total = buckets.reduce((s, x) => s + x, 0n);
     const last = sched.filter((s) => s.leaseId === l.id).at(-1);

@@ -18,7 +18,7 @@ export default async function RouRollforward({ searchParams }: { searchParams: S
       <div className="top"><h1>Right-of-Use Asset Rollforward</h1><span className="muted">{ctx.org.name} · {from} to {to}</span></div>
       <form className="card row noprint"><div><label>From</label><input type="date" name="from" defaultValue={from} /></div><div><label>To</label><input type="date" name="to" defaultValue={to} /></div><div style={{ flex: 0 }}><button>Show</button></div></form>
       <div className="table-wrap"><table>
-        <thead><tr><th>Lease</th><th>Asset</th>{cols.map(([k, l]) => <th key={k} className="num">{l}</th>)}</tr></thead>
+        <thead><tr><th>Lease</th><th style={{ minWidth: 200 }}>Asset</th>{cols.map(([k, l]) => <th key={k} className="num">{l}</th>)}</tr></thead>
         <tbody>
           {r.rows.map((x) => <tr key={x.id}><td><Link href={`/leases/${x.id}`}>{x.number}</Link></td><td>{x.asset}<div className="muted">{x.lessor}</div></td>{cols.map(([k]) => <td key={k} className="num">{a(x[k])}</td>)}</tr>)}
           {r.rows.length === 0 && <tr><td colSpan={12} className="muted">No right-of-use assets in this period.</td></tr>}

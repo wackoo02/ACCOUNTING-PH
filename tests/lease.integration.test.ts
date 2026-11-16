@@ -113,6 +113,11 @@ describe("lease lifecycle", () => {
     const ev = await prisma.leaseEvent.findFirstOrThrow({ where: { leaseId: id, type: "MODIFICATION" } });
     expect(toCentavos(ev.rouDerecognized.toString())).toBeGreaterThan(0n);
     expect(await bal("7040")).toBe(-toCentavos(ev.gainLoss.toString()));
+    // a maturity analysis dated before the change still uses the terms in force then
+    const before = (await maturityAnalysis(org, "2026-06-30")).rows.find((r) => r.id === id)!;
+    expect(before.buckets[0]).toBe(P(600000) + P(105000) * 6n);
+    expect(before.futureInterest).toBeGreaterThan(0n);
+    expect(before.futureInterest).toBeLessThan(P(400000));
   });
 
   it("terminates mid-month: everything comes off, difference to profit or loss", async () => {
