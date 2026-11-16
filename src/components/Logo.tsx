@@ -14,16 +14,8 @@ export function LogoMark({ size = 28 }: { size?: number }) {
         </linearGradient>
       </defs>
       <rect width="64" height="64" rx="14" fill="url(#vg)" />
-      <path transform="translate(32 31) scale(0.06 -0.06) translate(-393 -350)" d="M277 0 -19 700H235L476 109H325L573 700H805L509 0Z" fill="#fff" />
-      <g fill="#1E1338" stroke="#1E1338" strokeLinecap="round" strokeLinejoin="round">
-        <circle cx="25.6" cy="38.8" r="2.2" stroke="none" />
-        <path d="M26 41.6 L26.8 47.6" strokeWidth="3.6" fill="none" />
-        <path d="M27.2 48.2 L31.2 44.6 L32.6 49" strokeWidth="2.6" fill="none" />
-        <path d="M26.6 42.8 L31 45" strokeWidth="1.8" fill="none" />
-        <rect x="33.6" y="48.4" width="5.6" height="1.5" rx="0.5" stroke="none" />
-        <path d="M38.2 49 L39.8 49 L41.1 43.4 L39.5 43.4 Z" stroke="none" />
-      </g>
-      <circle cx="50.5" cy="49" r="4.4" fill="#FF6B1A" />
+      <path transform="translate(29 33) scale(0.052 -0.052) translate(-393 -350)" d="M277 0 -19 700H235L476 109H325L573 700H805L509 0Z" fill="#fff" />
+      <circle cx="50.5" cy="47.5" r="4.6" fill="#FF6B1A" />
     </svg>
   );
 }
