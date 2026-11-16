@@ -1,0 +1,60 @@
+:root {
+  --bg: #f6f7f9; --panel: #fff; --ink: #1b1f24; --muted: #5f6b7a; --line: #e2e6eb;
+  --brand: #0b5cad; --brand-ink: #fff; --danger: #b42318; --ok: #1a7f37; --warn: #9a6700;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: 14px; color: var(--ink); background: var(--bg);
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); }
+a { color: var(--brand); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.shell { display: grid; grid-template-columns: 220px 1fr; min-height: 100vh; }
+.side { background: #0f2540; color: #cfd8e3; padding: 16px 12px; }
+.side .brand { color: #fff; font-weight: 700; font-size: 16px; margin: 4px 8px 16px; }
+.side nav a { display: block; color: #cfd8e3; padding: 7px 10px; border-radius: 6px; }
+.side nav a:hover { background: #1b3a5e; color: #fff; text-decoration: none; }
+.side .sect { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: #8aa0b8; margin: 14px 10px 4px; }
+.side .soon { color: #6f8399; padding: 4px 10px; font-size: 13px; }
+.main { padding: 20px 28px; min-width: 0; }
+.top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; gap: 12px; flex-wrap: wrap; }
+h1 { font-size: 20px; margin: 0; }
+h2 { font-size: 16px; margin: 20px 0 8px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+.grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+.stat .n { font-size: 20px; font-weight: 600; }
+.stat .l { color: var(--muted); font-size: 12px; }
+table { width: 100%; border-collapse: collapse; background: var(--panel); }
+th, td { padding: 7px 8px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+th { font-size: 12px; color: var(--muted); font-weight: 600; background: #fafbfc; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+tr.total td { font-weight: 700; border-top: 2px solid var(--ink); }
+tr.header td { font-weight: 600; background: #fafbfc; }
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; }
+label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+input, select, textarea { font: inherit; padding: 7px 9px; border: 1px solid #c9d1da; border-radius: 6px; width: 100%; background: #fff; }
+input.num { text-align: right; }
+.row { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; }
+.row > div { flex: 1; min-width: 140px; }
+button, .btn { font: inherit; padding: 7px 14px; border-radius: 6px; border: 1px solid var(--brand); background: var(--brand); color: var(--brand-ink); cursor: pointer; display: inline-block; }
+button.secondary, .btn.secondary { background: #fff; color: var(--brand); }
+button.danger { background: #fff; color: var(--danger); border-color: var(--danger); }
+button.link { background: none; border: none; color: var(--brand); padding: 0; }
+button:disabled { opacity: .5; cursor: not-allowed; }
+.errors { background: #fdecea; border: 1px solid #f5c2bd; color: var(--danger); padding: 10px 12px; border-radius: 6px; margin-bottom: 12px; }
+.errors ul { margin: 0; padding-left: 18px; }
+.notice { background: #e8f3ff; border: 1px solid #b6d8ff; padding: 10px 12px; border-radius: 6px; margin-bottom: 12px; }
+.badge { display: inline-block; font-size: 11px; padding: 2px 7px; border-radius: 10px; font-weight: 600; }
+.badge.POSTED { background: #dafbe1; color: var(--ok); }
+.badge.DRAFT { background: #fff8c5; color: var(--warn); }
+.badge.VOID { background: #eee; color: #666; }
+.badge.OPEN { background: #dafbe1; color: var(--ok); }
+.badge.CLOSED { background: #eee; color: #444; }
+.muted { color: var(--muted); }
+.auth { max-width: 420px; margin: 60px auto; }
+.diff-bad { color: var(--danger); font-weight: 600; }
+.diff-ok { color: var(--ok); font-weight: 600; }
+@media (max-width: 760px) { .shell { grid-template-columns: 1fr; } .side { padding: 10px; } .main { padding: 16px; } }
+@media print { .side, .noprint { display: none !important; } .shell { display: block; } }
+.badge.PENDING_APPROVAL { background: #ddf4ff; color: #0969da; }
+.badge.LOCKED { background: #eee; color: #444; }
+.side nav { padding-bottom: 20px; }

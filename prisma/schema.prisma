@@ -1,0 +1,595 @@
+// General Ledger core for a multi-company (multi-tenant) accounting system.
+// Every business record carries organizationId; all queries are scoped by it.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------- Tenancy, users, access ----------
+
+model Organization {
+  id             String   @id @default(cuid())
+  code           String?  @unique // short company code, e.g. HOLDCO, SUB1 (unique across the system for now)
+  name           String
+  tin            String?  // BIR Taxpayer Identification Number, e.g. 000-000-000-00000
+  rdoCode        String?  // BIR Revenue District Office
+  registeredAddress String?
+  vatRegistered  Boolean  @default(true)
+  baseCurrency   String   @default("PHP")
+  fiscalYearStartMonth Int @default(1) // 1 = January (calendar year)
+  // Controls
+  requireApproval      Boolean @default(true)  // manual entries need approval before posting
+  segregationOfDuties  Boolean @default(true)  // the preparer cannot approve/post their own entry
+  // Entity hierarchy: a holding company is the root; subsidiaries/branches point to their parent.
+  // A "group" is the root entity plus all its descendants (used for consolidation).
+  parentId       String?
+  entityType     String   @default("COMPANY") // COMPANY | SUBSIDIARY | BRANCH | DIVISION
+  ownershipPct   Decimal  @db.Decimal(5, 2) @default(100) // parent's % ownership
+  createdAt      DateTime @default(now())
+
+  parent         Organization?  @relation("EntityTree", fields: [parentId], references: [id])
+  children       Organization[] @relation("EntityTree")
+  dimensions     DimensionValue[]
+  icLinks        IntercompanyLink[] @relation("IcFrom")
+  icLinksTo      IntercompanyLink[] @relation("IcTo")
+
+  memberships    Membership[]
+  accounts       Account[]
+  journalEntries JournalEntry[]
+  periods        FiscalPeriod[]
+  sequences      DocumentSequence[]
+  auditLogs      AuditLog[]
+  currencies     Currency[]
+  products       Product[]
+  employees      Employee[]
+  vendors        Vendor[]
+  customers      Customer[]
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  passwordHash String
+  createdAt    DateTime @default(now())
+
+  memberships  Membership[]
+  sessions     Session[]
+}
+
+enum Role {
+  OWNER       // everything, incl. managing users
+  ADMIN       // everything except removing the owner
+  ACCOUNTANT  // chart of accounts, post/void entries, close periods
+  BOOKKEEPER  // create draft entries, view reports
+  VIEWER      // read-only reports
+}
+
+model Membership {
+  id             String       @id @default(cuid())
+  userId         String
+  organizationId String
+  role           Role
+  // Max entry total (base currency) this person may approve. Null = no limit.
+  approvalLimit  Decimal?     @db.Decimal(18, 2)
+  createdAt      DateTime     @default(now())
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, organizationId])
+}
+
+model Session {
+  id                   String   @id // random token hash
+  userId               String
+  activeOrganizationId String?
+  expiresAt            DateTime
+  createdAt            DateTime @default(now())
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// ---------- Chart of accounts ----------
+
+enum AccountType {
+  ASSET
+  LIABILITY
+  EQUITY
+  INCOME
+  EXPENSE
+}
+
+enum NormalBalance {
+  DEBIT
+  CREDIT
+}
+
+model Account {
+  id             String        @id @default(cuid())
+  organizationId String
+  code           String
+  name           String
+  type           AccountType
+  // IFRS presentation line (e.g. "Cash and cash equivalents", "Trade and other receivables").
+  // Drives Statement of Financial Position / Profit or Loss grouping later.
+  ifrsGroup      String
+  isCurrent      Boolean?      // current vs non-current (assets & liabilities)
+  normalBalance  NormalBalance
+  parentId       String?
+  isPostable     Boolean       @default(true)  // false = header/summary account
+  // false = only sub-ledgers (AR, AP, payroll, bank) may post here, not manual journals
+  allowManualPosting Boolean   @default(true)
+  isActive       Boolean       @default(true)
+  // System role lets sub-ledgers find their control account without hard-coding codes,
+  // e.g. AR_CONTROL, AP_CONTROL, OUTPUT_VAT, INPUT_VAT, EWT_PAYABLE, RETAINED_EARNINGS.
+  systemRole     String?
+  // Set for accounts held in a foreign currency (e.g. a USD bank account); used for IAS 21 revaluation.
+  currencyCode   String?
+  description    String?
+  createdAt      DateTime      @default(now())
+
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  parent         Account?      @relation("AccountTree", fields: [parentId], references: [id])
+  children       Account[]     @relation("AccountTree")
+  lines          JournalLine[]
+
+  @@unique([organizationId, code])
+  @@unique([organizationId, systemRole])
+  @@index([organizationId, type])
+}
+
+// ---------- Periods ----------
+
+enum PeriodStatus {
+  OPEN    // posting allowed
+  CLOSED  // month-end close; accountants/admins can reopen
+  LOCKED  // locked after year-end close; only the owner can unlock
+}
+
+model FiscalYear {
+  id             String       @id @default(cuid())
+  organizationId String
+  // Named by the calendar year in which the fiscal year ENDS (e.g. FY2026 = Jul 2025 - Jun 2026).
+  year           Int
+  startDate      DateTime     @db.Date
+  endDate        DateTime     @db.Date
+  status         String       @default("OPEN") // OPEN | CLOSED
+  closingEntryId String?
+  closedAt       DateTime?
+  closedById     String?
+
+  @@unique([organizationId, year])
+}
+
+model FiscalPeriod {
+  id             String       @id @default(cuid())
+  organizationId String
+  year           Int
+  month          Int          // 1-12
+  status         PeriodStatus @default(OPEN)
+  closedAt       DateTime?
+  closedById     String?
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, year, month])
+}
+
+// ---------- Journal ----------
+
+enum JournalStatus {
+  DRAFT
+  PENDING_APPROVAL // submitted by a bookkeeper, waiting for an accountant/admin
+  POSTED
+  VOID
+}
+
+// Where an entry came from. Sub-ledgers post into the GL through the same service.
+enum JournalSource {
+  MANUAL
+  OPENING_BALANCE
+  SALES        // AR invoices / collections
+  PURCHASES    // AP bills / payments
+  BANK         // bank reconciliation adjustments
+  INVENTORY
+  FIXED_ASSETS
+  PREPAID
+  LEASE
+  DEBT
+  PAYROLL
+  EXPENSE_CLAIM // employee/partner reimbursements, travel expenses
+  TAX          // BIR filings / remittances
+  CLOSING
+  REVERSAL
+  INTERCOMPANY
+  CONSOLIDATION // group-level adjustment, only in consolidated reports
+  FX_REVALUATION
+}
+
+// STATUTORY = the entity's own books (BIR, its own financial statements).
+// CONSOLIDATION = group-only adjustments kept in the parent, excluded from the entity's own reports.
+enum LedgerBook {
+  STATUTORY
+  CONSOLIDATION
+}
+
+model JournalEntry {
+  id             String        @id @default(cuid())
+  organizationId String
+  number         String        // e.g. JV-2026-000001
+  // Posting date: the GL date that decides the accounting period.
+  date           DateTime      @db.Date
+  // Transaction (document) date, e.g. the invoice date. Defaults to the posting date.
+  transactionDate DateTime     @db.Date
+  memo           String
+  reference      String?       // external doc no. (OR, SI, CV, etc.)
+  status         JournalStatus @default(DRAFT)
+  book           LedgerBook    @default(STATUTORY)
+  source         JournalSource @default(MANUAL)
+  autoReverseOn  DateTime?     @db.Date // e.g. unrealized FX revaluation reverses on the 1st of next month
+  sourceId       String?       // id of the originating invoice/bill/payroll run
+  reversalOfId   String?       @unique
+  // Both sides of an intercompany transaction share this id (one entry per entity).
+  intercompanyGroupId String?
+  totalDebit     Decimal       @db.Decimal(18, 2) @default(0)
+  totalCredit    Decimal       @db.Decimal(18, 2) @default(0)
+  createdById    String
+  updatedById    String?
+  submittedById  String?
+  submittedAt    DateTime?
+  postedById     String?      // approver: the person who posted it
+  postedAt       DateTime?
+  voidedById     String?
+  voidedAt       DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  lines          JournalLine[]
+  attachments    JournalAttachment[]
+  reversalOf     JournalEntry? @relation("Reversal", fields: [reversalOfId], references: [id])
+  reversedBy     JournalEntry? @relation("Reversal")
+
+  @@unique([organizationId, number])
+  @@index([organizationId, date])
+  @@index([organizationId, source, sourceId])
+  @@index([intercompanyGroupId])
+}
+
+model JournalLine {
+  id             String       @id @default(cuid())
+  journalEntryId String
+  organizationId String
+  lineNo         Int
+  accountId      String
+  description    String?
+  // debit/credit are always in the entity's base (local reporting) currency, e.g. PHP.
+  debit          Decimal      @db.Decimal(18, 2) @default(0)
+  credit         Decimal      @db.Decimal(18, 2) @default(0)
+  // Original transaction (forex) amount, currency and the rate used (1 unit = fxRate base).
+  currencyCode   String       @default("PHP")
+  fxRate         Decimal      @db.Decimal(18, 6) @default(1)
+  fxDebit        Decimal      @db.Decimal(18, 2) @default(0)
+  fxCredit       Decimal      @db.Decimal(18, 2) @default(0)
+  // Optional sub-ledger tags so later modules can report by party:
+  // customer/vendor (AR/AP aging), employee/partner (expense summary).
+  partyType      String?      // CUSTOMER | VENDOR | EMPLOYEE | PARTNER
+  partyId        String?
+  // Dimensions for management reporting (all optional).
+  departmentId   String?
+  branchId       String?
+  businessUnitId String?
+  projectId      String?
+  costCenterId   String?
+  profitCenterId String?
+  locationId     String?
+  productLineId  String?
+  divisionId     String?
+  // Counterparty entity for intercompany lines (drives consolidation eliminations).
+  intercompanyOrgId String?
+  // Bank reconciliation / transaction clearing.
+  clearedAt      DateTime?
+  clearingRef    String?
+
+  journalEntry   JournalEntry @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
+  account        Account      @relation(fields: [accountId], references: [id])
+  department     DimensionValue? @relation("dDepartment", fields: [departmentId], references: [id])
+  branch         DimensionValue? @relation("dBranch", fields: [branchId], references: [id])
+  businessUnit   DimensionValue? @relation("dBusinessUnit", fields: [businessUnitId], references: [id])
+  project        DimensionValue? @relation("dProject", fields: [projectId], references: [id])
+  costCenter     DimensionValue? @relation("dCostCenter", fields: [costCenterId], references: [id])
+  profitCenter   DimensionValue? @relation("dProfitCenter", fields: [profitCenterId], references: [id])
+  location       DimensionValue? @relation("dLocation", fields: [locationId], references: [id])
+  productLine    DimensionValue? @relation("dProductLine", fields: [productLineId], references: [id])
+  division       DimensionValue? @relation("dDivision", fields: [divisionId], references: [id])
+
+  @@index([organizationId, accountId])
+  @@index([organizationId, departmentId])
+  @@index([organizationId, branchId])
+  @@index([organizationId, projectId])
+  @@index([organizationId, costCenterId])
+  @@index([organizationId, profitCenterId])
+  @@index([organizationId, partyType, partyId])
+}
+
+// Supporting documents (scanned invoice, OR, contract) as links. File storage comes with cloud hosting.
+model JournalAttachment {
+  id             String       @id @default(cuid())
+  journalEntryId String
+  name           String
+  url            String
+  addedById      String
+  createdAt      DateTime     @default(now())
+  journalEntry   JournalEntry @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
+}
+
+model DocumentSequence {
+  id             String       @id @default(cuid())
+  organizationId String
+  key            String       // e.g. "JV-2026"
+  next           Int          @default(1)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, key])
+}
+
+model AuditLog {
+  id             String       @id @default(cuid())
+  organizationId String
+  userId         String?
+  action         String       // e.g. journal.post
+  entity         String
+  entityId       String
+  details        Json?        // free-form context (e.g. reason, comment)
+  before         Json?        // record before the change
+  after          Json?        // record after the change
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, entity, entityId])
+}
+
+// ---------- Master lists ----------
+// Editable by OWNER/ADMIN only. Each can be bulk-uploaded from its Excel template.
+
+model Currency {
+  id             String       @id @default(cuid())
+  organizationId String
+  code           String       // ISO 4217, e.g. PHP, USD
+  name           String
+  symbol         String?
+  rateToBase     Decimal      @db.Decimal(18, 6) @default(1) // 1 unit = X PHP
+  isActive       Boolean      @default(true)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, code])
+}
+
+model Product {
+  id             String       @id @default(cuid())
+  organizationId String
+  code           String
+  name           String
+  kind           String       @default("GOODS") // GOODS | SERVICE
+  unit           String?      // pc, box, hr ...
+  sellingPrice   Decimal      @db.Decimal(18, 2) @default(0)
+  purchaseCost   Decimal      @db.Decimal(18, 2) @default(0)
+  currencyCode   String       @default("PHP")
+  vatType        String       @default("VATABLE") // VATABLE | ZERO_RATED | EXEMPT
+  salesAccountCode    String?
+  expenseAccountCode  String?
+  isActive       Boolean      @default(true)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, code])
+}
+
+model Employee {
+  id             String       @id @default(cuid())
+  organizationId String
+  code           String
+  firstName      String
+  lastName       String
+  middleName     String?
+  position       String?
+  department     String?
+  email          String?
+  tin            String?
+  sssNo          String?
+  philhealthNo   String?
+  pagibigNo      String?
+  dateHired      DateTime?    @db.Date
+  employmentStatus String?    // REGULAR | PROBATIONARY | CONTRACTUAL | PROJECT
+  payBasis       String?      // MONTHLY | DAILY
+  basicRate      Decimal      @db.Decimal(18, 2) @default(0)
+  isPartner      Boolean      @default(false) // owners/partners for expense summary
+  isActive       Boolean      @default(true)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, code])
+}
+
+model Vendor {
+  id             String       @id @default(cuid())
+  organizationId String
+  code           String
+  name           String
+  tin            String?
+  address        String?
+  contactPerson  String?
+  email          String?
+  phone          String?
+  paymentTermsDays Int        @default(30)
+  vatRegistered  Boolean      @default(true)
+  ewtRate        Decimal      @db.Decimal(5, 2) @default(0) // expanded withholding %, e.g. 1, 2, 5, 10
+  atcCode        String?      // BIR alphanumeric tax code, e.g. WC158
+  currencyCode   String       @default("PHP")
+  isActive       Boolean      @default(true)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, code])
+}
+
+model Customer {
+  id             String       @id @default(cuid())
+  organizationId String
+  code           String
+  name           String
+  tin            String?
+  address        String?
+  contactPerson  String?
+  email          String?
+  phone          String?
+  paymentTermsDays Int        @default(30)
+  creditLimit    Decimal      @db.Decimal(18, 2) @default(0)
+  vatRegistered  Boolean      @default(true)
+  withholdsTax   Boolean      @default(false) // customer deducts CWT and issues BIR 2307
+  currencyCode   String       @default("PHP")
+  isActive       Boolean      @default(true)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, code])
+}
+
+// ---------- Dimensions ----------
+// Management-reporting tags on journal lines. One table holds the values for all
+// dimension types; each line can carry one value per type.
+
+enum DimensionType {
+  DEPARTMENT
+  BRANCH
+  BUSINESS_UNIT
+  PROJECT
+  COST_CENTER
+  PROFIT_CENTER
+  LOCATION
+  PRODUCT_LINE
+  DIVISION
+}
+
+model DimensionValue {
+  id             String        @id @default(cuid())
+  organizationId String
+  type           DimensionType
+  code           String
+  name           String
+  parentId       String?       // hierarchy within the same type (e.g. sub-departments)
+  manager        String?
+  isActive       Boolean       @default(true)
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  parent         DimensionValue?  @relation("DimTree", fields: [parentId], references: [id])
+  children       DimensionValue[] @relation("DimTree")
+
+  linesDepartment   JournalLine[] @relation("dDepartment")
+  linesBranch       JournalLine[] @relation("dBranch")
+  linesBusinessUnit JournalLine[] @relation("dBusinessUnit")
+  linesProject      JournalLine[] @relation("dProject")
+  linesCostCenter   JournalLine[] @relation("dCostCenter")
+  linesProfitCenter JournalLine[] @relation("dProfitCenter")
+  linesLocation     JournalLine[] @relation("dLocation")
+  linesProductLine  JournalLine[] @relation("dProductLine")
+  linesDivision     JournalLine[] @relation("dDivision")
+
+  @@unique([organizationId, type, code])
+}
+
+// ---------- Budgets ----------
+// One row per account (optionally per dimension value) per fiscal year, with 12 monthly amounts
+// in base currency. Annual budget = sum of months.
+model Budget {
+  id               String       @id @default(cuid())
+  organizationId   String
+  fiscalYear       Int
+  accountId        String
+  dimensionValueId String?      // optional: budget for one department/project/etc.
+  m1  Decimal @db.Decimal(18, 2) @default(0)
+  m2  Decimal @db.Decimal(18, 2) @default(0)
+  m3  Decimal @db.Decimal(18, 2) @default(0)
+  m4  Decimal @db.Decimal(18, 2) @default(0)
+  m5  Decimal @db.Decimal(18, 2) @default(0)
+  m6  Decimal @db.Decimal(18, 2) @default(0)
+  m7  Decimal @db.Decimal(18, 2) @default(0)
+  m8  Decimal @db.Decimal(18, 2) @default(0)
+  m9  Decimal @db.Decimal(18, 2) @default(0)
+  m10 Decimal @db.Decimal(18, 2) @default(0)
+  m11 Decimal @db.Decimal(18, 2) @default(0)
+  m12 Decimal @db.Decimal(18, 2) @default(0)
+  updatedAt        DateTime     @updatedAt
+
+  @@unique([organizationId, fiscalYear, accountId, dimensionValueId])
+}
+
+// ---------- Intercompany ----------
+// For entity A trading with entity B: which of A's accounts hold "Due from B" and "Due to B".
+// Configure one link in each direction (A->B in A's books, B->A in B's books).
+model IntercompanyLink {
+  id                 String       @id @default(cuid())
+  organizationId     String       // the entity whose books these accounts are in
+  counterpartyOrgId  String
+  dueFromAccountId   String       // receivable from counterparty (asset)
+  dueToAccountId     String       // payable to counterparty (liability)
+  createdAt          DateTime     @default(now())
+  organization       Organization @relation("IcFrom", fields: [organizationId], references: [id], onDelete: Cascade)
+  counterparty       Organization @relation("IcTo", fields: [counterpartyOrgId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, counterpartyOrgId])
+}
+
+// ---------- Tax setup ----------
+// VAT, expanded/final withholding and percentage tax codes with their BIR ATC and GL account.
+model TaxCode {
+  id             String   @id @default(cuid())
+  organizationId String
+  code           String   // e.g. VAT12, WC158, WI160, FWT20
+  name           String
+  taxType        String   // VAT_OUTPUT | VAT_INPUT | EWT | FWT | PERCENTAGE
+  rate           Decimal  @db.Decimal(7, 4) // percent, e.g. 12, 1, 2, 20
+  atcCode        String?  // BIR alphanumeric tax code
+  accountCode    String?  // GL account the tax posts to
+  description    String?
+  isActive       Boolean  @default(true)
+
+  @@unique([organizationId, code])
+}
+
+// ---------- Recurring entries ----------
+model RecurringJournal {
+  id             String    @id @default(cuid())
+  organizationId String
+  name           String
+  frequency      String    // MONTHLY | QUARTERLY | SEMI_ANNUAL | ANNUAL
+  nextRunDate    DateTime  @db.Date
+  endDate        DateTime? @db.Date
+  memo           String
+  reference      String?
+  lines          Json      // LineInput[] in transaction currency
+  autoSubmit     Boolean   @default(true) // create as "submitted for approval" (else draft)
+  isActive       Boolean   @default(true)
+  runCount       Int       @default(0)
+  lastRunAt      DateTime?
+  createdById    String
+  createdAt      DateTime  @default(now())
+
+  @@index([organizationId, nextRunDate])
+}
+
+// ---------- Allocations ----------
+// Spread the period balance of a source account across dimension values by percentage,
+// e.g. allocate rent to departments 40/35/25.
+model AllocationRule {
+  id              String   @id @default(cuid())
+  organizationId  String
+  name            String
+  sourceAccountId String
+  targetAccountId String?  // null = same account
+  dimensionType   DimensionType
+  splits          Json     // [{ dimensionValueId, pct }]
+  isActive        Boolean  @default(true)
+  createdById     String
+  createdAt       DateTime @default(now())
+}
