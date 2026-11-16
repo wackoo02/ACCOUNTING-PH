@@ -8,7 +8,7 @@ export type { NavItem, NavSection };
 
 const MASTER_ICON: Record<string, IconName> = {
   accounts: "accounts", dimensions: "dimensions", taxes: "taxes", banks: "banks", products: "products",
-  employees: "employees", vendors: "vendors", customers: "customers", currencies: "currencies",
+  employees: "employees", vendors: "vendors", customers: "customers", currencies: "currencies", assets: "fixed-assets",
 };
 
 export const NAV: NavSection[] = [
@@ -39,6 +39,27 @@ export const NAV: NavSection[] = [
     ],
   },
   {
+    title: "Expense and Mobility",
+    items: [
+      { href: "/expenses", label: "Mobility Dashboard", icon: "mobility" },
+      { href: "/expenses/claims", label: "Expense Claims", icon: "claims" },
+      { href: "/expenses/claims?q=manager", label: "Manager Approvals", icon: "approvals" },
+      { href: "/expenses/claims?q=finance", label: "Finance Review", icon: "audit", perm: "expense.finance" },
+      { href: "/expenses/reimbursements", label: "Reimbursements", icon: "wallet" },
+      { href: "/expenses/reconcile", label: "Wallet and Card Recon", icon: "reconcile" },
+      { href: "/expenses/report", label: "Employee Expense Report", icon: "employees" },
+      { href: "/expenses/settings", label: "Mobility Settings", icon: "settings" },
+    ],
+  },
+  {
+    title: "Fixed Assets",
+    items: [
+      { href: "/masters/assets", label: "Asset Register", icon: "fixed-assets" },
+      { href: "/assets/stickers", label: "QR Stickers", icon: "asset-audit" },
+      { href: "/assets/audits", label: "Asset Counts", icon: "audit" },
+    ],
+  },
+  {
     title: "Leases (PFRS 16)",
     items: [
       { href: "/leases", label: "Lease Register", icon: "leases" },
@@ -66,7 +87,7 @@ export const NAV: NavSection[] = [
   },
   {
     title: "Master Lists",
-    items: MASTER_KINDS.map((k) => ({ href: `/masters/${k}`, label: MASTERS[k].title, icon: MASTER_ICON[k] ?? "dimensions" })),
+    items: MASTER_KINDS.filter((k) => k !== "assets").map((k) => ({ href: `/masters/${k}`, label: MASTERS[k].title, icon: MASTER_ICON[k] ?? "dimensions" })),
   },
   {
     title: "Settings",
@@ -82,9 +103,8 @@ export const NAV: NavSection[] = [
 export const COMING_NEXT: { label: string; icon: IconName }[] = [
   { label: "Receivables and aging", icon: "receivables" },
   { label: "Payables and aging", icon: "payables" },
-  { label: "Expense claims and mobility", icon: "mobility" },
   { label: "Payroll", icon: "payroll" },
-  { label: "Fixed assets", icon: "fixed-assets" },
+  { label: "Depreciation and disposals", icon: "fixed-assets" },
   { label: "Prepaid expenses", icon: "prepaid" },
   { label: "Debt", icon: "debt" },
   { label: "Inventory", icon: "inventory" },
