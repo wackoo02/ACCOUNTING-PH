@@ -11,6 +11,8 @@ import { savePayment } from "../src/lib/ap/payments";
 import { approveCash, saveCashTransaction } from "../src/lib/bank/cash";
 import { importStatement, statementTemplate } from "../src/lib/bank/recon";
 import ExcelJS from "exceljs";
+import { approveVoucher, createFund, createVoucher, financeClear } from "../src/lib/pettycash/service";
+import { scanAsset, startAudit } from "../src/lib/assets/audit";
 
 async function main() {
   if (await prisma.user.findUnique({ where: { email: "owner@demo.ph" } })) return console.log("Demo data already present.");
@@ -146,6 +148,49 @@ async function main() {
   await saveBill({ organizationId: P, userId: bk.id, vendorId: await vend("V-0003"), supplierInvoiceNo: "BS-2026-0201", invoiceDate: dt("02-28"), vatInclusive: true, action: "submit",
     memo: "Janitorial services, February", lines: [{ description: "Janitorial and maintenance services, February", category: "EXPENSE", accountId: await id("6065"), unitPrice: "44800", ewtTaxCodeId: await ewt("WC160") }] });
   await savePayment({ organizationId: P, userId: bk.id, vendorId: await vend("V-0003"), bankAccountId: BDO, date: dt("02-14"), method: "CHECK", lines: [{ billId: bill2.id, amount: (await prisma.apBill.findUniqueOrThrow({ where: { id: bill2.id } })).netPayable.toString() }], action: "submit" });
+  // ---- Veritus Mobility: employees linked to the demo users, corporate wallets / card, assets ----
+  await importMasters("dimensions", P, owner.id, [{ type: "COST_CENTER", code: "CC-SALES", name: "Sales" }, { type: "COST_CENTER", code: "CC-ADMIN", name: "Administration" }]);
+  await importMasters("employees", P, owner.id, [
+    { code: "E-001", lastName: "Owner", firstName: "Demo", position: "President", department: "ADMIN", email: "owner@demo.ph", isPartner: true, costCenter: "CC-ADMIN" },
+    { code: "E-002", lastName: "Accountant", firstName: "Ana", position: "Chief Accountant", department: "ADMIN", email: "accountant@demo.ph", costCenter: "CC-ADMIN", supervisorCode: "E-001" },
+    { code: "E-003", lastName: "Bookkeeper", firstName: "Ben", position: "Bookkeeper", department: "ADMIN", email: "bookkeeper@demo.ph", costCenter: "CC-SALES", supervisorCode: "E-001" },
+  ]);
+  await importMasters("banks", P, owner.id, [
+    { code: "MAYA", name: "Maya Business Wallet", kind: "EWALLET", glAccountCode: "1035" },
+    { code: "VISA", name: "BDO Corporate Visa", kind: "CREDIT_CARD", glAccountCode: "2015", bankName: "BDO Unibank" },
+  ]);
+  await importMasters("customers", P, owner.id, [{ code: "C-0001", name: "XYZ Trading Corp.", tin: "222-333-444-00000", email: "ap@xyz.example" }]);
+  await importMasters("assets", P, owner.id, [
+    { code: "FA-000101", name: "Dell Latitude 5440 laptop", category: "IT equipment", location: "Makati HQ", custodianCode: "E-002", cost: 65000, accountCode: "1530", acquisitionDate: new Date(`${y}-01-15`) },
+    { code: "FA-000102", name: "Epson L15150 printer", category: "IT equipment", location: "Makati HQ", custodianCode: "E-003", cost: 38500, accountCode: "1530", acquisitionDate: new Date(`${y}-01-15`) },
+    { code: "FA-000103", name: "Executive desk", category: "Furniture", location: "Makati HQ", custodianCode: "E-001", cost: 24000, accountCode: "1550" },
+    { code: "FA-000104", name: "Split-type aircon 2HP", category: "Office equipment", location: "Makati HQ", cost: 52000, accountCode: "1530" },
+    { code: "FA-000105", name: "Toyota Innova (NBC 1234)", category: "Vehicles", location: "Cebu branch", custodianCode: "E-003", cost: 1450000, accountCode: "1540" },
+  ]);
+  const gcash = await bank("GCASH");
+  const emp = async (code: string) => (await prisma.employee.findFirstOrThrow({ where: { organizationId: P, code } })).id;
+  // The mobile app's petty cash fund has its own GL account, separate from the web fund (one system per fund).
+  await importMasters("accounts", P, owner.id, [{ code: "1016", name: "Petty Cash Fund - Field (mobile app)", type: "ASSET", ifrsGroup: "Cash and cash equivalents", isCurrent: true, parentCode: "1000" }]);
+  await createFund(P, owner.id, { code: "PCF-FIELD", name: "Field petty cash", imprestAmount: "10000", custodianUserId: bk.id, accountId: await id("1016") });
+  const ride = await createVoucher(P, bk.id, {
+    module: "TRANSPORT", provider: "GRAB", paymentMethod: "GCASH", paymentAccountId: gcash, transactionType: "CLIENT_VISIT", bookingNumber: "A-6QXZ2KP",
+    receiptDate: `${y}-02-03`, tripAt: `${y}-02-03T09:20`, purpose: "Client meeting - XYZ Trading renewal", details: { pickup: "Makati HQ", dropoff: "BGC One Park", distanceKm: "6.4", clientVisited: "XYZ Trading" },
+    amounts: { fare: "385", tolls: "45" }, tipAmount: "20",
+  }, true);
+  await approveVoucher(P, owner.id, ride.id);
+  await financeClear(P, acc.id, ride.id);
+  const drop = await createVoucher(P, bk.id, {
+    module: "DELIVERY", provider: "LALAMOVE", paymentMethod: "EMPLOYEE", transactionType: "DELIVERY", bookingNumber: "LLM-240871", receiptDate: `${y}-02-04`,
+    purpose: "Signed contract to XYZ Trading", details: { receiver: "XYZ Trading - Purchasing", deliveryAddress: "Ortigas Center, Pasig", packageType: "Documents" }, amounts: { deliveryFee: "210" },
+  }, true);
+  await approveVoucher(P, owner.id, drop.id);
+  await createVoucher(P, bk.id, {
+    module: "TRANSPORT", provider: "JOYRIDE", paymentMethod: "EMPLOYEE", employeeId: await emp("E-003"), receiptDate: `${y}-02-05`, purpose: "Bank deposit run",
+    details: { pickup: "Makati HQ", dropoff: "BDO Ayala" }, amounts: { fare: "140" }, noReceipt: true, noReceiptReason: "Paid cash, no e-receipt",
+  }, true);
+  const audit = await startAudit(P, bk.id, { name: "Q1 asset count", location: "Makati HQ" });
+  await scanAsset(P, bk.id, audit.id, { tagText: "VFA:FA-000101", condition: "GOOD" });
+  await scanAsset(P, bk.id, audit.id, { tagText: "VFA:FA-000102", condition: "FOR_REPAIR" });
   console.log("Demo created. Sign in as owner@demo.ph / accountant@demo.ph / bookkeeper@demo.ph, password demo12345");
 }
 main().finally(() => prisma.$disconnect());
