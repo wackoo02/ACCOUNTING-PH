@@ -186,8 +186,8 @@ export async function receiveAction(_: FormState, fd: FormData): Promise<FormSta
   const poId = s(fd, "purchaseOrderId");
   try {
     const c = await requireCtx("journal.create");
-    const lines = [...fd.keys()].filter((k) => k.startsWith("qty_")).map((k) => ({ poLineId: k.slice(4), quantity: s(fd, k), remarks: s(fd, `rem_${k.slice(4)}`) }));
-    await recordGoodsReceipt(c.org.id, c.user.id, { purchaseOrderId: poId, date: new Date(s(fd, "date")), deliveryRef: s(fd, "deliveryRef"), notes: s(fd, "notes"), lines });
+    const lines = [...fd.keys()].filter((k) => k.startsWith("qty_")).map((k) => ({ poLineId: k.slice(4), quantity: s(fd, k), remarks: s(fd, `rem_${k.slice(4)}`), lotNo: s(fd, `lot_${k.slice(4)}`) || null }));
+    await recordGoodsReceipt(c.org.id, c.user.id, { purchaseOrderId: poId, date: new Date(s(fd, "date")), deliveryRef: s(fd, "deliveryRef"), notes: s(fd, "notes"), warehouseId: s(fd, "warehouseId") || null, lines });
   } catch (e) { return fail(e); }
   revalidatePath(`/purchasing/orders/${poId}`);
   return { message: "Receiving report posted: the items are in the books as received, not yet invoiced." };

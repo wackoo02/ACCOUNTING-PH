@@ -9,6 +9,9 @@ import { calcLine, fromQ4, netUnitCost, q4, roundDiv, totals, type LineOut } fro
 import { type Tx, cents, checkCategory, cleanDims, dec, decQ4, grniAccount, q4of } from "../ap/common";
 import type { LineInput } from "../ledger/validate";
 import { fromCentavos } from "../money";
+import { convert, parseRate } from "../ledger/validate";
+import { receiveGoodsTx, voidBySourceTx } from "../inventory/hooks";
+import type { InvLineInput } from "../inventory/service";
 
 const snap = (x: unknown) => JSON.parse(JSON.stringify(x)) as Prisma.InputJsonValue;
 
@@ -350,7 +353,14 @@ export async function poProgress(db: Tx | typeof prisma, purchaseOrderId: string
 
 // ---------- Receiving ----------
 
-export async function recordGoodsReceipt(organizationId: string, userId: string, input: { purchaseOrderId: string; date: Date; deliveryRef?: string | null; notes?: string | null; lines: { poLineId: string; quantity: string; remarks?: string | null }[] }) {
+export type GoodsReceiptInput = {
+  purchaseOrderId: string; date: Date; deliveryRef?: string | null; notes?: string | null;
+  /** Warehouse for stocked items; blank uses each item's default warehouse. */
+  warehouseId?: string | null;
+  lines: { poLineId: string; quantity: string; remarks?: string | null; lotNo?: string | null }[];
+};
+
+export async function recordGoodsReceipt(organizationId: string, userId: string, input: GoodsReceiptInput) {
   return prisma.$transaction(async (tx) => {
     const po = await loadPo(tx, organizationId, input.purchaseOrderId);
     if (po.status !== "APPROVED") throw new LedgerError(["Items can only be received on an approved PO"]);
@@ -361,6 +371,13 @@ export async function recordGoodsReceipt(organizationId: string, userId: string,
     const gl: LineInput[] = [];
     const grni = await grniAccount(tx, organizationId);
     let credit = 0n;
+    // Stocked items go through the inventory module: it books Dr Inventory / Cr GRNI and adds the stock.
+    const productIds = progress.map((p) => p.line.productId).filter(Boolean) as string[];
+    const stocked = productIds.length ? await tx.product.findMany({ where: { organizationId, id: { in: productIds }, isStocked: true } }) : [];
+    const warehouses = stocked.length ? await tx.warehouse.findMany({ where: { organizationId, isActive: true } }) : [];
+    if (input.warehouseId && stocked.length && !warehouses.some((w) => w.id === input.warehouseId)) errors.push("Warehouse not found");
+    const stockLines = new Map<string, InvLineInput[]>();
+    const rate = parseRate(po.fxRate.toString()) ?? 1000000n;
     for (const l of input.lines) {
       if (!String(l.quantity ?? "").trim()) continue;
       const p = progress.find((x) => x.line.id === l.poLineId);
@@ -372,6 +389,18 @@ export async function recordGoodsReceipt(organizationId: string, userId: string,
       if (p.received + qty > p.ordered) errors.push(`Item ${p.line.lineNo}: receiving ${fromQ4(qty)} would exceed the ${fromQ4(p.ordered)} ordered (${fromQ4(p.received)} already received)`);
       rows.push({ poLineId: p.line.id, quantity: decQ4(qty), remarks: l.remarks?.trim() || null });
       const cost = roundDiv(qty * netUnitCost(q4of(p.line.unitPrice), p.line.vatType, po.vatInclusive, vendor.vatRegistered), 1000000n);
+      const item = stocked.find((x) => x.id === p.line.productId);
+      if (item) {
+        const wh = input.warehouseId || warehouses.find((w) => w.code === item.defaultWarehouseCode)?.id;
+        if (!wh) { errors.push(`Item ${p.line.lineNo}: ${item.code} is an inventory item; choose the warehouse receiving it`); continue; }
+        if (item.costingMethod === "SPECIFIC" && !l.lotNo?.trim()) { errors.push(`Item ${p.line.lineNo}: ${item.code} uses specific identification; enter the lot or serial number`); continue; }
+        const base = po.currencyCode === (await baseCurrency(tx, organizationId)) ? cost : convert(cost, rate);
+        stockLines.set(wh, [...(stockLines.get(wh) ?? []), {
+          itemId: item.id, qty: fromQ4(qty), value: fromCentavos(base), lotNo: l.lotNo?.trim() || null, dims: cleanDims(p.line.dims) ?? undefined,
+          description: `${p.line.description} (${po.number})`,
+        }]);
+        continue;
+      }
       if (cost > 0n) {
         gl.push({ accountId: p.line.accountId, debit: fromCentavos(cost), description: `${p.line.description} (${fromQ4(qty)} ${p.line.unit ?? ""})`.trim(), currencyCode: po.currencyCode, fxRate: po.fxRate.toString(), dims: cleanDims(p.line.dims), partyType: "VENDOR", partyId: vendor.code });
         credit += cost;
@@ -386,6 +415,13 @@ export async function recordGoodsReceipt(organizationId: string, userId: string,
       gl.push({ accountId: grni.id, credit: fromCentavos(credit), description: `Received on ${po.number}, not yet invoiced`, currencyCode: po.currencyCode, fxRate: po.fxRate.toString(), partyType: "VENDOR", partyId: vendor.code });
       const e = await recordJournalTx(tx, { organizationId, userId, date, memo: `${number}: received from ${vendor.name} on ${po.number}`, reference: input.deliveryRef?.trim() || number, lines: gl, source: "PURCHASES", sourceId: rr.id, action: "post" });
       await tx.goodsReceipt.update({ where: { id: rr.id }, data: { journalEntryId: e.id } });
+    }
+    for (const [warehouseId, lines] of stockLines) {
+      await receiveGoodsTx(tx, {
+        organizationId, userId, date, warehouseId, reference: input.deliveryRef?.trim() || number,
+        memo: `${number}: received from ${vendor.name} on ${po.number}`.slice(0, 500), partyType: "VENDOR", partyId: vendor.code,
+        sourceModule: "PURCHASES", sourceId: rr.id, lines,
+      });
     }
     await audit(tx, organizationId, userId, "rr.create", rr.id, { number, po: po.number }, null, null, "goods_receipt");
     return rr;
@@ -404,8 +440,12 @@ export async function voidGoodsReceipt(organizationId: string, userId: string, i
       if (p.received - q4of(l.quantity) < p.billed) throw new LedgerError([`Item ${p.line.lineNo} is already billed by the supplier. Void the bill first.`]);
     }
     if (rr.journalEntryId) await voidOrReverseTx(tx, organizationId, userId, rr.journalEntryId, undefined, true);
+    // Inventory refuses if the received stock has already been issued or sold.
+    await voidBySourceTx(tx, organizationId, userId, "PURCHASES", id, `Receiving report ${rr.number} void: ${reason.trim()}`.slice(0, 500));
     await tx.goodsReceipt.update({ where: { id }, data: { status: "VOID", voidedById: userId, voidedAt: new Date(), voidReason: reason.trim() } });
     await audit(tx, organizationId, userId, "rr.void", id, { number: rr.number, reason }, null, null, "goods_receipt");
   });
 }
 
+
+const baseCurrency = async (tx: Tx, organizationId: string) => (await tx.organization.findUniqueOrThrow({ where: { id: organizationId }, select: { baseCurrency: true } })).baseCurrency;
