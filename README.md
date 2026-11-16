@@ -7,13 +7,21 @@ Next.js 15 (App Router, server actions) · TypeScript · PostgreSQL · Prisma ·
 
 ## Run locally
 ```bash
-cp .env.example .env          # set DATABASE_URL to a PostgreSQL database
+cp .env.example .env          # set DATABASE_URL and DATABASE_URL_UNPOOLED to a PostgreSQL database
 npm install
 npx prisma migrate deploy
 npm run db:seed               # optional demo: owner@demo.ph / accountant@demo.ph / bookkeeper@demo.ph, password demo12345
 npm run dev                   # http://localhost:3000
 npm test                      # unit + integration tests (needs the database)
 ```
+
+## Deploy to Vercel (with Neon PostgreSQL)
+1. On vercel.com, sign in with GitHub and **Add New → Project → import `accounting-ph`**. Don't deploy yet if it asks; open the project.
+2. **Storage → Create Database → Neon (Postgres)**, choose the Singapore region, and connect it to the project. This adds `DATABASE_URL` and `DATABASE_URL_UNPOOLED` automatically.
+3. Optional for a test site: **Settings → Environment Variables →** `SEED_DEMO` = `true` to load the demo companies.
+4. **Deployments → Redeploy.** The build runs the database migrations, then starts the app.
+
+Turn `SEED_DEMO` off and change or remove the demo users before real company data goes in.
 
 ## What's in Phase 1–2
 **Foundation**
