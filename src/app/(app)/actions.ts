@@ -201,6 +201,7 @@ export async function updateEntity(_: FormState, fd: FormData): Promise<FormStat
       tin: String(fd.get("tin") ?? "").trim() || null,
       rdoCode: String(fd.get("rdoCode") ?? "").trim() || null,
       registeredAddress: String(fd.get("registeredAddress") ?? "").trim() || null,
+      zipCode: String(fd.get("zipCode") ?? "").trim() || null,
       tradeName: String(fd.get("tradeName") ?? "").trim() || null,
       vatRegistered: fd.get("vatRegistered") === "on",
       fiscalYearStartMonth: Math.min(12, Math.max(1, Number(fd.get("fiscalYearStartMonth")) || 1)),

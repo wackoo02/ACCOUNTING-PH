@@ -35,6 +35,7 @@ export const PH_IFRS_TEMPLATE: TemplateAccount[] = [
   { code: "1310", name: "Input VAT", type: A, ifrsGroup: "Prepayments and other current assets", isCurrent: true, parent: "1000", systemRole: "INPUT_VAT" },
   { code: "1315", name: "Deferred Input VAT (Capital Goods > P1M)", type: A, ifrsGroup: "Prepayments and other current assets", isCurrent: true, parent: "1000" },
   { code: "1320", name: "Creditable Withholding Tax (BIR 2307)", type: A, ifrsGroup: "Prepayments and other current assets", isCurrent: true, parent: "1000", systemRole: "CWT_RECEIVABLE" },
+  { code: "1322", name: "Creditable VAT Withheld (BIR 2307)", type: A, ifrsGroup: "Prepayments and other current assets", isCurrent: true, parent: "1000", systemRole: "CVAT_WITHHELD" },
   { code: "1325", name: "Prepaid Income Tax", type: A, ifrsGroup: "Prepayments and other current assets", isCurrent: true, parent: "1000" },
 
   { code: "1500", name: "Non-current Assets", type: A, ifrsGroup: "Non-current assets", isCurrent: false, header: true },
@@ -64,6 +65,8 @@ export const PH_IFRS_TEMPLATE: TemplateAccount[] = [
   { code: "2035", name: "VAT Payable", type: L, ifrsGroup: "Trade and other payables", isCurrent: true, parent: "2000", systemRole: "VAT_PAYABLE" },
   { code: "2040", name: "Withholding Tax Payable - Compensation (1601-C)", type: L, ifrsGroup: "Trade and other payables", isCurrent: true, parent: "2000", systemRole: "WTC_PAYABLE" },
   { code: "2045", name: "Withholding Tax Payable - Expanded (1601-EQ / 0619-E)", type: L, ifrsGroup: "Trade and other payables", isCurrent: true, parent: "2000", systemRole: "EWT_PAYABLE" },
+  { code: "2046", name: "Withholding Tax Payable - Final (1601-FQ / 0619-F)", type: L, ifrsGroup: "Trade and other payables", isCurrent: true, parent: "2000", systemRole: "FWT_PAYABLE" },
+  { code: "2047", name: "Percentage Tax Payable (2551Q)", type: L, ifrsGroup: "Trade and other payables", isCurrent: true, parent: "2000", systemRole: "PERCENTAGE_TAX_PAYABLE" },
   { code: "2050", name: "SSS Contributions Payable", type: L, ifrsGroup: "Trade and other payables", isCurrent: true, parent: "2000", systemRole: "SSS_PAYABLE" },
   { code: "2055", name: "PhilHealth Contributions Payable", type: L, ifrsGroup: "Trade and other payables", isCurrent: true, parent: "2000", systemRole: "PHIC_PAYABLE" },
   { code: "2060", name: "Pag-IBIG (HDMF) Contributions Payable", type: L, ifrsGroup: "Trade and other payables", isCurrent: true, parent: "2000", systemRole: "HDMF_PAYABLE" },
