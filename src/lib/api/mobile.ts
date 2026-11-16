@@ -12,6 +12,7 @@ import {
 } from "../pettycash/service";
 import { autoReconcile, claimFromStatementLine, employeeExpenseReport, mobilityDashboard, mobilitySetup, reconciliationStatus } from "../expense/service";
 import { auditSummary, closeAudit, listAssets, listAudits, lookupAsset, mapTag, scanAsset, startAudit } from "../assets/audit";
+import { extractSalesInvoice, postSalesScan, previewSalesScan, type SalesScanInput } from "../sales/scan";
 import { extractReceipt, saveReceiptImage, suggestAccount } from "../pettycash/extract";
 
 async function assertManager(organizationId: string, userId: string, voucherId: string) {
@@ -51,7 +52,7 @@ const routes: [string, RegExp, Handler][] = [
     const ms = await prisma.membership.findMany({ where: { userId: ctx.user.id }, include: { organization: true }, orderBy: { createdAt: "asc" } });
     return json({
       user: ctx.user, company: ctx.org, role: ctx.role, approvalLimit: ctx.approvalLimit,
-      can: { capture: can(ctx.role, "pettycash.capture"), approve: can(ctx.role, "pettycash.approve"), finance: can(ctx.role, "expense.finance"), assetAudit: can(ctx.role, "assets.audit"), reports: can(ctx.role, "reports.view"), replenish: can(ctx.role, "pettycash.replenish"), postJournal: can(ctx.role, "journal.post"), manage: can(ctx.role, "masters.manage") },
+      can: { capture: can(ctx.role, "pettycash.capture"), approve: can(ctx.role, "pettycash.approve"), finance: can(ctx.role, "expense.finance"), sales: can(ctx.role, "journal.create"), assetAudit: can(ctx.role, "assets.audit"), reports: can(ctx.role, "reports.view"), replenish: can(ctx.role, "pettycash.replenish"), postJournal: can(ctx.role, "journal.post"), manage: can(ctx.role, "masters.manage") },
       companies: ms.map((m) => ({ id: m.organizationId, name: m.organization.name, role: m.role })),
     });
   }],
@@ -70,6 +71,17 @@ const routes: [string, RegExp, Handler][] = [
   ["GET", /^reconciliation$/, async (req) => json(await reconciliationStatus((await requireApiCtx(req, "expense.finance")).org.id))],
   ["POST", /^reconciliation\/([^/]+)\/auto$/, async (req, [id]) => { const ctx = await requireApiCtx(req, "expense.finance"); return json({ matched: await autoReconcile(ctx.org.id, ctx.user.id, id) }); }],
   ["POST", /^reconciliation\/exceptions$/, async (req) => { const ctx = await requireApiCtx(req, "expense.finance"); return json(await claimFromStatementLine(ctx.org.id, ctx.user.id, await body(req)), 201); }],
+
+  // Sales invoice scanning
+  ["POST", /^sales-invoices\/scan$/, async (req) => {
+    const ctx = await requireApiCtx(req, "journal.create");
+    const b = await body<{ imageBase64: string; mediaType: string }>(req);
+    const img = await saveReceiptImage(ctx.org.id, ctx.user.id, b.imageBase64, b.mediaType);
+    try { return json(await extractSalesInvoice(ctx.org.id, img.id), 201); }
+    catch (e) { return json({ imageId: img.id, extractionError: e instanceof LedgerError ? e.errors[0] : "The photo could not be read right now. Enter the details by hand." }, 201); }
+  }],
+  ["POST", /^sales-invoices\/preview$/, async (req) => json(await previewSalesScan((await requireApiCtx(req, "journal.create")).org.id, await body<SalesScanInput>(req)))],
+  ["POST", /^sales-invoices$/, async (req, _, url) => { const ctx = await requireApiCtx(req, "journal.create"); return json(await postSalesScan(ctx.org.id, ctx.user.id, await body<SalesScanInput>(req), url.origin), 201); }],
 
   // Asset audit (QR stickers)
   ["GET", /^assets$/, async (req, _, url) => json(await listAssets((await requireApiCtx(req, "assets.audit")).org.id, { location: url.searchParams.get("location"), q: url.searchParams.get("q") }))],

@@ -780,12 +780,14 @@ async function creditSide(tx: Tx, organizationId: string, v: FullVoucher) {
   if (v.paymentMethod === "EMPLOYEE") {
     const a = await tx.account.findFirst({ where: { organizationId, systemRole: "EMPLOYEE_REIMB_PAYABLE" } });
     if (!a) throw new LedgerError(["No account is assigned the role EMPLOYEE_REIMB_PAYABLE (Employee Reimbursements Payable)"]);
-    return { accountId: a.id, label: "Employee reimbursement payable", partyType: "EMPLOYEE", partyId: v.employeeId };
+    const e = v.employeeId ? await tx.employee.findUnique({ where: { id: v.employeeId } }) : null;
+    return { accountId: a.id, label: "Employee reimbursement payable", partyType: e?.isPartner ? "PARTNER" : "EMPLOYEE", partyId: e?.code ?? null };
   }
   if (v.paymentMethod === "COMPANY_ACCOUNT") {
     const a = await tx.account.findFirst({ where: { organizationId, systemRole: "AP_CONTROL" } });
     if (!a) throw new LedgerError(["No account is assigned the role AP_CONTROL (Accounts Payable)"]);
-    return { accountId: a.id, label: `Billed to company account - ${v.vendorName}`, partyType: v.vendorId ? "VENDOR" : null, partyId: v.vendorId };
+    const vd = v.vendorId ? await tx.vendor.findUnique({ where: { id: v.vendorId } }) : null;
+    return { accountId: a.id, label: `Billed to company account - ${v.vendorName}`, partyType: vd ? "VENDOR" : null, partyId: vd?.code ?? null };
   }
   const b = v.paymentAccountId ? await tx.bankAccount.findFirst({ where: { id: v.paymentAccountId, organizationId } }) : null;
   if (!b) throw new LedgerError(["The payment account was not found"]);
@@ -803,7 +805,12 @@ async function postClaim(tx: Tx, organizationId: string, userId: string, v: Full
   const emp = v.employeeId ? await tx.employee.findUnique({ where: { id: v.employeeId } }) : null;
   const who = emp ? `${emp.firstName} ${emp.lastName}` : null;
   // Expense lines carry the employee as party (expense summary per employee / partner).
-  for (const l of lines.slice(0, -1)) if (emp && l.debit !== "0" && !l.partyType) { l.partyType = "EMPLOYEE"; l.partyId = emp.id; }
+  // Party ids follow the cash module convention: the master code (EMPLOYEE:E-001, VENDOR:V-001).
+  const vendorCode = v.vendorId ? (await tx.vendor.findUnique({ where: { id: v.vendorId } }))?.code ?? null : null;
+  for (const l of lines.slice(0, -1)) {
+    if (emp && l.debit !== "0" && l.accountId !== inputVat?.id) { l.partyType = emp.isPartner ? "PARTNER" : "EMPLOYEE"; l.partyId = emp.code; }
+    else if (l.partyType === "VENDOR") l.partyId = vendorCode;
+  }
   const last = lines[lines.length - 1];
   last.description = `${credit.label}${who ? ` - ${who}` : ""} - ${ref}`.slice(0, 250);
   last.partyType = credit.partyType; last.partyId = credit.partyId;
@@ -913,7 +920,7 @@ export async function payReimbursement(organizationId: string, userId: string, i
     const total = claimed.vs.reduce((s, v) => s + cents(v.totalPaid), 0n);
     const t = await saveCashTransaction({
       organizationId, userId, type: "DISBURSEMENT", bankAccountId: input.bankAccountId, date: asDay(input.date || new Date()),
-      payee: `${claimed.emp.firstName} ${claimed.emp.lastName}`, partyType: "EMPLOYEE", partyId: claimed.emp.id,
+      payee: `${claimed.emp.firstName} ${claimed.emp.lastName}`, partyType: claimed.emp.isPartner ? "PARTNER" : "EMPLOYEE", partyId: claimed.emp.code,
       method: input.method || "BANK_TRANSFER", checkNo: input.checkNo || null,
       reference: claimed.vs.map((v) => v.number).join(", ").slice(0, 190),
       memo: `Reimbursement of ${claimed.vs.length} expense claim${claimed.vs.length === 1 ? "" : "s"}`,
@@ -957,7 +964,8 @@ export async function createBatch(organizationId: string, userId: string, input:
     if (!inputVat && vs.some((v) => cents(v.vatAmount) > 0n)) throw new LedgerError(["No account is assigned the role INPUT_VAT"]);
     const ewtAcct = new Map<string, string | null>();
     for (const t of [...new Set(vs.map((v) => v.ewtTaxCodeId).filter(Boolean) as string[])]) ewtAcct.set(t, await ewtAccountOf(tx, organizationId, t));
-    const bvs: BatchVoucher[] = vs.map((v) => toBatchVoucher(v as FullVoucher, v.ewtTaxCodeId ? ewtAcct.get(v.ewtTaxCodeId) ?? null : null));
+    const vcodes = new Map((await tx.vendor.findMany({ where: { id: { in: vs.map((v) => v.vendorId).filter(Boolean) as string[] } } })).map((x) => [x.id, x.code]));
+    const bvs: BatchVoucher[] = vs.map((v) => ({ ...toBatchVoucher(v as FullVoucher, v.ewtTaxCodeId ? ewtAcct.get(v.ewtTaxCodeId) ?? null : null), vendorId: v.vendorId ? vcodes.get(v.vendorId) ?? null : null }));
     let lines;
     try {
       lines = buildReplenishmentLines(bvs, inputVat?.id ?? "", fund.replenishAccountId ?? fund.accountId);

@@ -18,11 +18,12 @@ const empName = (e: { firstName: string; lastName: string }) => `${e.firstName} 
 export async function mobilitySetup(organizationId: string, userId: string) {
   const base = await setupData(organizationId);
   return prisma.$transaction(async (tx) => {
-    const [me, employees, banks, currencies] = await Promise.all([
+    const [me, employees, banks, currencies, customers] = await Promise.all([
       employeeOfUser(tx, organizationId, userId),
       tx.employee.findMany({ where: { organizationId, isActive: true }, orderBy: [{ lastName: "asc" }, { firstName: "asc" }] }),
       tx.bankAccount.findMany({ where: { organizationId, isActive: true, kind: { in: ["EWALLET", "CREDIT_CARD", "CURRENT", "SAVINGS"] } }, orderBy: { code: "asc" } }),
       tx.currency.findMany({ where: { organizationId, isActive: true }, orderBy: { code: "asc" } }),
+      tx.customer.findMany({ where: { organizationId, isActive: true }, orderBy: { name: "asc" }, select: { id: true, code: true, name: true, tin: true } }),
     ]);
     const types = await Promise.all(TRANSACTION_TYPES.map(async (t) => {
       const a = await mappedAccount(tx, organizationId, t.key);
@@ -40,6 +41,7 @@ export async function mobilitySetup(organizationId: string, userId: string) {
       modules: (Object.keys(MODULES) as ModuleKey[]).map((k) => ({ key: k, ...MODULES[k], providers: PROVIDERS[k], detailFields: DETAIL_FIELDS[k], amountFields: AMOUNT_FIELDS[k] })),
       transactionTypes: types,
       payments,
+      customers,
       currencies: currencies.map((c) => ({ code: c.code, name: c.name, rate: c.rateToBase.toString() })),
     };
   });

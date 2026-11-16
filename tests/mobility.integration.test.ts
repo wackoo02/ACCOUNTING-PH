@@ -145,7 +145,7 @@ describe("mobility claims", () => {
     expect(sumBy(e, "6051", "debit")).toBe(520);
     expect(sumBy(e, "1030", "credit")).toBe(520);
     expect(sumBy(e, "1310", "debit")).toBe(0);
-    expect(e.lines.find((l) => l.account.code === "6051")).toMatchObject({ partyType: "EMPLOYEE" });
+    expect(e.lines.find((l) => l.account.code === "6051")).toMatchObject({ partyType: "EMPLOYEE", partyId: "E-200" });
   });
 
   it("blocks a duplicate booking number at finance review unless overridden with a note", async () => {
@@ -176,7 +176,7 @@ describe("mobility claims", () => {
     const e = await je(c.data.journal.id);
     expect(sumBy(e, "1205", "debit")).toBe(1400);
     expect(sumBy(e, "2018", "credit")).toBe(1400);
-    expect(e.lines.find((l) => l.account.code === "2018")).toMatchObject({ partyType: "EMPLOYEE" });
+    expect(e.lines.find((l) => l.account.code === "2018")).toMatchObject({ partyType: "EMPLOYEE", partyId: "E-200" });
 
     const out = await call("GET", "reimbursements", acctTok);
     expect(out.data[0]).toMatchObject({ employee: { code: "E-200" }, total: "1400.00", count: 1 });
@@ -281,5 +281,25 @@ describe("asset audit", () => {
     expect(sum.totals).toMatchObject({ found: 1, missing: 2, missingCost: "25000.00" });
     expect((await prisma.fixedAsset.findFirstOrThrow({ where: { organizationId: org, code: "FA-0003" } })).status).toBe("MISSING");
     expect(sum.byCategory.find((c: { key: string }) => c.key === "Furniture")).toMatchObject({ expected: 1, missing: 1 });
+  });
+});
+
+describe("sales invoice scanning", () => {
+  it("previews and sends a charge sale journal for approval, and refuses the same invoice twice", async () => {
+    await importMasters("customers", org, owner, [{ code: "C-001", name: "ABC Corp", tin: "111-222-333-000" }]);
+    const cust = await prisma.customer.findFirstOrThrow({ where: { organizationId: org, code: "C-001" } });
+    const body = { invoiceNumber: "0451", date: "2026-11-14", terms: "CHARGE", customerId: cust.id, vatableSales: "10000", total: "11200", withholdingTax: "100", isService: true };
+    expect((await call("POST", "sales-invoices/preview", staffTok, { ...body, customerId: null })).data.errors.join()).toMatch(/need a customer/);
+    const p = await call("POST", "sales-invoices/preview", staffTok, body);
+    expect(p.data).toMatchObject({ ok: true, totals: { vat: "1200.00", net: "10000.00", receivable: "11100.00" } });
+    const r = await call("POST", "sales-invoices", staffTok, body);
+    expect(r.status).toBe(201);
+    const e = await je(r.data.journal.id);
+    expect(e).toMatchObject({ status: "PENDING_APPROVAL", source: "SALES", reference: "SI 0451" });
+    expect(sumBy(e, "1100", "debit")).toBe(11100);
+    expect(sumBy(e, "1320", "debit")).toBe(100);
+    expect(sumBy(e, "4020", "credit")).toBe(10000);
+    expect(sumBy(e, "2030", "credit")).toBe(1200);
+    expect((await call("POST", "sales-invoices", staffTok, body)).data.errors.join()).toMatch(/already recorded/);
   });
 });
