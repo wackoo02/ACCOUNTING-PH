@@ -91,6 +91,17 @@ export const ICONS = {
   receive: [p("M3 8l9-5 9 5v8l-9 5-9-5z"), p("M3 8l9 5 9-5M12 13v8", true)],
   aging: [circle(12, 12, 8.5), p("M12 7v5l3.5 2", true)],
   ratio: [p("M5 19L19 5"), circle(7, 7, 2.5, true), circle(17, 17, 2.5, true)],
+  search: [circle(10.5, 10.5, 6.5), p("M15.5 15.5L20.5 20.5", true)],
+  bell: [p("M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"), p("M10 20.5a2 2 0 0 0 4 0", true)],
+  chevron: [p("M9 6l6 6-6 6")],
+  home: [p("M3.5 11L12 4l8.5 7"), p("M5.5 9.5V20h13V9.5"), p("M10 20v-5.5h4V20", true)],
+  sparkle: [p("M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"), p("M18.5 15.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z", true)],
+  help: [p("M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v8a2.5 2.5 0 0 1-2.5 2.5H10l-4.5 3.5V17H6.5A2.5 2.5 0 0 1 4 14.5z"), p("M10 8.8a2 2 0 1 1 2.6 1.9c-.4.2-.6.5-.6.9v.4M12 14h.01", true)],
+  send: [p("M4 12l16-8-6 16-2.5-6.5z"), p("M11.5 13.5L20 4", true)],
+  trend: [p("M3 17l6-6 4 4 8-8"), p("M15 7h6v6", true)],
+  alert: [p("M12 3.5L2.5 20h19z"), p("M12 10v4.5M12 17.5h.01", true)],
+  info: [circle(12, 12, 8.5), p("M12 11v5.5M12 7.8h.01", true)],
+  menu: [p("M4 7h16M4 12h16M4 17h16")],
 } satisfies Record<string, IconDef>;
 
 export type IconName = keyof typeof ICONS;
