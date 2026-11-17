@@ -2,6 +2,8 @@
 import { useActionState, useMemo, useState } from "react";
 import { acceptSuggestions, manualMatch } from "../../bank-actions";
 import { Errors } from "@/components/Errors";
+import { MasterPicker } from "@/components/MasterPicker";
+import { idOpts } from "@/lib/lookup";
 
 export type WBank = { id: string; date: string; description: string; reference: string | null; checkNo: string | null; amount: string; suggestedAccountId: string | null; suggestedLabel: string };
 export type WBook = { id: string; date: string; number: string; memo: string; payee: string | null; checkNo: string | null; amount: string; entryId: string };
@@ -42,6 +44,7 @@ export function Suggestions({ bankAccountId, suggestions, bank, book }: { bankAc
 export function Manual({ bankAccountId, bank, book, accounts, canPost }: { bankAccountId: string; bank: WBank[]; book: WBook[]; accounts: Acct[]; canPost: boolean }) {
   const [s, a, p] = useActionState(manualMatch, undefined);
   const [selBank, setSelBank] = useState<Set<string>>(new Set());
+  const accountOpts = useMemo(() => idOpts(accounts), [accounts]);
   const [selBook, setSelBook] = useState<Set<string>>(new Set());
   const toggle = (set: Set<string>, id: string, f: (x: Set<string>) => void) => { const n = new Set(set); if (n.has(id)) n.delete(id); else n.add(id); f(n); };
   const tb = useMemo(() => bank.filter((b) => selBank.has(b.id)).reduce((t, b) => t + c(b.amount), 0), [bank, selBank]);
@@ -71,9 +74,7 @@ export function Manual({ bankAccountId, bank, book, accounts, canPost }: { bankA
                     {selBank.has(b.id) && <input type="hidden" name="adj" value={b.id} />}</td>
                   <td>{b.date}</td><td>{b.description}{b.checkNo ? <div className="muted">chk {b.checkNo}</div> : null}{b.reference ? <div className="muted">{b.reference}</div> : null}</td>
                   <td className="num">{money(c(b.amount))}</td>
-                  {canPost && <td><select name={`acct_${b.id}`} defaultValue={b.suggestedAccountId ?? ""} style={{ minWidth: 160 }}>
-                    <option value="">Choose…</option>{accounts.map((x) => <option key={x.id} value={x.id}>{x.code} · {x.name}</option>)}
-                  </select></td>}
+                  {canPost && <td><MasterPicker name={`acct_${b.id}`} ariaLabel={`Account for ${b.description}`} placeholder="Type account…" defaultValue={b.suggestedAccountId ?? ""} options={accountOpts} add={{ kind: "accounts" }} style={{ minWidth: 180 }} /></td>}
                 </tr>
               ))}
               {bank.length === 0 && <tr><td colSpan={5} className="muted">Everything on the statements is cleared.</td></tr>}

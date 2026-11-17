@@ -2,6 +2,8 @@
 import { useState } from "react";
 import { countWorkflow } from "../../../inventory-actions";
 import { ActionForm } from "@/components/ActionForm";
+import { MasterPicker } from "@/components/MasterPicker";
+import { idOpts } from "@/lib/lookup";
 
 type Line = { id: string; item: string; unit: string; location: string; lotNo: string; systemQty: string; onHand: string; changed: boolean; counted: string; variance: string; note: string };
 type Props = { id: string; status: string; canEdit: boolean; canApprove: boolean; canReject: boolean; lines: Line[]; items: { id: string; code: string; name: string }[]; locations: { id: string; code: string }[] };
@@ -44,8 +46,8 @@ export function CountSheet({ id, status, canEdit, canApprove, canReject, lines, 
             ))}
             {canEdit && [0, 1, 2].map((i) => (
               <tr key={`a${i}`} className="noprint">
-                <td><select name={`a_loc_${i}`} defaultValue=""><option value="">—</option>{locations.map((x) => <option key={x.id} value={x.id}>{x.code}</option>)}</select></td>
-                <td colSpan={2}><select name={`a_item_${i}`} defaultValue=""><option value="">+ Item found, not on the sheet…</option>{items.map((x) => <option key={x.id} value={x.id}>{x.code} · {x.name}</option>)}</select></td>
+                <td><MasterPicker name={`a_loc_${i}`} ariaLabel={`Bin, extra line ${i + 1}`} placeholder="—" emptyLabel="—" options={locations.map((x) => ({ value: x.id, code: x.code, label: "" }))} /></td>
+                <td colSpan={2}><MasterPicker name={`a_item_${i}`} ariaLabel={`Item, extra line ${i + 1}`} placeholder="+ Item found, not on the sheet…" emptyLabel="—" options={idOpts(items)} /></td>
                 <td><input name={`a_lot_${i}`} placeholder="Lot / serial" /></td>{!blind && <td />}
                 <td><input className="num" name={`a_qty_${i}`} inputMode="decimal" /></td>{!blind && <td />}<td />
               </tr>

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { entityTree } from "@/lib/group";
 import { ActionForm } from "@/components/ActionForm";
 import { createEntity, setupIntercompanyAction } from "../actions";
+import { MasterPicker } from "@/components/MasterPicker";
 
 export default async function Entities() {
   const ctx = await requireCtx();
@@ -35,7 +36,7 @@ export default async function Entities() {
           <div><label>Company code</label><input name="code" required placeholder="e.g. SUB1" /></div>
           <div><label>TIN</label><input name="tin" /></div>
           <div><label>Type</label><select name="entityType" defaultValue="SUBSIDIARY"><option>COMPANY</option><option>SUBSIDIARY</option><option>BRANCH</option><option>DIVISION</option></select></div>
-          <div><label>Parent entity</label><select name="parentId" defaultValue={ctx.org.id}><option value="">None (top level)</option>{admins.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}</select></div>
+          <div><label>Parent entity</label><MasterPicker name="parentId" ariaLabel="Parent entity" defaultValue={ctx.org.id} emptyLabel="None (top level)" placeholder="None (top level)" options={admins.map((o) => ({ value: o.id, label: o.name }))} /></div>
           <div><label>Ownership %</label><input name="ownershipPct" defaultValue="100" /></div>
           <div style={{ flex: 0 }}><button>Create</button></div>
         </div>
@@ -54,7 +55,7 @@ export default async function Entities() {
         <ActionForm action={setupIntercompanyAction} className="card" style={{ marginTop: 10 }}>
           <div className="row">
             <div style={{ flex: 3 }}><label>Set up intercompany with</label>
-              <select name="counterpartyId">{admins.filter((o) => o.id !== ctx.org.id && !links.some((l) => l.counterpartyOrgId === o.id)).map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}</select></div>
+              <MasterPicker name="counterpartyId" ariaLabel="Counterparty entity" options={admins.filter((o) => o.id !== ctx.org.id && !links.some((l) => l.counterpartyOrgId === o.id)).map((o) => ({ value: o.id, label: o.name }))} required /></div>
             <div style={{ flex: 0 }}><button>Create Due from / Due to accounts</button></div>
           </div>
           <p className="muted" style={{ marginBottom: 0 }}>Creates a Due from and a Due to account in both entities and links them, so intercompany entries balance and eliminate on consolidation.</p>

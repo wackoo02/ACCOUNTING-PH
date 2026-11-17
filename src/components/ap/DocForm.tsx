@@ -4,6 +4,8 @@ import { Fragment, useActionState, useMemo, useState } from "react";
 import { savePrAction, savePoAction, saveBillAction } from "@/app/(app)/ap-actions";
 import type { ApFormData } from "@/lib/ap/form-data";
 import { Errors } from "../Errors";
+import { MasterLookup } from "../MasterLookup";
+import { dimAdd, idOpts } from "@/lib/lookup";
 
 export type DocMode = "PR" | "PO" | "BILL";
 export type DocLine = {
@@ -65,11 +67,14 @@ export function DocForm({ mode, data, initial, initialLines, openPos = [], requi
     const p = data.products.find((x) => x.id === id);
     set(i, p ? { productId: id, description: p.name, unit: p.unit ?? "", unitPrice: p.cost !== "0" ? p.cost : lines[i].unitPrice, accountId: p.accountId || lines[i].accountId, vatType: p.vatType } : { productId: "" });
   };
+  const vendorOpts = useMemo(() => idOpts(data.vendors, (v) => (v.tin ? `TIN ${v.tin}` : undefined)), [data.vendors]);
+  const productOpts = useMemo(() => idOpts(data.products), [data.products]);
+  const taxOpts = useMemo(() => data.taxCodes.map((t) => ({ value: t.id, code: t.atc ?? t.code, label: t.name, hint: `${t.rate}%` })), [data.taxCodes]);
   const body = (intent: string) => JSON.stringify({ ...h, intent, lines });
   const dimSel = (key: string, label: string) => {
     const d = data.dims.find((x) => x.key === key);
     if (!d) return null;
-    return <div><label>{label}</label><select value={(h as unknown as Record<string, string>)[key] ?? ""} onChange={(e) => setH({ ...h, [key]: e.target.value })}><option value="">—</option>{d.values.map((v) => <option key={v.id} value={v.id}>{v.code} · {v.name}</option>)}</select></div>;
+    return <div><label>{label}</label><MasterLookup ariaLabel={label} placeholder="—" emptyLabel="— None" value={(h as unknown as Record<string, string>)[key] ?? ""} options={idOpts(d.values)} add={dimAdd(key)} onChange={(v) => setH({ ...h, [key]: v })} /></div>;
   };
 
   return (
@@ -79,10 +84,7 @@ export function DocForm({ mode, data, initial, initialLines, openPos = [], requi
       <div className="card">
         <div className="row">
           {mode !== "PR" && <div style={{ flex: 2 }}><label>Supplier</label>
-            <select value={h.vendorId} onChange={(e) => pickVendor(e.target.value)} required>
-              <option value="">Choose supplier…</option>
-              {data.vendors.map((v) => <option key={v.id} value={v.id}>{v.name} ({v.code}){v.tin ? ` · TIN ${v.tin}` : ""}</option>)}
-            </select>{vendor && !vendor.vat && <div className="muted">Non-VAT supplier: no input VAT.</div>}</div>}
+            <MasterLookup ariaLabel="Supplier" required value={h.vendorId} options={vendorOpts} add={{ kind: "vendors", noun: "supplier" }} onChange={(v) => pickVendor(v)} />{vendor && !vendor.vat && <div className="muted">Non-VAT supplier: no input VAT.</div>}</div>}
           {mode === "BILL" && <div><label>Supplier invoice no.</label><input value={h.invoiceNo} onChange={(e) => setH({ ...h, invoiceNo: e.target.value })} required /></div>}
           {mode === "BILL" && <div><label>Invoice date</label><input type="date" value={h.invoiceDate} onChange={(e) => setH({ ...h, invoiceDate: e.target.value })} required /></div>}
           <div><label>{mode === "BILL" ? "Posting date" : mode === "PO" ? "PO date" : "Date"}</label><input type="date" value={h.date} onChange={(e) => setH({ ...h, date: e.target.value })} required /></div>
@@ -124,21 +126,20 @@ export function DocForm({ mode, data, initial, initialLines, openPos = [], requi
               <Fragment key={i}>
                 <tr>
                   <td>
-                    {data.products.length > 0 && !l.poLineId && <select value={l.productId} onChange={(e) => pickProduct(i, e.target.value)} style={{ marginBottom: 4 }}><option value="">— free text —</option>{data.products.map((p) => <option key={p.id} value={p.id}>{p.code} · {p.name}</option>)}</select>}
+                    {!l.poLineId && <MasterLookup ariaLabel={`Item line ${i + 1}`} placeholder="Type item code or name…" emptyLabel="— Free text" value={l.productId} options={productOpts} add={{ kind: "products", noun: "item" }}
+                      onChange={(v, rec) => (rec ? set(i, { productId: v, description: rec.label }) : pickProduct(i, v))} style={{ marginBottom: 4 }} />}
                     <input value={l.description} onChange={(e) => set(i, { description: e.target.value })} placeholder="Description" aria-label={`Description line ${i + 1}`} />
                     {poLine && <div className="muted">PO line {poLine.lineNo} · open {poLine.open}</div>}
                     {l.reason && <div className="muted">AI: {l.reason}</div>}
                   </td>
                   <td><select value={l.category} onChange={(e) => set(i, { category: e.target.value, accountId: "" })} aria-label={`Type line ${i + 1}`}>{CATS.map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></td>
-                  <td><select value={l.accountId} onChange={(e) => set(i, { accountId: e.target.value })} aria-label={`Account line ${i + 1}`} required={mode !== "PR"}>
-                    <option value="">Choose…</option>{opts.map((a) => <option key={a.id} value={a.id}>{a.code} · {a.name}</option>)}
-                    {l.accountId && !opts.some((a) => a.id === l.accountId) && <option value={l.accountId}>{data.accounts.find((a) => a.id === l.accountId)?.code ?? "?"} (does not fit the type)</option>}
-                  </select></td>
+                  <td><MasterLookup ariaLabel={`Account line ${i + 1}`} placeholder="Type account code or name…" required={mode !== "PR"} value={l.accountId} add={{ kind: "accounts" }} onChange={(v) => set(i, { accountId: v })}
+                    options={[...idOpts(opts), ...(l.accountId && !opts.some((a) => a.id === l.accountId) ? [{ value: l.accountId, code: data.accounts.find((a) => a.id === l.accountId)?.code ?? "?", label: "(does not fit the type)" }] : [])]} /></td>
                   <td><input className="num" value={l.quantity} onChange={(e) => set(i, { quantity: e.target.value })} aria-label={`Quantity line ${i + 1}`} /></td>
                   {mode !== "BILL" && <td><input value={l.unit} onChange={(e) => set(i, { unit: e.target.value })} /></td>}
                   <td><input className="num" inputMode="decimal" value={l.unitPrice} onChange={(e) => set(i, { unitPrice: e.target.value })} aria-label={`Unit price line ${i + 1}`} /></td>
                   {mode !== "PR" && <td><select value={l.vatType} onChange={(e) => set(i, { vatType: e.target.value })}><option value="VATABLE">VATable</option><option value="ZERO_RATED">Zero-rated</option><option value="EXEMPT">Exempt</option></select></td>}
-                  {mode === "BILL" && <td><select value={l.ewtTaxCodeId} onChange={(e) => set(i, { ewtTaxCodeId: e.target.value })}><option value="">None</option>{data.taxCodes.map((t) => <option key={t.id} value={t.id}>{t.atc ?? t.code} {t.rate}%</option>)}</select></td>}
+                  {mode === "BILL" && <td><MasterLookup ariaLabel={`EWT line ${i + 1}`} placeholder="None" emptyLabel="None" value={l.ewtTaxCodeId} options={taxOpts} add={{ kind: "taxes" }} onChange={(v) => set(i, { ewtTaxCodeId: v })} /></td>}
                   <td className="num">{money(num(l.quantity) * num(l.unitPrice))}</td>
                   <td>{lines.length > 1 && <button type="button" className="link" style={{ color: "var(--danger)" }} onClick={() => setLines((ls) => ls.filter((_, j) => j !== i))} aria-label="Remove line">✕</button>}</td>
                 </tr>
@@ -149,7 +150,7 @@ export function DocForm({ mode, data, initial, initialLines, openPos = [], requi
                       <div style={{ minWidth: 140 }}><label>Coverage to</label><input type="date" value={l.prepaidEnd} onChange={(e) => set(i, { prepaidEnd: e.target.value })} /></div>
                     </>}
                     {showDims && data.dims.map((d) => <div key={d.key} style={{ minWidth: 130 }}><label>{d.label}</label>
-                      <select value={l.dims[d.key] ?? ""} onChange={(e) => set(i, { dims: { ...l.dims, [d.key]: e.target.value } })}><option value="">—</option>{d.values.map((v) => <option key={v.id} value={v.id}>{v.code} · {v.name}</option>)}</select></div>)}
+                      <MasterLookup ariaLabel={`${d.label} line ${i + 1}`} placeholder="—" emptyLabel="— None" value={l.dims[d.key] ?? ""} options={idOpts(d.values)} add={dimAdd(d.key)} onChange={(v) => set(i, { dims: { ...l.dims, [d.key]: v } })} /></div>)}
                   </div></td></tr>
                 ) : null}
               </Fragment>

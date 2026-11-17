@@ -3,6 +3,8 @@ import { useActionState, useState } from "react";
 import { saveContractAction } from "@/app/(app)/ar-actions";
 import type { InvoiceFormData } from "@/lib/ar/form-data";
 import { Errors } from "./Errors";
+import { MasterLookup } from "./MasterLookup";
+import { idOpts } from "@/lib/lookup";
 import { LineEditor, blankLine, money, previewTotals, type InvLine } from "./InvoiceForm";
 
 type Milestone = { id?: string; description: string; percent: string; amount: string; dueDate: string; vatType: string; billed?: boolean };
@@ -36,7 +38,7 @@ export function ContractForm({ data, initial }: { data: InvoiceFormData; initial
         <div className="row">
           <div style={{ flex: 2 }}><label>Billing type</label><select value={h.kind} onChange={(e) => setH({ ...h, kind: e.target.value })} disabled={!!initial.id}>{Object.entries(KINDS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
           <div style={{ flex: 2 }}><label>Name</label><input value={h.name} onChange={(e) => setH({ ...h, name: e.target.value })} placeholder="e.g. Monthly IT support retainer" required /></div>
-          <div style={{ flex: 2 }}><label>Customer</label><select value={h.customerId} onChange={(e) => setH({ ...h, customerId: e.target.value })} required><option value="">Choose…</option>{data.customers.map((c) => <option key={c.id} value={c.id}>{c.name} ({c.code})</option>)}</select></div>
+          <div style={{ flex: 2 }}><label>Customer</label><MasterLookup ariaLabel="Customer" required value={h.customerId} options={idOpts(data.customers)} add={{ kind: "customers" }} onChange={(v) => setH({ ...h, customerId: v })} /></div>
         </div>
         <div className="row" style={{ marginTop: 10 }}>
           <div><label>Start date</label><input type="date" value={h.startDate} onChange={(e) => setH({ ...h, startDate: e.target.value })} required /></div>
@@ -47,7 +49,7 @@ export function ContractForm({ data, initial }: { data: InvoiceFormData; initial
           <div><label>{project ? "Contract value" : "Total contract value (optional)"}</label><input className="num" value={h.contractValue} onChange={(e) => setH({ ...h, contractValue: e.target.value })} /></div>
         </div>
         <div className="row" style={{ marginTop: 10 }}>
-          <div style={{ flex: 2 }}><label>Tax the customer withholds (BIR 2307)</label><select value={h.ewtTaxCodeId} onChange={(e) => setH({ ...h, ewtTaxCodeId: e.target.value })}><option value="">None</option>{data.taxCodes.map((x) => <option key={x.id} value={x.id}>{x.code} · {x.name}</option>)}</select></div>
+          <div style={{ flex: 2 }}><label>Tax the customer withholds (BIR 2307)</label><MasterLookup ariaLabel="Withholding tax" placeholder="None" emptyLabel="None" value={h.ewtTaxCodeId} options={idOpts(data.taxCodes, (x) => `${x.rate}%`)} add={{ kind: "taxes" }} onChange={(v) => setH({ ...h, ewtTaxCodeId: v })} /></div>
           {data.vatRegistered && <div><label><input type="checkbox" checked={h.pricesIncludeVat} onChange={(e) => setH({ ...h, pricesIncludeVat: e.target.checked })} style={{ width: "auto" }} /> Prices include VAT</label></div>}
           <div><label><input type="checkbox" checked={h.autoSubmit} onChange={(e) => setH({ ...h, autoSubmit: e.target.checked })} style={{ width: "auto" }} /> Send new invoices straight to approval</label></div>
           {initial.id && <div><label>Status</label><select value={h.status} onChange={(e) => setH({ ...h, status: e.target.value })}><option value="ACTIVE">Active</option><option value="PAUSED">Paused</option><option value="ENDED">Ended</option></select></div>}

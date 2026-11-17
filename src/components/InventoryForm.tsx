@@ -1,8 +1,10 @@
 "use client";
-import { Fragment, useActionState, useRef, useState } from "react";
+import { Fragment, useActionState, useMemo, useRef, useState } from "react";
 import { saveInventoryDoc } from "@/app/(app)/inventory-actions";
 import type { InventoryFormData } from "@/lib/inventory/form-data";
 import { Errors } from "./Errors";
+import { MasterLookup, type AddTarget } from "./MasterLookup";
+import { dimAdd, idOpts, partyAdd, partyOpt } from "@/lib/lookup";
 
 export type InvMode = "RECEIPT" | "ISSUE" | "TRANSFER" | "ADJUSTMENT" | "RETURN_IN" | "RETURN_OUT";
 type Line = { itemId: string; qty: string; unitCost: string; locationId: string; toLocationId: string; lotNo: string; accountId: string; description: string; dims: Record<string, string> };
@@ -37,6 +39,12 @@ export function InventoryForm(props: InventoryFormData & { mode: InvMode; initia
   const itemOf = (id: string) => items.find((i) => i.id === id);
   const locsOf = (whId: string) => locations.filter((l) => l.warehouseId === whId);
 
+  const itemOpts = useMemo(() => idOpts(items), [items]);
+  const accountOpts = useMemo(() => idOpts(accounts), [accounts]);
+  const binAdd = (whId: string): AddTarget | undefined => {
+    const w = warehouses.find((x) => x.id === whId);
+    return w ? { kind: "locations", noun: "bin", prefill: { warehouseCode: w.code } } : undefined;
+  };
   const set = (i: number, p: Partial<Line>) => setLines((ls) => ls.map((l, j) => (j === i ? { ...l, ...p } : l)));
   const setDim = (i: number, k: string, v: string) => setLines((ls) => ls.map((l, j) => (j === i ? { ...l, dims: { ...l.dims, [k]: v } } : l)));
   const pickItem = (i: number, id: string) => {
@@ -74,26 +82,19 @@ export function InventoryForm(props: InventoryFormData & { mode: InvMode; initia
       <div className="card">
         <div className="row">
           <div><label>{transfer ? "From warehouse" : "Warehouse"}</label>
-            <select value={h.warehouseId} onChange={(e) => setH({ ...h, warehouseId: e.target.value })} required>
-              <option value="">Choose…</option>{warehouses.map((w) => <option key={w.id} value={w.id}>{w.code} · {w.name}</option>)}
-            </select></div>
+            <MasterLookup ariaLabel="Warehouse" required value={h.warehouseId} options={idOpts(warehouses)} add={{ kind: "warehouses" }} onChange={(v) => setH({ ...h, warehouseId: v })} /></div>
           {transfer && <div><label>To warehouse</label>
-            <select value={h.toWarehouseId} onChange={(e) => setH({ ...h, toWarehouseId: e.target.value })} required>
-              <option value="">Choose…</option>{warehouses.map((w) => <option key={w.id} value={w.id}>{w.code} · {w.name}{w.id === h.warehouseId ? " (move between bins)" : ""}</option>)}
-            </select></div>}
+            <MasterLookup ariaLabel="To warehouse" required value={h.toWarehouseId} options={idOpts(warehouses, (w) => (w.id === h.warehouseId ? "move between bins" : undefined))} add={{ kind: "warehouses" }} onChange={(v) => setH({ ...h, toWarehouseId: v })} /></div>}
           <div><label>Date</label><input type="date" value={h.date} onChange={(e) => setH({ ...h, date: e.target.value })} required /></div>
           {!transfer && <div style={{ flex: 2 }}><label>{mode === "ISSUE" ? "Issued to" : mode === "RETURN_IN" ? "Customer" : mode === "ADJUSTMENT" ? "Party (optional)" : "Supplier"}</label>
-            <select value={h.party} onChange={(e) => setH({ ...h, party: e.target.value })}>
-              <option value="">—</option>{parties.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
-            </select></div>}
+            <MasterLookup ariaLabel="Party" placeholder="—" emptyLabel="— None" value={h.party} options={parties.map((p) => partyOpt(p.value, p.label))} onChange={(v) => setH({ ...h, party: v })}
+              add={partyAdd(mode === "ISSUE" ? ["employees", "customers", "vendors"] : mode === "RETURN_IN" ? ["customers"] : ["vendors", "customers", "employees"])} /></div>}
           <div><label>Reference (DR, PO, SI, CM)</label><input value={h.reference} onChange={(e) => setH({ ...h, reference: e.target.value })} /></div>
         </div>
         <div className="row" style={{ marginTop: 10 }}>
           <div style={{ flex: 3 }}><label>Particulars / purpose</label><input value={h.memo} onChange={(e) => setH({ ...h, memo: e.target.value })} required placeholder={MEMO_HINT[mode]} /></div>
           {!transfer && <div style={{ flex: 2 }}><label>{OFFSET_HELP[mode]}</label>
-            <select value={h.offsetAccountId} onChange={(e) => setH({ ...h, offsetAccountId: e.target.value })}>
-              <option value="">Default</option>{accounts.map((a) => <option key={a.id} value={a.id}>{a.code} · {a.name}</option>)}
-            </select></div>}
+            <MasterLookup ariaLabel="Offset account" placeholder="Default" emptyLabel="Default" value={h.offsetAccountId} options={accountOpts} add={{ kind: "accounts" }} onChange={(v) => setH({ ...h, offsetAccountId: v })} /></div>}
         </div>
       </div>
 
@@ -120,19 +121,15 @@ export function InventoryForm(props: InventoryFormData & { mode: InvMode; initia
             return (
               <Fragment key={i}>
                 <tr>
-                  <td><select value={l.itemId} onChange={(e) => pickItem(i, e.target.value)} aria-label={`Item line ${i + 1}`}>
-                    <option value="">Choose item…</option>{items.map((x) => <option key={x.id} value={x.id}>{x.code} · {x.name}</option>)}
-                  </select>{it && <div className="muted">{it.unit ?? ""} · {it.method === "SPECIFIC" ? "specific identification" : it.method === "FIFO" ? "FIFO" : "weighted average"}</div>}</td>
+                  <td><MasterLookup ariaLabel={`Item line ${i + 1}`} placeholder="Type item code or name…" value={l.itemId} options={itemOpts} add={{ kind: "products", noun: "item" }} onChange={(v) => pickItem(i, v)} />{it && <div className="muted">{it.unit ?? ""} · {it.method === "SPECIFIC" ? "specific identification" : it.method === "FIFO" ? "FIFO" : "weighted average"}</div>}</td>
                   <td><input className="num" inputMode="decimal" value={l.qty} onChange={(e) => set(i, { qty: e.target.value })} aria-label={`Quantity line ${i + 1}`} /></td>
                   {mode !== "ISSUE" && mode !== "TRANSFER" && mode !== "RETURN_OUT" && <td>{inbound(l)
                     ? <input className="num" inputMode="decimal" value={l.unitCost} onChange={(e) => set(i, { unitCost: e.target.value })} placeholder={mode === "RECEIPT" ? "" : "Current cost"} aria-label={`Unit cost line ${i + 1}`} />
                     : <span className="muted">at cost</span>}</td>}
-                  <td><select value={l.locationId} onChange={(e) => set(i, { locationId: e.target.value })}>
-                    <option value="">{inbound(l) ? "Default bin" : "Any"}</option>{locsOf(h.warehouseId).map((x) => <option key={x.id} value={x.id}>{x.code}</option>)}
-                  </select></td>
-                  {transfer && <td><select value={l.toLocationId} onChange={(e) => set(i, { toLocationId: e.target.value })}>
-                    <option value="">Default bin</option>{locsOf(h.toWarehouseId).map((x) => <option key={x.id} value={x.id}>{x.code}</option>)}
-                  </select></td>}
+                  <td><MasterLookup ariaLabel={`Bin line ${i + 1}`} placeholder={inbound(l) ? "Default bin" : "Any"} emptyLabel={inbound(l) ? "Default bin" : "Any"} value={l.locationId} options={idOpts(locsOf(h.warehouseId))}
+                    add={binAdd(h.warehouseId)} onChange={(v) => set(i, { locationId: v })} /></td>
+                  {transfer && <td><MasterLookup ariaLabel={`To bin line ${i + 1}`} placeholder="Default bin" emptyLabel="Default bin" value={l.toLocationId} options={idOpts(locsOf(h.toWarehouseId))}
+                    add={binAdd(h.toWarehouseId)} onChange={(v) => set(i, { toLocationId: v })} /></td>}
                   <td>{it?.method === "SPECIFIC" && !inbound(l)
                     ? <select value={l.lotNo} onChange={(e) => set(i, { lotNo: e.target.value })}><option value="">Choose lot…</option>{outLots.map((x) => <option key={x.lotNo} value={x.lotNo}>{x.lotNo} ({Number(x.qty)})</option>)}</select>
                     : <input value={l.lotNo} onChange={(e) => set(i, { lotNo: e.target.value })} placeholder={it?.method === "SPECIFIC" ? "Required" : "Optional"} />}</td>
@@ -142,9 +139,9 @@ export function InventoryForm(props: InventoryFormData & { mode: InvMode; initia
                 {showMore && !transfer && (
                   <tr><td colSpan={8} style={{ background: "#fafbfc" }}><div className="row" style={{ gap: 6 }}>
                     <div style={{ minWidth: 220 }}><label>Account for this line</label>
-                      <select value={l.accountId} onChange={(e) => set(i, { accountId: e.target.value })}><option value="">Document default</option>{accounts.map((a) => <option key={a.id} value={a.id}>{a.code} · {a.name}</option>)}</select></div>
+                      <MasterLookup ariaLabel={`Account line ${i + 1}`} placeholder="Document default" emptyLabel="Document default" value={l.accountId} options={accountOpts} add={{ kind: "accounts" }} onChange={(v) => set(i, { accountId: v })} /></div>
                     {dims.map((d) => <div key={d.key} style={{ minWidth: 130 }}><label>{d.label}</label>
-                      <select value={l.dims[d.key] ?? ""} onChange={(e) => setDim(i, d.key, e.target.value)}><option value="">—</option>{d.values.map((v) => <option key={v.id} value={v.id}>{v.code} · {v.name}</option>)}</select></div>)}
+                      <MasterLookup ariaLabel={`${d.label} line ${i + 1}`} placeholder="—" emptyLabel="— None" value={l.dims[d.key] ?? ""} options={idOpts(d.values)} add={dimAdd(d.key)} onChange={(v) => setDim(i, d.key, v)} /></div>)}
                   </div></td></tr>
                 )}
               </Fragment>

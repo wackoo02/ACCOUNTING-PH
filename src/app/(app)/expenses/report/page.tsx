@@ -5,6 +5,8 @@ import { employeeExpenseReport } from "@/lib/expense/service";
 import { firstOfYear, parseDateParam, today } from "@/lib/format";
 import { MODULES, PAYMENTS, type ModuleKey, type PaymentKey } from "@/lib/expense/catalog";
 import { StatusBadge, peso } from "@/components/ExpenseUi";
+import { MasterPicker } from "@/components/MasterPicker";
+import { empOpts } from "@/lib/lookup";
 
 type SP = Promise<Record<string, string | string[] | undefined>>;
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) ?? "";
@@ -25,7 +27,7 @@ export default async function EmployeeReport({ searchParams }: { searchParams: S
       <div className="top">
         <h1>Employee expense report</h1>
         <form className="row noprint" style={{ alignItems: "end" }}>
-          <div><label>Employee / partner</label><select name="employeeId" defaultValue={employeeId}><option value="">Everyone</option>{emps.map((e) => <option key={e.id} value={e.id}>{e.code} {e.firstName} {e.lastName}</option>)}</select></div>
+          <div><label>Employee / partner</label><MasterPicker name="employeeId" ariaLabel="Employee / partner" defaultValue={employeeId} emptyLabel="Everyone" placeholder="Everyone" options={empOpts(emps)} /></div>
           <div><label>From</label><input type="date" name="from" defaultValue={from} /></div>
           <div><label>To</label><input type="date" name="to" defaultValue={to} /></div>
           <div><label>Include</label><select name="pending" defaultValue={pending ? "1" : ""}><option value="">Cleared only</option><option value="1">Also claims in the workflow</option></select></div>

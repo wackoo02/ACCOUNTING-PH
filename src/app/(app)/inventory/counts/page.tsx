@@ -5,6 +5,8 @@ import { can } from "@/lib/permissions";
 import { fmtDate, today } from "@/lib/format";
 import { ActionForm } from "@/components/ActionForm";
 import { newCount } from "../../inventory-actions";
+import { MasterPicker } from "@/components/MasterPicker";
+import { idOpts, textOpts } from "@/lib/lookup";
 
 export default async function Counts() {
   const ctx = await requireCtx("reports.view");
@@ -23,10 +25,10 @@ export default async function Counts() {
           <h2 style={{ marginTop: 0 }}>Start a count</h2>
           <div className="row">
             <div><label>Type</label><select name="type" defaultValue="CYCLE"><option value="CYCLE">Cycle count (part of the stock)</option><option value="PHYSICAL">Physical inventory (whole warehouse)</option></select></div>
-            <div><label>Warehouse</label><select name="warehouseId" required>{whs.map((w) => <option key={w.id} value={w.id}>{w.code} · {w.name}</option>)}</select></div>
+            <div><label>Warehouse</label><MasterPicker name="warehouseId" ariaLabel="Warehouse" required options={idOpts(whs)} add={{ kind: "warehouses" }} defaultValue={whs[0]?.id} /></div>
             <div><label>Count date</label><input type="date" name="date" defaultValue={today()} required /></div>
-            <div><label>Cycle count: category</label><select name="category" defaultValue=""><option value="">—</option>{cats.map((c) => <option key={c.category} value={c.category!}>{c.category}</option>)}</select></div>
-            <div><label>or bin / location</label><select name="locationId" defaultValue=""><option value="">—</option>{locs.map((l) => <option key={l.id} value={l.id}>{l.warehouse.code} {l.code}</option>)}</select></div>
+            <div><label>Cycle count: category</label><MasterPicker name="category" ariaLabel="Category" defaultValue="" emptyLabel="—" placeholder="—" options={textOpts(cats.map((c) => c.category!))} /></div>
+            <div><label>or bin / location</label><MasterPicker name="locationId" ariaLabel="Bin / location" defaultValue="" emptyLabel="—" placeholder="—" options={locs.map((l) => ({ value: l.id, code: `${l.warehouse.code} ${l.code}`, label: l.name ?? "" }))} /></div>
           </div>
           <div style={{ marginTop: 10 }}><label>Notes</label><input name="memo" placeholder="e.g. Year-end count, team A" /></div>
           <p className="muted">The count sheet lists what the system shows on hand by item, bin and lot. Count blind if you prefer: print the sheet without the system column. Variances post as one adjustment after approval.</p>

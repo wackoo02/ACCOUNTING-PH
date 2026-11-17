@@ -7,6 +7,8 @@ import { fmtDate } from "@/lib/format";
 import { stockStatus } from "@/lib/inventory/reports";
 import { COSTING_LABELS } from "@/lib/inventory/engine";
 import { formatQty, formatUnitCost } from "@/lib/inventory/qty";
+import { MasterPicker } from "@/components/MasterPicker";
+import { idOpts, textOpts } from "@/lib/lookup";
 
 type SP = Promise<Record<string, string | undefined>>;
 
@@ -38,8 +40,8 @@ export default async function StockStatus({ searchParams }: { searchParams: SP }
       </div>
       <form className="card row noprint">
         <div><label>Search</label><input name="q" defaultValue={sp.q} placeholder="Code, name, barcode" /></div>
-        <div><label>Warehouse</label><select name="wh" defaultValue={sp.wh ?? ""}><option value="">All</option>{whs.map((w) => <option key={w.id} value={w.id}>{w.code}</option>)}</select></div>
-        <div><label>Category</label><select name="cat" defaultValue={sp.cat ?? ""}><option value="">All</option>{cats.map((c) => <option key={c.category} value={c.category!}>{c.category}</option>)}</select></div>
+        <div><label>Warehouse</label><MasterPicker name="wh" ariaLabel="Warehouse" defaultValue={sp.wh ?? ""} emptyLabel="All" placeholder="All" options={idOpts(whs)} /></div>
+        <div><label>Category</label><MasterPicker name="cat" ariaLabel="Category" defaultValue={sp.cat ?? ""} emptyLabel="All" placeholder="All" options={textOpts(cats.map((c) => c.category!))} /></div>
         <div><label>Show</label><select name="below" defaultValue={sp.below ?? ""}><option value="">All items</option><option value="1">Reorder needed</option></select></div>
         <div style={{ flex: 0 }}><button>Filter</button></div>
       </form>

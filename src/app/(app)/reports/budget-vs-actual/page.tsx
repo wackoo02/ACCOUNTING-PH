@@ -9,6 +9,7 @@ import { fiscalYearOf } from "@/lib/ledger/service";
 import { formatPeso } from "@/lib/money";
 import { ActionForm } from "@/components/ActionForm";
 import { uploadBudget } from "../../actions";
+import { MasterPicker } from "@/components/MasterPicker";
 
 type SP = Promise<Record<string, string | undefined>>;
 
@@ -43,7 +44,7 @@ export default async function BudgetVsActual({ searchParams }: { searchParams: S
         <div><label>Fiscal year</label><input name="fy" type="number" defaultValue={fy} /></div>
         <div><label>From period</label><select name="m1" defaultValue={mFrom}>{labels.map((l, i) => <option key={i} value={i + 1}>P{i + 1} {l}</option>)}</select></div>
         <div><label>To period</label><select name="m2" defaultValue={mTo}>{labels.map((l, i) => <option key={i} value={i + 1}>P{i + 1} {l}</option>)}</select></div>
-        <div><label>Budget for</label><select name="dim" defaultValue={sp.dim ?? ""}><option value="">Whole company</option>{dims.map((d) => <option key={d.id} value={d.id}>{d.type.replace("_", " ")}: {d.code} · {d.name}</option>)}</select></div>
+        <div><label>Budget for</label><MasterPicker name="dim" ariaLabel="Budget for" defaultValue={sp.dim ?? ""} emptyLabel="Whole company" placeholder="Whole company" options={dims.map((d) => ({ value: d.id, code: d.code, label: d.name, group: d.type.replace("_", " ") }))} /></div>
         <div style={{ flex: 0 }}><button>Show</button></div>
       </form>
       <div className="table-wrap"><table>

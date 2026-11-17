@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { requireCtx } from "@/lib/auth";
 import { MASTERS, isMasterKind } from "@/lib/masters/config";
 import { listMasters } from "@/lib/masters/query";
+import { refOptions } from "@/lib/masters/ref-options";
 import { MasterForm } from "./MasterForm";
 
 export default async function EditMaster({ params, searchParams }: { params: Promise<{ kind: string }>; searchParams: Promise<{ code?: string; type?: string }> }) {
@@ -24,7 +25,8 @@ export default async function EditMaster({ params, searchParams }: { params: Pro
   return (
     <>
       <div className="top"><h1>{code ? `Edit ${def.singular.toLowerCase()} ${code}` : `Add ${def.singular.toLowerCase()}`}</h1></div>
-      <MasterForm kind={kind} fields={def.fields} record={record} originalCode={code} singular={def.singular} />
+      <MasterForm kind={kind} fields={def.fields} record={record} originalCode={code} singular={def.singular}
+        refs={await refOptions(def.fields, ctx.org.id, type ?? (typeof record.type === "string" ? record.type : undefined))} />
     </>
   );
 }

@@ -6,6 +6,8 @@ import { reconciliationStatus } from "@/lib/expense/service";
 import { ActionForm } from "@/components/ActionForm";
 import { peso } from "@/components/ExpenseUi";
 import { autoReconcileAction, exceptionToClaimAction } from "../../expense-actions";
+import { MasterPicker } from "@/components/MasterPicker";
+import { empOpts } from "@/lib/lookup";
 
 const KIND: Record<string, string> = { EWALLET: "E-wallet", CREDIT_CARD: "Credit card", CURRENT: "Bank (debit card)", SAVINGS: "Bank (debit card)" };
 
@@ -46,7 +48,7 @@ export default async function Reconcile() {
                     <ActionForm action={exceptionToClaimAction} className="row">
                       <input type="hidden" name="statementLineId" value={x.id} />
                       <div className="row" style={{ gap: 6, flexWrap: "nowrap" }}>
-                        <select name="employeeId" required defaultValue=""><option value="" disabled>Employee…</option>{emps.map((e) => <option key={e.id} value={e.id}>{e.code} {e.firstName} {e.lastName}</option>)}</select>
+                        <MasterPicker name="employeeId" ariaLabel="Employee" defaultValue="" required options={empOpts(emps)} add={{ kind: "employees" }} />
                         <select name="module" defaultValue={/lalamove|transportify|borzo|lbc|express|courier/i.test(x.description) ? "DELIVERY" : /air|hotel|agoda|booking/i.test(x.description) ? "TRAVEL" : "TRANSPORT"}><option value="TRANSPORT">Transport</option><option value="DELIVERY">Sent Package</option><option value="TRAVEL">Travel</option></select>
                         <button className="secondary">Send</button>
                       </div>

@@ -6,6 +6,8 @@ import { formatPeso } from "@/lib/money";
 import { apAging } from "@/lib/ap/aging";
 import { BUCKETS, BUCKET_LABELS } from "@/lib/ap/compute";
 import { PrintButton } from "@/components/PrintButton";
+import { MasterPicker } from "@/components/MasterPicker";
+import { idOpts } from "@/lib/lookup";
 
 export default async function Aging({ searchParams }: { searchParams: Promise<{ asOf?: string; view?: string; vendor?: string; basis?: string }> }) {
   const ctx = await requireCtx("reports.view");
@@ -26,7 +28,7 @@ export default async function Aging({ searchParams }: { searchParams: Promise<{ 
         <div><label>As of</label><input type="date" name="asOf" defaultValue={asOf.toISOString().slice(0, 10)} /></div>
         <div><label>View</label><select name="view" defaultValue={sp.view ?? ""}><option value="">Summary by supplier</option><option value="detail">Detail by invoice</option></select></div>
         <div><label>Age by</label><select name="basis" defaultValue={sp.basis ?? ""}><option value="">Days past due</option><option value="invoice">Days from invoice date</option></select></div>
-        <div style={{ flex: 2 }}><label>Supplier</label><select name="vendor" defaultValue={sp.vendor ?? ""}><option value="">All</option>{vendors.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}</select></div>
+        <div style={{ flex: 2 }}><label>Supplier</label><MasterPicker name="vendor" ariaLabel="Supplier" defaultValue={sp.vendor ?? ""} emptyLabel="All" placeholder="All" options={idOpts(vendors)} /></div>
         <div style={{ flex: 0 }}><button>Show</button></div>
       </form>
       {r.gl !== null && <div className={r.gl === r.subledger ? "notice" : "errors"}>

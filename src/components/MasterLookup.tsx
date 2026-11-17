@@ -80,7 +80,7 @@ export function MasterLookup(props: {
   const [modal, setModal] = useState<{ target: AddTarget; url: string; title: string } | null>(null);
 
   const selected = options.find((o) => o.value === value) ?? (pending?.value === value ? pending : undefined);
-  const shown = selected ? (selected.code ? `${selected.code} · ${selected.label}` : selected.label) : "";
+  const shown = selected ? (selected.code && selected.label ? `${selected.code} · ${selected.label}` : selected.code || selected.label) : "";
 
   const rows: Row[] = useMemo(() => {
     const text = q.trim();

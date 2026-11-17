@@ -6,6 +6,8 @@ import { formatPeso } from "@/lib/money";
 import { today } from "@/lib/format";
 import { assetRegister } from "@/lib/assets/reports";
 import { PrintButton } from "@/components/PrintButton";
+import { MasterPicker } from "@/components/MasterPicker";
+import { codeOpts, textOpts } from "@/lib/lookup";
 
 type SP = Promise<Record<string, string | undefined>>;
 const AUDIT_CLASS: Record<string, string> = { Found: "POSTED", Tagged: "POSTED", Moved: "PENDING_APPROVAL", Missing: "VOID", "Not tagged": "DRAFT" };
@@ -36,8 +38,8 @@ export default async function AssetRegister({ searchParams }: { searchParams: SP
       <form className="card row noprint">
         <div><label>As of</label><input type="date" name="asOf" defaultValue={asOf} /></div>
         <div><label>Search</label><input name="q" defaultValue={sp.q} placeholder="Asset no., description, serial, old tag" /></div>
-        <div><label>Category</label><select name="category" defaultValue={sp.category ?? ""}><option value="">All</option>{cats.map((c) => <option key={c.code} value={c.code}>{c.name}</option>)}</select></div>
-        <div><label>Location</label><select name="location" defaultValue={sp.location ?? ""}><option value="">All</option>{locs.map((l) => l.location!).sort().map((l) => <option key={l}>{l}</option>)}</select></div>
+        <div><label>Category</label><MasterPicker name="category" ariaLabel="Category" defaultValue={sp.category ?? ""} emptyLabel="All" placeholder="All" options={codeOpts(cats)} /></div>
+        <div><label>Location</label><MasterPicker name="location" ariaLabel="Location" defaultValue={sp.location ?? ""} emptyLabel="All" placeholder="All" options={textOpts(locs.map((l) => l.location!).sort())} /></div>
         <div><label>Status</label><select name="status" defaultValue={sp.status ?? ""}><option value="">In the books</option><option>ACTIVE</option><option>FOR_REPAIR</option><option>MISSING</option><option>DISPOSED</option><option>RETIRED</option><option value="ALL">All, incl. disposed</option></select></div>
         <div style={{ flex: 0 }}><button>Filter</button></div>
       </form>

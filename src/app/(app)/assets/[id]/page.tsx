@@ -146,7 +146,7 @@ export default async function AssetView({ params, searchParams }: { params: Prom
               <div><label>Extend useful life by (months)</label><input name="extendLifeMonths" inputMode="numeric" placeholder="0" /></div>
               <div><label>What was done</label><input name="memo" required placeholder="e.g. engine overhaul" /></div>
               <div><label>Post to the GL?</label><select name="postToGl" defaultValue="yes"><option value="yes">Yes: Dr asset / Cr account below</option><option value="no">No: already booked (AP bill)</option></select></div>
-              <AccountInput name="offsetAccountCode" label="Account to credit" placeholder="e.g. 2010" />
+              <AccountInput d={d} name="offsetAccountCode" label="Account to credit" placeholder="e.g. 2010" />
               <Pick name="vendorCode" label="Vendor" options={d.vendors} value={a.vendorCode} />
               <div><label>Reference</label><input name="reference" /></div>
             </div>
@@ -160,10 +160,10 @@ export default async function AssetView({ params, searchParams }: { params: Prom
               <div><label>Date sold</label><input type="date" name="date" defaultValue={today()} /></div>
               <div><label>Selling price (net of VAT)</label><input name="proceeds" inputMode="decimal" required /></div>
               <div><label>Output VAT</label><input name="outputVat" inputMode="decimal" placeholder="0.00" /><div className="muted" style={{ fontSize: 12 }}>12% if your company is VAT-registered.</div></div>
-              <AccountInput name="proceedsAccountCode" label="Debit (cash or receivable)" placeholder="e.g. 1020 or 1100" />
+              <AccountInput d={d} name="proceedsAccountCode" label="Debit (cash or receivable)" placeholder="e.g. 1020 or 1100" />
               <div><label>Buyer</label><input name="buyer" /></div>
               <Pick name="customerCode" label="Customer (if on account)" options={d.customers} />
-              <AccountInput name="gainLossAccountCode" label="Gain / loss account" placeholder="Blank = 7030 gain or 7545 loss" />
+              <AccountInput d={d} name="gainLossAccountCode" label="Gain / loss account" placeholder="Blank = 7030 gain or 7545 loss" />
               <div><label>Reference</label><input name="reference" placeholder="e.g. deed of sale, SI no." /></div>
               <div><label>Notes</label><input name="memo" required placeholder="e.g. sold to employee" /></div>
             </div>
@@ -176,7 +176,7 @@ export default async function AssetView({ params, searchParams }: { params: Prom
             <div className="grid">
               <div><label>Date</label><input type="date" name="date" defaultValue={today()} /></div>
               <div><label>Reason</label><input name="memo" required placeholder="e.g. beyond repair, scrapped" /></div>
-              <AccountInput name="gainLossAccountCode" label="Loss account" placeholder="Blank = 7545" />
+              <AccountInput d={d} name="gainLossAccountCode" label="Loss account" placeholder="Blank = 7545" />
               <div><label>Reference</label><input name="reference" placeholder="e.g. incident report no." /></div>
             </div>
             <button>Retire asset</button>

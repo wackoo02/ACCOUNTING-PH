@@ -12,6 +12,8 @@ import { ApprovalPanel } from "@/components/ap/ApprovalPanel";
 import { ActionForm } from "@/components/ActionForm";
 import { prNextStep } from "../../../ap-actions";
 import { canApproveNow } from "@/lib/approvals";
+import { MasterPicker } from "@/components/MasterPicker";
+import { idOpts } from "@/lib/lookup";
 
 export default async function PrView({ params }: { params: Promise<{ id: string }> }) {
   const ctx = await requireCtx("reports.view");
@@ -69,7 +71,7 @@ export default async function PrView({ params }: { params: Promise<{ id: string 
           <ActionForm action={prNextStep} style={{ flex: 1 }}>
             <input type="hidden" name="id" value={pr.id} /><input type="hidden" name="op" value="po" />
             <label>Or order directly from</label>
-            <div className="row"><div><select name="vendorId" required><option value="">Choose supplier…</option>{vendors.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}</select></div><div style={{ flex: 0 }}><button className="secondary">Create draft PO</button></div></div>
+            <div className="row"><div><MasterPicker name="vendorId" ariaLabel="Supplier" required placeholder="Type to search…" options={idOpts(vendors)} add={{ kind: "vendors", noun: "supplier" }} /></div><div style={{ flex: 0 }}><button className="secondary">Create draft PO</button></div></div>
           </ActionForm>
         </div>
       </div>}

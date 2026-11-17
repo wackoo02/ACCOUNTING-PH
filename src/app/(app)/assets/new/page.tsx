@@ -6,6 +6,7 @@ import { METHOD_LABEL } from "@/lib/assets/depreciation";
 import { ActionForm } from "@/components/ActionForm";
 import { AccountInput, AccountList, LocationList, Pick } from "@/components/AssetPick";
 import { addAssetAction } from "../../asset-actions";
+import { MasterPicker } from "@/components/MasterPicker";
 
 export default async function NewAsset({ searchParams }: { searchParams: Promise<{ billLine?: string }> }) {
   const ctx = await requireCtx("reports.view");
@@ -34,7 +35,7 @@ export default async function NewAsset({ searchParams }: { searchParams: Promise
           <h3 style={{ marginTop: 0 }}>Asset</h3>
           <div className="grid">
             <div><label>Description *</label><input name="name" required defaultValue={b?.description} placeholder="e.g. Dell Latitude 5440 laptop" /></div>
-            <div><label>Category *</label><select name="categoryCode" required defaultValue=""><option value="" disabled>Choose…</option>{d.categories.map((c) => <option key={c.code} value={c.code}>{c.name} ({c.usefulLifeMonths} mo., {c.prefix ?? "FA"}-…)</option>)}</select></div>
+            <div><label>Category *</label><MasterPicker name="categoryCode" ariaLabel="Category" defaultValue="" required options={d.categories.map((c) => ({ value: c.code, code: c.code, label: c.name, hint: `${c.usefulLifeMonths} mo., ${c.prefix ?? "FA"}-…` }))} add={{ kind: "asset-categories", noun: "asset category" }} valueIsCode /></div>
             <div><label>Asset no.</label><input name="code" placeholder="Blank = next number for the category" /></div>
             <div><label>Serial no.</label><input name="serialNo" /></div>
             <div><label>Location</label><input name="location" list="fa-locations" placeholder="e.g. Makati HQ - 5F" /></div>
@@ -54,9 +55,9 @@ export default async function NewAsset({ searchParams }: { searchParams: Promise
             <div><label>Salvage value</label><input name="salvageValue" inputMode="decimal" placeholder="Blank = category %" /></div>
             <div><label>Useful life (months)</label><input name="usefulLifeMonths" inputMode="numeric" placeholder="Blank = category" /></div>
             <div><label>Method</label><select name="depreciationMethod" defaultValue=""><option value="">Category default</option>{Object.entries(METHOD_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
-            <AccountInput name="accountCode" label="GL asset account" placeholder="Blank = category" value={b?.accountCode} />
-            <AccountInput name="accumDepAccountCode" label="Accumulated depreciation account" placeholder="Blank = category" />
-            <AccountInput name="depExpenseAccountCode" label="Depreciation expense account" placeholder="Blank = category" />
+            <AccountInput d={d} name="accountCode" label="GL asset account" placeholder="Blank = category" value={b?.accountCode} />
+            <AccountInput d={d} name="accumDepAccountCode" label="Accumulated depreciation account" placeholder="Blank = category" />
+            <AccountInput d={d} name="depExpenseAccountCode" label="Depreciation expense account" placeholder="Blank = category" />
           </div>
         </div>
         <div className="card">
@@ -66,7 +67,7 @@ export default async function NewAsset({ searchParams }: { searchParams: Promise
               <option value="yes">Yes: Dr asset account / Cr the account below</option>
               <option value="no">No: already in the books (AP bill, opening balance)</option>
             </select></div>
-            <AccountInput name="offsetAccountCode" label="Account to credit" placeholder="e.g. 2010 Accounts Payable, 1020 Cash in bank" help="When posting. Use Accounts Payable when the supplier bill is not yet in Veritus." />
+            <AccountInput d={d} name="offsetAccountCode" label="Account to credit" placeholder="e.g. 2010 Accounts Payable, 1020 Cash in bank" help="When posting. Use Accounts Payable when the supplier bill is not yet in Veritus." />
             <div><label>Reference</label><input name="reference" placeholder="e.g. SI 12345" defaultValue={b ? `${b.billNumber} / SI ${b.supplierInvoiceNo}` : undefined} /></div>
             <div><label>Notes</label><input name="memo" /></div>
             <div><label>Opening accumulated depreciation</label><input name="openingAccum" inputMode="decimal" placeholder="Only when not posting" /></div>

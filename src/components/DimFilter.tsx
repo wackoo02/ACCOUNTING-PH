@@ -1,5 +1,7 @@
 import { prisma } from "@/lib/db";
 import { DIMENSIONS, type DimKey } from "@/lib/ledger/dimensions";
+import { idOpts } from "@/lib/lookup";
+import { MasterPicker } from "./MasterPicker";
 
 /** Dimension filter selects for report forms (server component). */
 export async function DimFilter({ organizationId, sp }: { organizationId: string; sp: Record<string, string | undefined> }) {
@@ -9,10 +11,7 @@ export async function DimFilter({ organizationId, sp }: { organizationId: string
     <>
       {used.map((d) => (
         <div key={d.key}><label>{d.label}</label>
-          <select name={d.key} defaultValue={sp[d.key] ?? ""}>
-            <option value="">All</option>
-            {vals.filter((v) => v.type === d.type).map((v) => <option key={v.id} value={v.id}>{v.code} · {v.name}</option>)}
-          </select></div>
+          <MasterPicker name={d.key} ariaLabel={d.label} defaultValue={sp[d.key] ?? ""} emptyLabel="All" placeholder="All" options={idOpts(vals.filter((v) => v.type === d.type))} /></div>
       ))}
     </>
   );

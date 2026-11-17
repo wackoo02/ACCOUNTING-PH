@@ -5,6 +5,8 @@ import { accountLedger } from "@/lib/ledger/reports";
 import { formatPeso } from "@/lib/money";
 import { firstOfYear, fmtDate, parseDateParam, today } from "@/lib/format";
 import { DimFilter, dimsFrom } from "@/components/DimFilter";
+import { MasterPicker } from "@/components/MasterPicker";
+import { idOpts } from "@/lib/lookup";
 
 type SP = Promise<Record<string, string | undefined>>;
 
@@ -22,10 +24,7 @@ export default async function Ledger({ searchParams }: { searchParams: SP }) {
       <div className="top"><h1>Account Ledger</h1><Link className="noprint" href="/reports/gl-listing">Full general ledger listing →</Link></div>
       <form className="card row noprint">
         <div style={{ flex: 3 }}><label>Account</label>
-          <select name="account" defaultValue={accountId} required>
-            <option value="">Choose account…</option>
-            {accounts.map((a) => <option key={a.id} value={a.id}>{a.code} · {a.name}</option>)}
-          </select></div>
+          <MasterPicker name="account" ariaLabel="Account" defaultValue={accountId} required options={idOpts(accounts)} placeholder="Type account code or name…" /></div>
         <div><label>From</label><input type="date" name="from" defaultValue={from} /></div>
         <div><label>To</label><input type="date" name="to" defaultValue={to} /></div>
         <DimFilter organizationId={ctx.org.id} sp={sp} />

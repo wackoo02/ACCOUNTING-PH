@@ -9,6 +9,8 @@ import { addDays, daysBetween } from "@/lib/ap/compute";
 import { openBalances } from "@/lib/ap/bills";
 import { ActionForm } from "@/components/ActionForm";
 import { scheduleAction } from "../../ap-actions";
+import { MasterPicker } from "@/components/MasterPicker";
+import { idOpts } from "@/lib/lookup";
 
 export default async function Schedule({ searchParams }: { searchParams: Promise<{ until?: string; vendor?: string }> }) {
   const ctx = await requireCtx("reports.view");
@@ -37,7 +39,7 @@ export default async function Schedule({ searchParams }: { searchParams: Promise
       <div className="top"><h1>Payment Schedule</h1><Link className="btn secondary" href="/ap/aging">AP aging</Link></div>
       <form className="card row noprint">
         <div><label>Due or scheduled up to</label><input type="date" name="until" defaultValue={until.toISOString().slice(0, 10)} /></div>
-        <div style={{ flex: 2 }}><label>Supplier</label><select name="vendor" defaultValue={sp.vendor ?? ""}><option value="">All</option>{vendors.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}</select></div>
+        <div style={{ flex: 2 }}><label>Supplier</label><MasterPicker name="vendor" ariaLabel="Supplier" defaultValue={sp.vendor ?? ""} emptyLabel="All" placeholder="All" options={idOpts(vendors)} /></div>
         <div style={{ flex: 0 }}><button>Show</button></div>
       </form>
       <div className="card grid">{[...weeks].map(([k, v]) => <div key={k} className="stat"><div className="l">{k}</div><div className="n">{formatPeso(v)}</div></div>)}
@@ -58,7 +60,7 @@ export default async function Schedule({ searchParams }: { searchParams: Promise
           <strong>With the ticked bills</strong>
           <div className="row" style={{ marginTop: 8 }}>
             <div><label>Pay / schedule date</label><input type="date" name="payDate" defaultValue={today()} /></div>
-            <div style={{ flex: 2 }}><label>Pay from</label><select name="bankAccountId">{banks.map((b) => <option key={b.id} value={b.id}>{b.code} · {b.name}</option>)}</select></div>
+            <div style={{ flex: 2 }}><label>Pay from</label><MasterPicker name="bankAccountId" ariaLabel="Pay from" options={idOpts(banks)} add={{ kind: "banks" }} required defaultValue={banks[0]?.id} /></div>
             <div><label>Method</label><select name="method"><option value="CHECK">Check</option><option value="BANK_TRANSFER">Bank transfer</option><option value="ONLINE">Online</option></select></div>
             <div><label style={{ display: "flex", gap: 6 }}><input type="checkbox" name="submit" defaultChecked style={{ width: "auto" }} /> Submit for approval</label></div>
           </div>

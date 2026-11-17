@@ -3,6 +3,7 @@ import { requireCtx } from "@/lib/auth";
 import { can } from "@/lib/permissions";
 import { MASTERS, isMasterKind } from "@/lib/masters/config";
 import { listMasters } from "@/lib/masters/query";
+import { refOptions } from "@/lib/masters/ref-options";
 import { MasterForm, UseRecordButton } from "@/app/(app)/masters/[kind]/edit/MasterForm";
 
 const DEFAULTS = { isActive: true, isPostable: true, allowManualPosting: true, vatRegistered: true };
@@ -44,5 +45,6 @@ export default async function EmbedMaster({ params, searchParams }: {
       </div>
     );
   }
-  return <MasterForm kind={kind} fields={def.fields} record={record} originalCode={code} embed skip={skip ? skip.split(",") : []} dimType={type} singular={def.singular} />;
+  const refs = await refOptions(def.fields, ctx.org.id, type ?? (typeof record.type === "string" ? record.type : undefined));
+  return <MasterForm kind={kind} fields={def.fields} record={record} originalCode={code} embed skip={skip ? skip.split(",") : []} dimType={type} singular={def.singular} refs={refs} />;
 }

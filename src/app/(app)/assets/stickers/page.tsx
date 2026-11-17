@@ -3,6 +3,8 @@ import QRCode from "qrcode";
 import { requireCtx } from "@/lib/auth";
 import { listAssets, qrPayload } from "@/lib/assets/audit";
 import { PrintButton } from "@/components/PrintButton";
+import { MasterPicker } from "@/components/MasterPicker";
+import { textOpts } from "@/lib/lookup";
 
 type SP = Promise<Record<string, string | string[] | undefined>>;
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) ?? "";
@@ -23,7 +25,7 @@ export default async function Stickers({ searchParams }: { searchParams: SP }) {
         <PrintButton label={`Print ${assets.length} sticker${assets.length === 1 ? "" : "s"}`} />
       </div>
       <form className="row noprint" style={{ alignItems: "end", marginBottom: 12 }}>
-        <div><label>Location</label><select name="location" defaultValue={location}><option value="">All</option>{locations.map((l) => <option key={l}>{l}</option>)}</select></div>
+        <div><label>Location</label><MasterPicker name="location" ariaLabel="Location" defaultValue={location} emptyLabel="All" placeholder="All" options={textOpts(locations)} /></div>
         <div><label>Search</label><input name="q" defaultValue={q} placeholder="Asset no. or name" /></div>
         <div><label>Show</label><select name="untagged" defaultValue={untagged ? "1" : ""}><option value="">All assets</option><option value="1">Not yet tagged</option></select></div>
         <div style={{ flex: 0 }}><button>Filter</button></div>

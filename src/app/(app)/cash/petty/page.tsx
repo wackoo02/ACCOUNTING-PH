@@ -7,6 +7,8 @@ import { fmtDate, today } from "@/lib/format";
 import { bookBalance, unreplenished } from "@/lib/bank/cash";
 import { ActionForm } from "@/components/ActionForm";
 import { replenishAction } from "../../bank-actions";
+import { MasterPicker } from "@/components/MasterPicker";
+import { idOpts } from "@/lib/lookup";
 
 export default async function PettyCash() {
   const ctx = await requireCtx("reports.view");
@@ -42,7 +44,7 @@ export default async function PettyCash() {
               <ActionForm action={replenishAction} className="row noprint" style={{ marginTop: 10 }}>
                 <input type="hidden" name="fundId" value={f.id} />
                 <div className="row">
-                  <div><label>Replenish from</label><select name="fromBankAccountId" required>{banks.map((b) => <option key={b.id} value={b.id}>{b.code} · {b.name}</option>)}</select></div>
+                  <div><label>Replenish from</label><MasterPicker name="fromBankAccountId" ariaLabel="Replenish from" required options={idOpts(banks)} add={{ kind: "banks" }} defaultValue={banks[0]?.id} /></div>
                   <div><label>Date</label><input type="date" name="date" defaultValue={today()} /></div>
                   <div><label>Method</label><select name="method" defaultValue="CHECK"><option value="CHECK">Check</option><option value="BANK_TRANSFER">Bank transfer</option><option value="CASH">Cash withdrawal</option></select></div>
                   <div><label>Check no. (blank = next)</label><input name="checkNo" /></div>

@@ -8,6 +8,8 @@ import { MODULES, type ModuleKey } from "@/lib/expense/catalog";
 import { ActionForm } from "@/components/ActionForm";
 import { peso } from "@/components/ExpenseUi";
 import { payReimbursementAction } from "../../expense-actions";
+import { MasterPicker } from "@/components/MasterPicker";
+import { idOpts } from "@/lib/lookup";
 
 export default async function Reimbursements() {
   const ctx = await requireCtx("reports.view");
@@ -35,7 +37,7 @@ export default async function Reimbursements() {
             </table></div>
             {finance && (
               <div className="row" style={{ marginTop: 10, alignItems: "end" }}>
-                <div><label>Pay from</label><select name="bankAccountId" required>{banks.map((b) => <option key={b.id} value={b.id}>{b.code} · {b.name}</option>)}</select></div>
+                <div><label>Pay from</label><MasterPicker name="bankAccountId" ariaLabel="Pay from" required options={idOpts(banks)} add={{ kind: "banks" }} defaultValue={banks[0]?.id} /></div>
                 <div><label>Date</label><input type="date" name="date" defaultValue={today()} /></div>
                 <div><label>Method</label><select name="method" defaultValue="BANK_TRANSFER"><option value="BANK_TRANSFER">Bank transfer</option><option value="CHECK">Check</option><option value="EWALLET">GCash / Maya</option><option value="CASH">Cash</option></select></div>
                 <div><label>Check no.</label><input name="checkNo" /></div>

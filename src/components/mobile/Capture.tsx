@@ -1,6 +1,8 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "@/components/Icon";
+import { MasterLookup } from "@/components/MasterLookup";
+import { idOpts } from "@/lib/lookup";
 import type { IconName } from "@/lib/icons";
 import type { VoucherOut } from "@/lib/pettycash/service";
 import { ApiFail, api, fetchImage, peso, photoToBase64 } from "./api";
@@ -79,6 +81,7 @@ export function Capture({ module, id, setup, me, nav }: { module: ModuleKey; id?
   const [loaded, setLoaded] = useState(!id);
   const file = useRef<HTMLInputElement>(null);
   const modDef = setup.modules.find((x) => x.key === module)!;
+  const accountOpts = useMemo(() => idOpts(setup.accounts), [setup.accounts]);
 
   useEffect(() => {
     if (!id) return;
@@ -216,8 +219,8 @@ export function Capture({ module, id, setup, me, nav }: { module: ModuleKey; id?
               <>
                 {module === "TRAVEL" && (
                   <div className="two">
-                    <Field label="Currency"><select value={f.currencyCode} onChange={(e) => { const c = e.target.value; const r = setup.currencies.find((x) => x.code === c)?.rate; setF((x) => ({ ...x, currencyCode: c, fxRate: c === "PHP" ? "" : x.fxRate || r || "" })); }}>
-                      <option value="PHP">PHP</option>{setup.currencies.filter((c) => c.code !== "PHP").map((c) => <option key={c.code} value={c.code}>{c.code}</option>)}</select></Field>
+                    <Field label="Currency"><MasterLookup ariaLabel="Currency" value={f.currencyCode} onChange={(c) => { const r = setup.currencies.find((x) => x.code === c)?.rate; setF((x) => ({ ...x, currencyCode: c || "PHP", fxRate: !c || c === "PHP" ? "" : x.fxRate || r || "" })); }}
+                      options={[{ value: "PHP", code: "PHP", label: "Philippine peso" }, ...setup.currencies.filter((c) => c.code !== "PHP").map((c) => ({ value: c.code, code: c.code, label: c.name }))]} /></Field>
                     {f.currencyCode !== "PHP" && <Field label={`PHP per 1 ${f.currencyCode}`}><input inputMode="decimal" value={f.fxRate} onChange={(e) => set("fxRate", e.target.value)} /></Field>}
                   </div>
                 )}
@@ -227,10 +230,8 @@ export function Capture({ module, id, setup, me, nav }: { module: ModuleKey; id?
                     <input className="q" inputMode="decimal" value={l.quantity} onChange={(e) => set("lines", f.lines.map((x, j) => (j === i ? { ...x, quantity: e.target.value } : x)))} />
                     <input className="p num" inputMode="decimal" placeholder="Price" value={l.unitPrice} onChange={(e) => set("lines", f.lines.map((x, j) => (j === i ? { ...x, unitPrice: e.target.value } : x)))} />
                     {(module === "PETTY_CASH" || module === "TRAVEL") && (
-                      <select className="a" value={l.accountId} onChange={(e) => set("lines", f.lines.map((x, j) => (j === i ? { ...x, accountId: e.target.value } : x)))}>
-                        <option value="">{module === "TRAVEL" ? "Mapped travel account" : "Expense account…"}</option>
-                        {setup.accounts.map((a) => <option key={a.id} value={a.id}>{a.code} {a.name}</option>)}
-                      </select>
+                      <MasterLookup style={{ gridColumn: "1 / -1" }} ariaLabel={`Account item ${i + 1}`} placeholder={module === "TRAVEL" ? "Mapped travel account" : "Expense account…"} emptyLabel={module === "TRAVEL" ? "Mapped travel account" : undefined}
+                        value={l.accountId} options={accountOpts} onChange={(v) => set("lines", f.lines.map((x, j) => (j === i ? { ...x, accountId: v } : x)))} />
                     )}
                     {f.lines.length > 1 && <button type="button" className="x" onClick={() => set("lines", f.lines.filter((_, j) => j !== i))} aria-label="Remove">×</button>}
                   </div>
@@ -252,16 +253,16 @@ export function Capture({ module, id, setup, me, nav }: { module: ModuleKey; id?
               const p = setup.payments.find((x) => x.key === v)!;
               setF((x) => ({ ...x, paymentMethod: v, paymentAccountId: p.accounts.length === 1 ? p.accounts[0].id : "" }));
             }} />
-            {f.paymentMethod === "PETTY_CASH_FUND" && <Field label="Fund"><select value={f.fundId} onChange={(e) => set("fundId", e.target.value)}><option value="">Choose…</option>{setup.funds.map((x) => <option key={x.id} value={x.id}>{x.code} · {x.name}</option>)}</select></Field>}
+            {f.paymentMethod === "PETTY_CASH_FUND" && <Field label="Fund"><MasterLookup ariaLabel="Fund" placeholder="Choose…" value={f.fundId} options={idOpts(setup.funds)} onChange={(v) => set("fundId", v)} /></Field>}
             {(setup.payments.find((p) => p.key === f.paymentMethod)?.accounts.length ?? 0) > 0 && (
-              <Field label="Account used"><select value={f.paymentAccountId} onChange={(e) => set("paymentAccountId", e.target.value)}><option value="">Choose…</option>{setup.payments.find((p) => p.key === f.paymentMethod)!.accounts.map((a) => <option key={a.id} value={a.id}>{a.code} · {a.name}</option>)}</select></Field>
+              <Field label="Account used"><MasterLookup ariaLabel="Account used" placeholder="Choose…" value={f.paymentAccountId} options={idOpts(setup.payments.find((p) => p.key === f.paymentMethod)!.accounts)} onChange={(v) => set("paymentAccountId", v)} /></Field>
             )}
             {["GCASH", "MAYA", "CREDIT_CARD", "DEBIT_CARD", "CORPORATE_WALLET"].includes(f.paymentMethod) && setup.payments.find((p) => p.key === f.paymentMethod)?.accounts.length === 0 && (
               <div className="vm-note subtle">No {setup.payments.find((p) => p.key === f.paymentMethod)?.label} account is set up yet. Ask finance to add it under Bank and Cash Accounts.</div>
             )}
             {f.paymentMethod === "EMPLOYEE" && <div className="vm-note subtle">You will be reimbursed after finance clears this claim.</div>}
             {(me.can.approve || me.can.finance) && (
-              <Field label="Employee / partner"><select value={f.employeeId} onChange={(e) => set("employeeId", e.target.value)}><option value="">Me</option>{setup.employees.map((x) => <option key={x.id} value={x.id}>{x.name} ({x.code})</option>)}</select></Field>
+              <Field label="Employee / partner"><MasterLookup ariaLabel="Employee / partner" placeholder="Me" emptyLabel="Me" value={f.employeeId} options={idOpts(setup.employees)} onChange={(v) => set("employeeId", v)} /></Field>
             )}
           </section>
 

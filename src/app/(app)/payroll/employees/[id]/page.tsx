@@ -10,6 +10,7 @@ import { ITEM_CATEGORIES, ratesFor } from "@/lib/payroll/compute";
 import { DE_MINIMIS } from "@/lib/payroll/rates";
 import { manilaToday } from "@/lib/payroll/attendance";
 import { hrSetupAction, payItemAction } from "../../../payroll-actions";
+import { MasterPicker } from "@/components/MasterPicker";
 
 const peso = (n: unknown) => Number(n ?? 0).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -43,8 +44,8 @@ export default async function EmployeePay({ params }: { params: Promise<{ id: st
         <ActionForm action={hrSetupAction}>
           <input type="hidden" name="op" value="employee" /><input type="hidden" name="employeeId" value={e.id} />
           <div className="row">
-            <div><label>Work schedule</label><select name="shiftId" defaultValue={e.shiftId ?? ""}><option value="">No fixed schedule</option>{shifts.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
-            <div><label>Reporting manager / supervisor</label><select name="managerId" defaultValue={e.managerId ?? ""}><option value="">None (HR approves)</option>{others.map((o) => <option key={o.id} value={o.id}>{employeeName(o)} ({o.position ?? o.code})</option>)}</select></div>
+            <div><label>Work schedule</label><MasterPicker name="shiftId" ariaLabel="Work schedule" defaultValue={e.shiftId ?? ""} emptyLabel="No fixed schedule" placeholder="No fixed schedule" options={shifts.map((s) => ({ value: s.id, label: s.name }))} /></div>
+            <div><label>Reporting manager / supervisor</label><MasterPicker name="managerId" ariaLabel="Reporting manager" defaultValue={e.managerId ?? ""} emptyLabel="None (HR approves)" placeholder="None (HR approves)" options={others.map((o) => ({ value: o.id, code: o.code, label: employeeName(o), hint: o.position ?? undefined }))} /></div>
             <div><label>Work days per year (rate factor)</label><input name="workDaysPerYear" type="number" defaultValue={e.workDaysPerYear} /></div>
             <div><label>Cost center code</label><input name="costCenter" defaultValue={e.costCenter ?? ""} /></div>
             <div><label>Payroll bank account no.</label><input name="bankAccountNo" defaultValue={e.bankAccountNo ?? ""} /></div>

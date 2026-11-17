@@ -9,6 +9,8 @@ import { suggestedAccountId, workbench } from "@/lib/bank/recon";
 import { ActionForm } from "@/components/ActionForm";
 import { undoMatch } from "../../bank-actions";
 import { Manual, Suggestions, type WBank, type WBook } from "./Workbench";
+import { MasterPicker } from "@/components/MasterPicker";
+import { idOpts } from "@/lib/lookup";
 
 const s = (c: bigint) => (Number(c) / 100).toFixed(2);
 const METHOD: Record<string, string> = { SUGGESTED: "Suggested", MANUAL: "Manual", ADJUSTMENT: "Booked from statement", NO_STATEMENT: "No statement line" };
@@ -30,7 +32,7 @@ export default async function Reconcile({ searchParams }: { searchParams: Promis
     <>
       <div className="top"><h1>Match and Clear · {w.bank.code}</h1>
         <div className="row noprint" style={{ gap: 8, flex: 0, flexWrap: "nowrap" }}>
-          <form className="row" style={{ gap: 6, flexWrap: "nowrap", minWidth: 320 }}><select name="account" defaultValue={w.bank.id}>{banks.map((b) => <option key={b.id} value={b.id}>{b.code} · {b.name}</option>)}</select><button className="secondary">Open</button></form>
+          <form className="row" style={{ gap: 6, flexWrap: "nowrap", minWidth: 320 }}><MasterPicker name="account" ariaLabel="Bank account" defaultValue={w.bank.id} options={idOpts(banks)} style={{ minWidth: 240 }} /><button className="secondary">Open</button></form>
           <Link className="btn secondary" href={`/bank/statements?account=${w.bank.id}`}>Upload statement</Link>
           {latest && <Link className="btn" href={`/bank/reconcile/${latest.id}`}>Reconciliation report</Link>}
         </div>
