@@ -58,10 +58,11 @@ export function JournalForm(props: {
     else if (others < 0) set(i, { debit: (-others / 100).toFixed(2), credit: "" });
   };
 
-  const available = accounts.filter((a) => !a.currencyCode || a.currencyCode === h.currencyCode);
   const balanced = totals.diff === 0 && totals.d > 0;
-  const accountOptions: LookupOption[] = TYPES.flatMap((t) => available.filter((a) => a.type === t)
-    .map((a) => ({ value: a.id, code: a.code, label: a.name, group: t, hint: a.currencyCode ?? undefined })));
+  const accountOptions: LookupOption[] = useMemo(() => {
+    const available = accounts.filter((a) => !a.currencyCode || a.currencyCode === h.currencyCode);
+    return TYPES.flatMap((t) => available.filter((a) => a.type === t).map((a) => ({ value: a.id, code: a.code, label: a.name, group: t, hint: a.currencyCode ?? undefined })));
+  }, [accounts, h.currencyCode]);
 
   return (
     <form action={action}>

@@ -1,5 +1,5 @@
 "use client";
-import { useActionState, useState } from "react";
+import { useActionState, useMemo, useState } from "react";
 import { savePaymentAction } from "@/app/(app)/ap-actions";
 import { Errors } from "../Errors";
 import { MasterLookup } from "../MasterLookup";
@@ -15,6 +15,7 @@ const money = (n: number) => n.toLocaleString("en-PH", { minimumFractionDigits: 
 export function PaymentForm({ vendors, banks, bills, initial, baseCurrency, rates }: { vendors: { id: string; name: string; code: string }[]; banks: Bank[]; bills: OpenBill[]; initial: PayInitial; baseCurrency: string; rates: Record<string, string> }) {
   const [state, run, pending] = useActionState(savePaymentAction, undefined);
   const [h, setH] = useState(initial);
+  const vendorOpts = useMemo(() => idOpts(vendors), [vendors]);
   const bank = banks.find((b) => b.id === h.bankAccountId);
   const mine = bills.filter((b) => b.vendorId === h.vendorId);
   const total = Object.entries(h.amounts).filter(([id]) => mine.some((b) => b.id === id)).reduce((s, [, v]) => s + num(v), 0);
@@ -24,7 +25,7 @@ export function PaymentForm({ vendors, banks, bills, initial, baseCurrency, rate
     <form action={run}>
       <Errors errors={state?.errors} />
       <div className="card"><div className="row">
-        <div style={{ flex: 2 }}><label>Supplier</label><MasterLookup ariaLabel="Supplier" required value={h.vendorId} options={idOpts(vendors)} add={{ kind: "vendors", noun: "supplier" }} onChange={(v) => setH({ ...h, vendorId: v, amounts: {} })} /></div>
+        <div style={{ flex: 2 }}><label>Supplier</label><MasterLookup ariaLabel="Supplier" required value={h.vendorId} options={vendorOpts} add={{ kind: "vendors", noun: "supplier" }} onChange={(v) => setH({ ...h, vendorId: v, amounts: {} })} /></div>
         <div style={{ flex: 2 }}><label>Pay from</label><MasterLookup ariaLabel="Pay from" required value={h.bankAccountId} options={idOpts(banks, (b) => (b.currencyCode !== baseCurrency ? b.currencyCode : undefined))} add={{ kind: "banks" }}
           onChange={(v) => { const b = banks.find((x) => x.id === v); setH({ ...h, bankAccountId: v, method: b && b.kind !== "CURRENT" && b.kind !== "SAVINGS" ? "CASH" : h.method, fxRate: b && b.currencyCode !== baseCurrency ? rates[b.currencyCode] ?? "" : "1" }); }} /></div>
         <div><label>Payment date</label><input type="date" value={h.date} onChange={(e) => setH({ ...h, date: e.target.value })} required /></div>

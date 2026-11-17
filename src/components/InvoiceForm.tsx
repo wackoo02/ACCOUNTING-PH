@@ -87,6 +87,7 @@ export function InvoiceForm(props: { data: InvoiceFormData; initial: InvoiceInit
   const [lines, setLinesState] = useState<InvLine[]>(initial.lines.length ? initial.lines : [blankLine()]);
   const [showAccounts, setShowAccounts] = useState(initial.lines.some((l) => l.accountId));
   const setLines = (f: (l: InvLine[]) => InvLine[]) => setLinesState(f);
+  const customerOpts = useMemo(() => idOpts(customers, (c) => (c.currencyCode !== baseCurrency ? c.currencyCode : undefined)), [customers, baseCurrency]);
   const cm = h.kind === "CREDIT_MEMO";
   const cust = customers.find((c) => c.id === h.customerId);
   const ccy = cust?.currencyCode ?? baseCurrency;
@@ -107,7 +108,7 @@ export function InvoiceForm(props: { data: InvoiceFormData; initial: InvoiceInit
         <div className="row">
           <div style={{ flex: 2 }}><label>Customer</label>
             <MasterLookup ariaLabel="Customer" required value={h.customerId} add={{ kind: "customers" }} onChange={(v) => pickCustomer(v)}
-              options={idOpts(customers, (c) => (c.currencyCode !== baseCurrency ? c.currencyCode : undefined))} /></div>
+              options={customerOpts} /></div>
           <div><label>{cm ? "Credit memo date" : "Invoice date"}</label><input type="date" value={h.date} onChange={(e) => setH({ ...h, date: e.target.value })} required /></div>
           {!cm && <div><label>Terms (days)</label><input className="num" inputMode="numeric" value={h.termsDays} onChange={(e) => setH({ ...h, termsDays: e.target.value, dueDate: "" })} /></div>}
           {!cm && <div><label>Due date (blank = date + terms)</label><input type="date" value={h.dueDate} onChange={(e) => setH({ ...h, dueDate: e.target.value })} /></div>}

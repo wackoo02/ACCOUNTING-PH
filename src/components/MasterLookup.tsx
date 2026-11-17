@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from "react";
+import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
 import type { MasterKind } from "@/lib/masters/config";
@@ -28,24 +28,56 @@ const NOUN: Record<MasterKind, string> = {
   employees: "employee", vendors: "vendor", customers: "customer", currencies: "currency", assets: "asset", "asset-categories": "asset category", warehouses: "warehouse", locations: "location",
 };
 
-function rank(o: LookupOption, q: string): number {
+// Lower-cased search text for each option, built once per list (not on every keystroke).
+type Indexed = { o: LookupOption; code: string; label: string; words: string; hay: string };
+const indexOptions = (options: LookupOption[]): Indexed[] => options.map((o) => {
   const code = (o.code ?? "").toLowerCase(), label = o.label.toLowerCase();
-  const hay = `${code} ${label} ${(o.hint ?? "").toLowerCase()}`;
-  const toks = q.toLowerCase().split(/\s+/).filter(Boolean);
-  if (!toks.every((t) => hay.includes(t))) return -1;
-  const q0 = toks[0];
-  if (code.startsWith(q0)) return 0;
-  if (label.startsWith(q0)) return 1;
-  if (new RegExp(`\\b${q0.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`).test(label)) return 2;
-  return 3;
+  return { o, code, label, words: " " + label.replace(/[^a-z0-9]+/g, " "), hay: `${code} ${label} ${(o.hint ?? "").toLowerCase()}` };
+});
+
+const SHOW_EMPTY = 40, SHOW_MATCHES = 50;
+
+/** Options containing every typed word, best first: code starts with it, name starts with it, a word starts with it, anywhere. */
+function search(index: Indexed[], text: string): LookupOption[] {
+  const toks = text.toLowerCase().split(/\s+/).filter(Boolean);
+  const q0 = toks[0], w0 = " " + q0;
+  const buckets: LookupOption[][] = [[], [], [], []];
+  for (const x of index) {
+    let ok = true;
+    for (const t of toks) if (!x.hay.includes(t)) { ok = false; break; }
+    if (!ok) continue;
+    const r = x.code.startsWith(q0) ? 0 : x.label.startsWith(q0) ? 1 : x.words.includes(w0) ? 2 : 3;
+    if (buckets[r].length < SHOW_MATCHES) buckets[r].push(x.o);
+    if (r === 0 && buckets[0].length >= SHOW_MATCHES) break; // nothing can rank higher
+  }
+  return buckets.flat().slice(0, SHOW_MATCHES);
 }
 
-function Highlight({ text, q }: { text: string; q: string }) {
-  const toks = q.trim().split(/\s+/).filter(Boolean).map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
-  if (!toks.length) return <>{text}</>;
-  const parts = text.split(new RegExp(`(${toks.join("|")})`, "ig"));
+const rowIndex = (t: EventTarget): number | null => {
+  const el = (t as HTMLElement).closest?.("[data-i]");
+  return el ? Number(el.getAttribute("data-i")) : null;
+};
+
+const escapeRe = (t: string) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+function Highlight({ text, re }: { text: string; re: RegExp | null }) {
+  if (!re) return <>{text}</>;
+  const parts = text.split(re);
   return <>{parts.map((p, i) => (i % 2 ? <mark key={i}>{p}</mark> : p))}</>;
 }
+
+/** One option row; memoized so moving the highlight re-renders two rows, not the whole list. */
+const OptionRow = memo(function OptionRow({ o, i, on, sel, group, re }: { o: LookupOption; i: number; on: boolean; sel: boolean; group?: string; re: RegExp | null }) {
+  return (
+    <div>
+      {group && <div className="lookup-group">{group}</div>}
+      <div data-i={i} className={"lookup-opt" + (on ? " on" : "") + (sel ? " sel" : "")} role="option" aria-selected={sel}>
+        {o.code && <span className="lookup-code"><Highlight text={o.code} re={re} /></span>}
+        <span className="lookup-label"><Highlight text={o.label} re={re} /></span>
+        {o.hint && <span className="lookup-hint">{o.hint}</span>}
+      </div>
+    </div>
+  );
+});
 
 /**
  * Type-to-search picker for master data. Suggests existing records as you type,
@@ -82,21 +114,32 @@ export function MasterLookup(props: {
   const selected = options.find((o) => o.value === value) ?? (pending?.value === value ? pending : undefined);
   const shown = selected ? (selected.code && selected.label ? `${selected.code} · ${selected.label}` : selected.code || selected.label) : "";
 
+  // Filtering and drawing the list follow the typing at lower priority, so each key shows at once.
+  const dq = useDeferredValue(q);
+  // The typo search compares every record, so it waits until typing pauses.
+  const [settled, setSettled] = useState("");
+  useEffect(() => { const t = setTimeout(() => setSettled(dq), 250); return () => clearTimeout(t); }, [dq]);
+  const index = useMemo(() => (open ? indexOptions(options) : []), [open, options]);
+  const re = useMemo(() => {
+    const toks = dq.trim().split(/\s+/).filter(Boolean).map(escapeRe);
+    return toks.length ? new RegExp(`(${toks.join("|")})`, "ig") : null;
+  }, [dq]);
   const rows: Row[] = useMemo(() => {
-    const text = q.trim();
+    if (!open) return [];
+    const text = dq.trim();
     let list: Row[];
-    if (!text) list = options.slice(0, 80).map((o) => ({ t: "opt", o }));
+    if (!text) list = options.slice(0, SHOW_EMPTY).map((o) => ({ t: "opt", o }));
     else {
-      list = options.map((o, i) => ({ o, r: rank(o, text), i })).filter((x) => x.r >= 0).sort((a, b) => a.r - b.r || a.i - b.i).slice(0, 60).map((x) => ({ t: "opt", o: x.o }));
-      if (!list.length && text.length >= 3) {
-        // Nothing contains the text: suggest the closest names, which catches typos.
+      list = search(index, text).map((o) => ({ t: "opt", o }));
+      if (!list.length && text.length >= 3 && settled === dq) {
+        // Nothing contains the text: once typing pauses, suggest the closest names, which catches typos.
         list = options.map((o) => ({ o, s: typeaheadScore(text, `${o.code ?? ""} ${o.label}`) })).filter((x) => x.s >= 0.7)
           .sort((a, b) => b.s - a.s).slice(0, 5).map((x) => ({ t: "opt", o: x.o, fuzzy: true }));
       }
     }
     if (text) for (const target of targets) list.push({ t: "add", target });
     return list;
-  }, [q, options, targets]);
+  }, [open, dq, settled, index, options, targets]);
 
   const place = useCallback(() => {
     const r = inputRef.current?.getBoundingClientRect();
@@ -209,7 +252,9 @@ export function MasterLookup(props: {
       />
       {busy && <span className="lookup-spin" aria-hidden="true" />}
       {open && portal(
-        <div className="lookup-list" style={pos} role="listbox" onMouseDown={(e) => e.preventDefault()}>
+        <div className="lookup-list" style={pos} role="listbox" onMouseDown={(e) => e.preventDefault()}
+          onMouseOver={(e) => { const i = rowIndex(e.target); if (i !== null && i !== active) setActive(i); }}
+          onClick={(e) => { const i = rowIndex(e.target); if (i !== null && rows[i]) choose(rows[i]); }}>
           {props.emptyLabel && !q.trim() && (
             <div className={"lookup-opt" + (value === "" ? " sel" : "")} onClick={() => { onChange(""); setOpen(false); }}>
               <span className="muted">{props.emptyLabel}</span>
@@ -226,19 +271,9 @@ export function MasterLookup(props: {
             }
             const prev = rows[i - 1];
             const showGroup = row.o.group && !row.fuzzy && (!prev || prev.t !== "opt" || prev.o.group !== row.o.group);
-            return (
-              <div key={row.o.value}>
-                {showGroup && <div className="lookup-group">{row.o.group}</div>}
-                <div className={"lookup-opt" + (i === active ? " on" : "") + (row.o.value === value ? " sel" : "")} role="option" aria-selected={row.o.value === value}
-                  onMouseEnter={() => setActive(i)} onClick={() => choose(row)}>
-                  {row.o.code && <span className="lookup-code"><Highlight text={row.o.code} q={q} /></span>}
-                  <span className="lookup-label"><Highlight text={row.o.label} q={q} /></span>
-                  {row.o.hint && <span className="lookup-hint">{row.o.hint}</span>}
-                </div>
-              </div>
-            );
+            return <OptionRow key={row.o.value} o={row.o} i={i} on={i === active} sel={row.o.value === value} group={showGroup ? row.o.group : undefined} re={re} />;
           })}
-          {q.trim() && !rows.some((r) => r.t === "opt") && <div className="lookup-empty">No record matches &ldquo;{q.trim()}&rdquo;.</div>}
+          {dq.trim() && !rows.some((r) => r.t === "opt") && <div className="lookup-empty">No record matches &ldquo;{dq.trim()}&rdquo;.</div>}
           {!q.trim() && !options.length && <div className="lookup-empty">No records yet. Type a name to add one.</div>}
         </div>
       )}

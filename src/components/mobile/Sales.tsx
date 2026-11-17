@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "@/components/Icon";
 import { MasterLookup } from "@/components/MasterLookup";
 import { idOpts } from "@/lib/lookup";
@@ -17,6 +17,7 @@ export function SalesScan({ setup, nav }: { setup: Setup | null; nav: Nav }) {
   const [f, setF] = useState<Form>({ invoiceNumber: "", date: new Date().toISOString().slice(0, 10), terms: "CHARGE", customerId: "", customerName: "", customerTin: "", vatableSales: "", vatAmount: "", vatExemptSales: "", zeroRatedSales: "", total: "", withholdingTax: "", isService: false, imageId: null, memo: "" });
   const [photo, setPhoto] = useState<string | null>(null);
   const [reading, setReading] = useState(false);
+  const customerOpts = useMemo(() => idOpts(setup?.customers ?? []), [setup?.customers]);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [errors, setErrors] = useState<string[]>([]);
   const [done, setDone] = useState<{ journal: { number: string }; totals: { total: string } } | null>(null);
@@ -76,7 +77,7 @@ export function SalesScan({ setup, nav }: { setup: Setup | null; nav: Nav }) {
             </div>
             <Field label="Terms"><Chips options={[{ value: "CHARGE", label: "Charge (on account)" }, { value: "CASH", label: "Cash sale" }]} value={f.terms} onChange={(v) => set("terms", v)} /></Field>
             <Field label="Customer"><MasterLookup ariaLabel="Customer" placeholder={f.customerName ? `${f.customerName} (not in list)` : "Walk-in / type to search…"} emptyLabel={f.customerName ? `${f.customerName} (not in list)` : "Walk-in"}
-              value={f.customerId} options={idOpts(setup?.customers ?? [])} onChange={(v) => set("customerId", v)} /></Field>
+              value={f.customerId} options={customerOpts} onChange={(v) => set("customerId", v)} /></Field>
             <label className="vm-switch"><input type="checkbox" checked={f.isService} onChange={(e) => set("isService", e.target.checked)} /><span />Services (service income)</label>
           </section>
           <section className="vm-card">

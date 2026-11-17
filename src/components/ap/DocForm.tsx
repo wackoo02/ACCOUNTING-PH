@@ -67,6 +67,9 @@ export function DocForm({ mode, data, initial, initialLines, openPos = [], requi
     const p = data.products.find((x) => x.id === id);
     set(i, p ? { productId: id, description: p.name, unit: p.unit ?? "", unitPrice: p.cost !== "0" ? p.cost : lines[i].unitPrice, accountId: p.accountId || lines[i].accountId, vatType: p.vatType } : { productId: "" });
   };
+  // Account options per line type, built once instead of on every keystroke.
+  const accountsByCat = useMemo(() => new Map(CATS.map(([k]) => [k, idOpts(data.accounts.filter((a) => fits(k, a)))])), [data.accounts]);
+  const accountsFor = (cat: string) => accountsByCat.get(cat) ?? idOpts(data.accounts.filter((a) => fits(cat, a)));
   const vendorOpts = useMemo(() => idOpts(data.vendors, (v) => (v.tin ? `TIN ${v.tin}` : undefined)), [data.vendors]);
   const productOpts = useMemo(() => idOpts(data.products), [data.products]);
   const taxOpts = useMemo(() => data.taxCodes.map((t) => ({ value: t.id, code: t.atc ?? t.code, label: t.name, hint: `${t.rate}%` })), [data.taxCodes]);
@@ -120,7 +123,7 @@ export function DocForm({ mode, data, initial, initialLines, openPos = [], requi
         </tr></thead>
         <tbody>
           {lines.map((l, i) => {
-            const opts = data.accounts.filter((a) => fits(l.category, a));
+            const opts = accountsFor(l.category);
             const poLine = po?.lines.find((x) => x.id === l.poLineId);
             return (
               <Fragment key={i}>
@@ -134,7 +137,7 @@ export function DocForm({ mode, data, initial, initialLines, openPos = [], requi
                   </td>
                   <td><select value={l.category} onChange={(e) => set(i, { category: e.target.value, accountId: "" })} aria-label={`Type line ${i + 1}`}>{CATS.map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></td>
                   <td><MasterLookup ariaLabel={`Account line ${i + 1}`} placeholder="Type account code or name…" required={mode !== "PR"} value={l.accountId} add={{ kind: "accounts" }} onChange={(v) => set(i, { accountId: v })}
-                    options={[...idOpts(opts), ...(l.accountId && !opts.some((a) => a.id === l.accountId) ? [{ value: l.accountId, code: data.accounts.find((a) => a.id === l.accountId)?.code ?? "?", label: "(does not fit the type)" }] : [])]} /></td>
+                    options={l.accountId && !opts.some((o) => o.value === l.accountId) ? [...opts, { value: l.accountId, code: data.accounts.find((a) => a.id === l.accountId)?.code ?? "?", label: "(does not fit the type)" }] : opts} /></td>
                   <td><input className="num" value={l.quantity} onChange={(e) => set(i, { quantity: e.target.value })} aria-label={`Quantity line ${i + 1}`} /></td>
                   {mode !== "BILL" && <td><input value={l.unit} onChange={(e) => set(i, { unit: e.target.value })} /></td>}
                   <td><input className="num" inputMode="decimal" value={l.unitPrice} onChange={(e) => set(i, { unitPrice: e.target.value })} aria-label={`Unit price line ${i + 1}`} /></td>

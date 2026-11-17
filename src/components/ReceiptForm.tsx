@@ -43,6 +43,7 @@ export function ReceiptForm({ data, initial, canPost }: { data: ReceiptFormData;
     for (const i of usable) { if (left <= 0) break; const a = Math.min(left, i.open); apps[i.id] = a.toFixed(2); left = r2(left - a); }
     setH({ ...h, applications: apps });
   };
+  const customerOpts = useMemo(() => idOpts(customers), [customers]);
   const payload = (intent: string) => JSON.stringify({
     ...h, intent, fxRate: ccy !== baseCurrency ? h.fxRate : "1",
     applications: Object.entries(h.applications).filter(([, v]) => num(v) !== 0).map(([invoiceId, amount]) => ({ invoiceId, amount: String(amount).replace(/,/g, "") })),
@@ -54,7 +55,7 @@ export function ReceiptForm({ data, initial, canPost }: { data: ReceiptFormData;
       <div className="card">
         <div className="row">
           <div style={{ flex: 2 }}><label>Received from (customer)</label>
-            <MasterLookup ariaLabel="Customer" required value={h.customerId} options={idOpts(customers)} add={{ kind: "customers" }} onChange={(v) => setH({ ...h, customerId: v, applications: {} })} /></div>
+            <MasterLookup ariaLabel="Customer" required value={h.customerId} options={customerOpts} add={{ kind: "customers" }} onChange={(v) => setH({ ...h, customerId: v, applications: {} })} /></div>
           <div><label>Date received</label><input type="date" value={h.date} onChange={(e) => setH({ ...h, date: e.target.value })} required /></div>
           <div style={{ flex: 2 }}><label>Deposited to</label>
             <MasterLookup ariaLabel="Deposited to" required value={h.bankAccountId} options={idOpts(banks, (b) => (b.currencyCode !== baseCurrency ? b.currencyCode : undefined))} add={{ kind: "banks" }}

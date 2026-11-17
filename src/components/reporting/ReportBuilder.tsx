@@ -65,6 +65,8 @@ export function ReportBuilder({ initialDef, initialResult, lookups, saved, start
   const exportRef = useRef<HTMLFormElement>(null);
   const info = sourceInfo(def.source)!;
   const dirty = JSON.stringify(def) !== ranDef;
+  // The result table can be thousands of cells: draw it only when the result changes, not on every keystroke in the design panel.
+  const table = useMemo(() => (result ? <ReportTable r={result} /> : null), [result]);
   const readOnly = !!saved && !saved.editable;
 
   const up = (fn: (d: ReportDefinition) => void) => setDef((cur) => { const n = clone(cur); fn(n); return n; });
@@ -184,7 +186,7 @@ export function ReportBuilder({ initialDef, initialResult, lookups, saved, start
       <Errors errors={errors} />
       {result && (
         <div style={{ opacity: pending ? 0.55 : 1, transition: "opacity .15s" }}>
-          <ReportTable r={result} />
+          {table}
           {result.notes.map((n, i) => <p key={i} className="muted small">{n}</p>)}
         </div>
       )}
