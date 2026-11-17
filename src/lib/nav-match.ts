@@ -1,7 +1,7 @@
 import type { IconName } from "@/lib/icons";
 
 export type NavItem = { href: string; label: string; icon: IconName; perm?: string };
-export type NavSection = { title: string | null; items: NavItem[] };
+export type NavSection = { title: string | null; icon?: IconName; items: NavItem[] };
 
 /** Best nav match for a path + query string: exact href (with query) wins, then longest path prefix. */
 export function matchNav(sections: NavSection[], pathname: string, search: string): { section: string | null; item: NavItem } | null {

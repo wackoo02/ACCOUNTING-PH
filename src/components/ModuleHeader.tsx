@@ -8,7 +8,7 @@ export function ModuleHeader({ sections }: { sections: NavSection[] }) {
   const pathname = usePathname();
   const search = useSearchParams().toString();
   const m = matchNav(sections, pathname, search);
-  if (!m) return null;
+  if (!m || pathname === "/dashboard") return null;
   return (
     <div className="module-head" key={m.item.href}>
       <span className="module-tile"><Icon name={m.item.icon} size={20} /></span>

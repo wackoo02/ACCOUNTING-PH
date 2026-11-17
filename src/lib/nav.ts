@@ -15,6 +15,7 @@ export const NAV: NavSection[] = [
   { title: null, items: [{ href: "/dashboard", label: "Dashboard", icon: "dashboard" }] },
   {
     title: "General Ledger",
+    icon: "journal",
     items: [
       { href: "/journals", label: "Journal Entries", icon: "journal" },
       { href: "/journals/new", label: "New Journal Entry", icon: "journal-new", perm: "journal.create" },
@@ -28,6 +29,7 @@ export const NAV: NavSection[] = [
   },
   {
     title: "Cash and Bank",
+    icon: "bank",
     items: [
       { href: "/bank", label: "Bank and Cash Accounts", icon: "bank" },
       { href: "/cash", label: "Receipts and Disbursements", icon: "cash" },
@@ -40,6 +42,7 @@ export const NAV: NavSection[] = [
   },
   {
     title: "Receivables and Billing",
+    icon: "receivables",
     items: [
       { href: "/receivables", label: "Sales Invoices", icon: "receivables" },
       { href: "/receivables?status=PENDING_APPROVAL", label: "Invoice Approvals", icon: "approvals", perm: "journal.post" },
@@ -53,6 +56,7 @@ export const NAV: NavSection[] = [
   },
   {
     title: "Purchasing",
+    icon: "cart",
     items: [
       { href: "/purchasing/requests", label: "Purchase Requests", icon: "journal-new" },
       { href: "/purchasing/rfq", label: "RFQ / Canvass", icon: "activity" },
@@ -62,6 +66,7 @@ export const NAV: NavSection[] = [
   },
   {
     title: "Payables",
+    icon: "payables",
     items: [
       { href: "/ap/inbox", label: "AP Invoice Inbox", icon: "inbox" },
       { href: "/ap/bills", label: "Supplier Bills", icon: "payables" },
@@ -74,6 +79,7 @@ export const NAV: NavSection[] = [
   },
   {
     title: "Debt",
+    icon: "debt",
     items: [
       { href: "/debt", label: "Loans and Borrowings", icon: "debt" },
       { href: "/debt/period-end", label: "Debt Period-end Run", icon: "periods", perm: "journal.post" },
@@ -84,6 +90,7 @@ export const NAV: NavSection[] = [
   },
   {
     title: "Inventory",
+    icon: "inventory",
     items: [
       { href: "/inventory", label: "Stock Status", icon: "inventory" },
       { href: "/inventory/transactions", label: "Inventory Transactions", icon: "journal" },
@@ -99,6 +106,7 @@ export const NAV: NavSection[] = [
   },
   {
     title: "Expense and Mobility",
+    icon: "mobility",
     items: [
       { href: "/expenses", label: "Mobility Dashboard", icon: "mobility" },
       { href: "/expenses/claims", label: "Expense Claims", icon: "claims" },
@@ -112,6 +120,7 @@ export const NAV: NavSection[] = [
   },
   {
     title: "Payroll and HR",
+    icon: "payroll",
     items: [
       { href: "/payroll", label: "Payroll Runs", icon: "payroll", perm: "payroll.process" },
       { href: "/payroll/employees", label: "Employees and Pay", icon: "employees", perm: "payroll.process" },
@@ -125,6 +134,7 @@ export const NAV: NavSection[] = [
   },
   {
     title: "Fixed Assets",
+    icon: "fixed-assets",
     items: [
       { href: "/assets", label: "Asset Register", icon: "fixed-assets" },
       { href: "/assets/new", label: "New Asset", icon: "journal-new", perm: "journal.post" },
@@ -139,6 +149,7 @@ export const NAV: NavSection[] = [
   },
   {
     title: "Leases (PFRS 16)",
+    icon: "leases",
     items: [
       { href: "/leases", label: "Lease Register", icon: "leases" },
       { href: "/leases/new", label: "New Lease", icon: "journal-new", perm: "journal.create" },
@@ -151,6 +162,7 @@ export const NAV: NavSection[] = [
   },
   {
     title: "BIR Tax",
+    icon: "bir",
     items: [
       { href: "/tax", label: "Tax Overview and Calendar", icon: "bir" },
       { href: "/tax/review", label: "Tax Review", icon: "audit" },
@@ -164,6 +176,7 @@ export const NAV: NavSection[] = [
   },
   {
     title: "Reports",
+    icon: "report-builder",
     items: [
       { href: "/reports/custom", label: "Custom Reports", icon: "report-builder" },
       { href: "/trial-balance", label: "Trial Balance", icon: "trial-balance" },
@@ -179,10 +192,12 @@ export const NAV: NavSection[] = [
   },
   {
     title: "Master Lists",
+    icon: "dimensions",
     items: MASTER_KINDS.filter((k) => k !== "assets" && k !== "asset-categories").map((k) => ({ href: `/masters/${k}`, label: MASTERS[k].title, icon: MASTER_ICON[k] ?? "dimensions" })),
   },
   {
     title: "Settings",
+    icon: "settings",
     items: [
       { href: "/entities", label: "Entities and Intercompany", icon: "entities" },
       { href: "/settings", label: "Company Settings", icon: "settings", perm: "org.manage" },
