@@ -1,5 +1,5 @@
 "use client";
-import { useActionState, useState } from "react";
+import { useActionState, useMemo, useState } from "react";
 import { saveContractAction } from "@/app/(app)/ar-actions";
 import type { InvoiceFormData } from "@/lib/ar/form-data";
 import { Errors } from "./Errors";
@@ -26,6 +26,7 @@ export function ContractForm({ data, initial }: { data: InvoiceFormData; initial
   const value = Number(h.contractValue.replace(/,/g, "")) || 0;
   const msTotal = ms.reduce((s, m) => s + (m.amount.trim() ? Number(m.amount.replace(/,/g, "")) || 0 : (value * (Number(m.percent) || 0)) / 100), 0);
   const setM = (i: number, p: Partial<Milestone>) => setMs((xs) => xs.map((m, j) => (j === i ? { ...m, ...p } : m)));
+  const customerOpts = useMemo(() => idOpts(data.customers), [data.customers]);
   const payload = JSON.stringify({
     ...h, endDate: h.endDate || undefined, nextBillDate: h.nextBillDate || undefined,
     lines: project ? [] : lines.map((l) => ({ ...l, dims: Object.fromEntries(Object.entries(l.dims).map(([k, v]) => [k, v || null])) })),
@@ -38,7 +39,7 @@ export function ContractForm({ data, initial }: { data: InvoiceFormData; initial
         <div className="row">
           <div style={{ flex: 2 }}><label>Billing type</label><select value={h.kind} onChange={(e) => setH({ ...h, kind: e.target.value })} disabled={!!initial.id}>{Object.entries(KINDS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
           <div style={{ flex: 2 }}><label>Name</label><input value={h.name} onChange={(e) => setH({ ...h, name: e.target.value })} placeholder="e.g. Monthly IT support retainer" required /></div>
-          <div style={{ flex: 2 }}><label>Customer</label><MasterLookup ariaLabel="Customer" required value={h.customerId} options={idOpts(data.customers)} add={{ kind: "customers" }} onChange={(v) => setH({ ...h, customerId: v })} /></div>
+          <div style={{ flex: 2 }}><label>Customer</label><MasterLookup ariaLabel="Customer" required value={h.customerId} options={customerOpts} add={{ kind: "customers" }} onChange={(v) => setH({ ...h, customerId: v })} /></div>
         </div>
         <div className="row" style={{ marginTop: 10 }}>
           <div><label>Start date</label><input type="date" value={h.startDate} onChange={(e) => setH({ ...h, startDate: e.target.value })} required /></div>

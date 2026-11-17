@@ -57,12 +57,12 @@ export function CashForm(props: CashFormData & { mode: CashMode; initial: CashIn
     toFxRate: toForeign ? h.toFxRate : to && to.currencyCode !== baseCurrency ? h.fxRate : "1",
   });
   const bankOpt = (b: (typeof banks)[number]): LookupOption => ({ value: b.id, code: b.code, label: b.name, hint: b.currencyCode !== baseCurrency ? b.currencyCode : undefined });
-  const accountOptions: LookupOption[] = TYPES.flatMap((t) => accounts.filter((a) => a.type === t && (!a.currencyCode || a.currencyCode === ccy)).map((a) => ({ value: a.id, code: a.code, label: a.name, group: t })));
-  const partyOptions: LookupOption[] = parties.map((p) => {
+  const accountOptions: LookupOption[] = useMemo(() => TYPES.flatMap((t) => accounts.filter((a) => a.type === t && (!a.currencyCode || a.currencyCode === ccy)).map((a) => ({ value: a.id, code: a.code, label: a.name, group: t }))), [accounts, ccy]);
+  const partyOptions: LookupOption[] = useMemo(() => parties.map((p) => {
     const [prefix, code] = p.value.split(":");
     const kind = PARTY_KIND[prefix];
     return { value: p.value, code, label: p.name, hint: prefix.charAt(0) + prefix.slice(1).toLowerCase(), kind };
-  });
+  }), [parties]);
   const partyAdd: AddTarget[] = (receipt ? ["customers", "employees", "vendors"] : ["vendors", "employees", "customers"]).map((k) => ({
     kind: k as MasterKind, toValue: (r: SavedRecord) => `${k === "employees" ? (r.isPartner ? "PARTNER" : "EMPLOYEE") : k === "vendors" ? "VENDOR" : "CUSTOMER"}:${r.code}`,
   }));

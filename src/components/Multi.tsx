@@ -1,5 +1,5 @@
 "use client";
-import { useRef, useState } from "react";
+import { useDeferredValue, useRef, useState } from "react";
 
 const toggle = (arr: string[] | undefined, v: string) => (arr ?? []).includes(v) ? (arr ?? []).filter((x) => x !== v) : [...(arr ?? []), v];
 
@@ -8,7 +8,8 @@ export function Multi({ options, value, onChange, placeholder }: { options: { va
   const [q, setQ] = useState("");
   const search = useRef<HTMLInputElement>(null);
   // Every word typed must appear (code or name), like the single-value pickers.
-  const toks = q.toLowerCase().split(/\s+/).filter(Boolean);
+  const dq = useDeferredValue(q); // filter the list behind the typing, not on the keystroke
+  const toks = dq.toLowerCase().split(/\s+/).filter(Boolean);
   const shown = toks.length ? options.filter((o) => { const l = o.label.toLowerCase(); return toks.every((t) => l.includes(t)); }) : options;
   const summary = value.length === 0 ? placeholder ?? "All" : value.length <= 3 ? value.map((v) => options.find((o) => o.value === v)?.label ?? v).join(", ") : `${value.length} selected`;
   return (
@@ -17,8 +18,9 @@ export function Multi({ options, value, onChange, placeholder }: { options: { va
       <div className="multi-pop">
         {options.length > 5 && <input ref={search} placeholder="Type to search…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search" />}
         <div className="multi-actions"><button type="button" className="link" onClick={() => onChange([])}>Clear</button>{q && <button type="button" className="link" onClick={() => onChange([...new Set([...value, ...shown.map((o) => o.value)])])}>Select shown</button>}</div>
-        {shown.slice(0, 400).map((o) => <label key={o.value} className="check"><input type="checkbox" checked={value.includes(o.value)} onChange={() => onChange(toggle(value, o.value))} /> {o.label}</label>)}
+        {shown.slice(0, 200).map((o) => <label key={o.value} className="check"><input type="checkbox" checked={value.includes(o.value)} onChange={() => onChange(toggle(value, o.value))} /> {o.label}</label>)}
         {shown.length === 0 && <span className="muted">No matches</span>}
+        {shown.length > 200 && <span className="muted">{shown.length - 200} more: type to narrow the list.</span>}
       </div>
     </details>
   );

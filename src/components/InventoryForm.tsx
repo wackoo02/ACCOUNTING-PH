@@ -39,6 +39,7 @@ export function InventoryForm(props: InventoryFormData & { mode: InvMode; initia
   const itemOf = (id: string) => items.find((i) => i.id === id);
   const locsOf = (whId: string) => locations.filter((l) => l.warehouseId === whId);
 
+  const partyOpts = useMemo(() => parties.map((p) => partyOpt(p.value, p.label)), [parties]);
   const itemOpts = useMemo(() => idOpts(items), [items]);
   const accountOpts = useMemo(() => idOpts(accounts), [accounts]);
   const binAdd = (whId: string): AddTarget | undefined => {
@@ -87,7 +88,7 @@ export function InventoryForm(props: InventoryFormData & { mode: InvMode; initia
             <MasterLookup ariaLabel="To warehouse" required value={h.toWarehouseId} options={idOpts(warehouses, (w) => (w.id === h.warehouseId ? "move between bins" : undefined))} add={{ kind: "warehouses" }} onChange={(v) => setH({ ...h, toWarehouseId: v })} /></div>}
           <div><label>Date</label><input type="date" value={h.date} onChange={(e) => setH({ ...h, date: e.target.value })} required /></div>
           {!transfer && <div style={{ flex: 2 }}><label>{mode === "ISSUE" ? "Issued to" : mode === "RETURN_IN" ? "Customer" : mode === "ADJUSTMENT" ? "Party (optional)" : "Supplier"}</label>
-            <MasterLookup ariaLabel="Party" placeholder="—" emptyLabel="— None" value={h.party} options={parties.map((p) => partyOpt(p.value, p.label))} onChange={(v) => setH({ ...h, party: v })}
+            <MasterLookup ariaLabel="Party" placeholder="—" emptyLabel="— None" value={h.party} options={partyOpts} onChange={(v) => setH({ ...h, party: v })}
               add={partyAdd(mode === "ISSUE" ? ["employees", "customers", "vendors"] : mode === "RETURN_IN" ? ["customers"] : ["vendors", "customers", "employees"])} /></div>}
           <div><label>Reference (DR, PO, SI, CM)</label><input value={h.reference} onChange={(e) => setH({ ...h, reference: e.target.value })} /></div>
         </div>
