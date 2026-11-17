@@ -3,6 +3,8 @@ import { requireCtx } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { formatPeso, toCentavos } from "@/lib/money";
 import { fmtDate, parseDateParam, today } from "@/lib/format";
+import { MasterPicker } from "@/components/MasterPicker";
+import { idOpts } from "@/lib/lookup";
 
 // A check is stale after six months from its date (PH banking practice).
 const STALE_DAYS = 180;
@@ -39,7 +41,7 @@ export default async function Checks({ searchParams }: { searchParams: Promise<R
         {["Unreleased", "Outstanding", "Stale", "Cleared"].map((s) => <div key={s} className="card stat"><div className="l">{s}</div><div className="n">{formatPeso(total(s))}</div></div>)}
       </div>
       <form className="card row noprint">
-        <div><label>Bank account</label><select name="bank" defaultValue={sp.bank ?? ""}><option value="">All</option>{banks.map((b) => <option key={b.id} value={b.id}>{b.code} · {b.name}</option>)}</select></div>
+        <div><label>Bank account</label><MasterPicker name="bank" ariaLabel="Bank account" defaultValue={sp.bank ?? ""} emptyLabel="All" placeholder="All" options={idOpts(banks)} /></div>
         <div><label>Status</label><select name="status" defaultValue={want}><option value="">All</option>{["Draft", "For approval", "Unreleased", "Outstanding", "Stale", "Cleared", "Void"].map((s) => <option key={s}>{s}</option>)}</select></div>
         <div><label>As of</label><input type="date" name="asOf" defaultValue={fmtDate(asOf)} /></div>
         <div style={{ flex: 0 }}><button>Show</button></div>

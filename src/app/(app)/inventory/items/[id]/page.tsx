@@ -8,6 +8,8 @@ import { stockCard } from "@/lib/inventory/reports";
 import { COSTING_LABELS } from "@/lib/inventory/engine";
 import { INV_LABELS, type InvType } from "@/lib/inventory/service";
 import { formatQty } from "@/lib/inventory/qty";
+import { MasterPicker } from "@/components/MasterPicker";
+import { idOpts } from "@/lib/lookup";
 
 type SP = Promise<Record<string, string | undefined>>;
 
@@ -30,7 +32,7 @@ export default async function StockCard({ params, searchParams }: { params: Prom
         <div><label>Reorder point</label>{i.reorderPoint.toString()}</div><div><label>Default vendor</label>{i.defaultVendorCode || "—"}</div>
       </div>
       <form className="card row noprint">
-        <div><label>Warehouse</label><select name="wh" defaultValue={sp.wh ?? ""}><option value="">All</option>{whs.map((w) => <option key={w.id} value={w.id}>{w.code}</option>)}</select></div>
+        <div><label>Warehouse</label><MasterPicker name="wh" ariaLabel="Warehouse" defaultValue={sp.wh ?? ""} emptyLabel="All" placeholder="All" options={idOpts(whs)} /></div>
         <div><label>From</label><input type="date" name="from" defaultValue={from} /></div>
         <div><label>To</label><input type="date" name="to" defaultValue={to} /></div>
         <div style={{ flex: 0 }}><button>Show</button></div>

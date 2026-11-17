@@ -3,6 +3,8 @@ import { prisma } from "@/lib/db";
 import { certificateForQuarter } from "@/lib/ap/payments";
 import { Cert2307View } from "@/components/ap/Cert2307";
 import { PrintButton } from "@/components/PrintButton";
+import { MasterPicker } from "@/components/MasterPicker";
+import { idOpts } from "@/lib/lookup";
 
 export default async function Quarterly2307({ searchParams }: { searchParams: Promise<{ vendor?: string; year?: string; q?: string }> }) {
   const ctx = await requireCtx("reports.view");
@@ -16,7 +18,7 @@ export default async function Quarterly2307({ searchParams }: { searchParams: Pr
   return (<>
     <div className="top noprint"><h1>BIR Form 2307 by Quarter</h1><PrintButton /></div>
     <form className="card row noprint">
-      <div style={{ flex: 2 }}><label>Supplier</label><select name="vendor" defaultValue={sp.vendor ?? ""}><option value="">Choose…</option><option value="ALL">All suppliers with tax withheld</option>{vendors.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}</select></div>
+      <div style={{ flex: 2 }}><label>Supplier</label><MasterPicker name="vendor" ariaLabel="Supplier" defaultValue={sp.vendor ?? ""} placeholder="Type to search…" options={[{ value: "ALL", label: "All suppliers with tax withheld" }, ...idOpts(vendors)]} /></div>
       <div><label>Year</label><input name="year" className="num" defaultValue={year} /></div>
       <div><label>Quarter</label><select name="q" defaultValue={q}>{[1, 2, 3, 4].map((x) => <option key={x} value={x}>Q{x}</option>)}</select></div>
       <div style={{ flex: 0 }}><button>Show</button></div>

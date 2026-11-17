@@ -10,6 +10,8 @@ import { defaultRecipients } from "@/lib/ar/email";
 import { ActionForm } from "@/components/ActionForm";
 import { PrintButton } from "@/components/PrintButton";
 import { emailAction } from "../../ar-actions";
+import { MasterPicker } from "@/components/MasterPicker";
+import { idOpts } from "@/lib/lookup";
 
 type SP = Promise<Record<string, string | undefined>>;
 const HREF = { INVOICE: (id: string) => `/receivables/${id}`, CREDIT_MEMO: (id: string) => `/receivables/${id}`, PAYMENT: (id: string) => `/receivables/collections/${id}` };
@@ -27,7 +29,7 @@ export default async function Statement({ searchParams }: { searchParams: SP }) 
     <>
       <div className="top"><h1>Statement of Account</h1>{st && <div className="row noprint" style={{ gap: 8, flex: 0, flexWrap: "nowrap" }}><PrintButton /><a className="btn secondary" target="_blank" rel="noreferrer" href={`/api/receivables/pdf?type=statement&id=${st.customer.id}&from=${from}&to=${to}`}>PDF</a></div>}</div>
       <form className="card row noprint">
-        <div style={{ flex: 2 }}><label>Customer</label><select name="customer" defaultValue={sp.customer ?? ""} required><option value="">Choose…</option>{customers.map((c) => <option key={c.id} value={c.id}>{c.name} ({c.code})</option>)}</select></div>
+        <div style={{ flex: 2 }}><label>Customer</label><MasterPicker name="customer" ariaLabel="Customer" defaultValue={sp.customer ?? ""} required placeholder="Type to search…" options={idOpts(customers)} /></div>
         <div><label>From</label><input type="date" name="from" defaultValue={from} /></div>
         <div><label>To</label><input type="date" name="to" defaultValue={to} /></div>
         <div style={{ flex: 0 }}><button>Show</button></div>

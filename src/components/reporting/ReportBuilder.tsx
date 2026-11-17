@@ -7,6 +7,9 @@ import { ROW_GROUP_OPTIONS, SOURCES, sourceInfo } from "@/lib/reporting/catalog"
 import type { ReportResult } from "@/lib/reporting/result";
 import { ReportTable } from "./ReportTable";
 import { Errors } from "@/components/Errors";
+import { MasterLookup } from "@/components/MasterLookup";
+import { Multi } from "@/components/Multi";
+export { Multi };
 import { deleteReportAction, runReportAction, saveReportAction, type RunState } from "@/app/(app)/reports/custom/actions";
 
 export type BuilderLookups = {
@@ -16,6 +19,7 @@ export type BuilderLookups = {
   accounts: { code: string; name: string; type: string; ifrsGroup: string }[];
   ifrsGroups: string[];
   journalSources: string[];
+  parties: { code: string; name: string; type: string }[];
   members: { id: string; name: string; role: Role }[];
   roles: { id: Role; label: string }[];
 };
@@ -194,22 +198,6 @@ function Check({ label, checked, onChange }: { label: string; checked: boolean; 
   return <label className="check"><input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} /> {label}</label>;
 }
 
-export function Multi({ options, value, onChange, placeholder }: { options: { value: string; label: string }[]; value: string[]; onChange: (v: string[]) => void; placeholder?: string }) {
-  const [q, setQ] = useState("");
-  const shown = q ? options.filter((o) => o.label.toLowerCase().includes(q.toLowerCase())) : options;
-  const summary = value.length === 0 ? placeholder ?? "All" : value.length <= 3 ? value.map((v) => options.find((o) => o.value === v)?.label ?? v).join(", ") : `${value.length} selected`;
-  return (
-    <details className="multi">
-      <summary>{summary}</summary>
-      <div className="multi-pop">
-        {options.length > 8 && <input placeholder="Search…" value={q} onChange={(e) => setQ(e.target.value)} />}
-        <div className="multi-actions"><button type="button" className="link" onClick={() => onChange([])}>Clear</button>{q && <button type="button" className="link" onClick={() => onChange([...new Set([...value, ...shown.map((o) => o.value)])])}>Select shown</button>}</div>
-        {shown.slice(0, 400).map((o) => <label key={o.value} className="check"><input type="checkbox" checked={value.includes(o.value)} onChange={() => onChange(toggle(value, o.value))} /> {o.label}</label>)}
-        {shown.length === 0 && <span className="muted">No matches</span>}
-      </div>
-    </details>
-  );
-}
 
 type Up = (fn: (d: ReportDefinition) => void) => void;
 
@@ -435,13 +423,14 @@ function FiltersEditor({ def, up, lookups }: { def: ReportDefinition; up: Up; lo
   const f = def.filters;
   const info = sourceInfo(def.source)!;
   const accountOpts = useMemo(() => lookups.accounts.map((a) => ({ value: a.code, label: `${a.code} · ${a.name}` })), [lookups.accounts]);
+  const codeOpts = useMemo(() => lookups.accounts.map((a) => ({ value: a.code, code: a.code, label: a.name })), [lookups.accounts]);
   return (
     <div className="stack">
       <div className="row">
         {lookups.entities.length > 1 && <Field label="Entities / subsidiaries" wide><Multi placeholder="This company only" value={f.entityIds ?? []} onChange={(v) => up((d) => { d.filters.entityIds = v; })} options={lookups.entities.map((e) => ({ value: e.id, label: e.name }))} /></Field>}
         <Field label="Specific accounts" wide><Multi placeholder="All accounts" value={f.accountCodes ?? []} onChange={(v) => up((d) => { d.filters.accountCodes = v; })} options={accountOpts} /></Field>
-        <Field label="Account code from"><input value={f.accountCodeFrom ?? ""} placeholder="e.g. 6000" onChange={(e) => up((d) => { d.filters.accountCodeFrom = e.target.value || undefined; })} /></Field>
-        <Field label="to"><input value={f.accountCodeTo ?? ""} placeholder="e.g. 6999" onChange={(e) => up((d) => { d.filters.accountCodeTo = e.target.value || undefined; })} /></Field>
+        <Field label="Account code from"><MasterLookup ariaLabel="Account code from" placeholder="e.g. 6000" emptyLabel="Any" value={f.accountCodeFrom ?? ""} options={codeOpts} onChange={(v) => up((d) => { d.filters.accountCodeFrom = v || undefined; })} /></Field>
+        <Field label="to"><MasterLookup ariaLabel="Account code to" placeholder="e.g. 6999" emptyLabel="Any" value={f.accountCodeTo ?? ""} options={codeOpts} onChange={(v) => up((d) => { d.filters.accountCodeTo = v || undefined; })} /></Field>
       </div>
       <div className="row">
         <Field label="Account types"><Multi value={f.accountTypes ?? []} onChange={(v) => up((d) => { d.filters.accountTypes = v as ReportDefinition["filters"]["accountTypes"]; })} options={TYPES.map(([v, l]) => ({ value: v, label: l }))} /></Field>
@@ -458,7 +447,8 @@ function FiltersEditor({ def, up, lookups }: { def: ReportDefinition; up: Up; lo
       )}
       <div className="row">
         <Field label="Customer / vendor / employee type"><Multi value={f.partyTypes ?? []} onChange={(v) => up((d) => { d.filters.partyTypes = v as ReportDefinition["filters"]["partyTypes"]; })} options={PARTY_TYPES.map(([v, l]) => ({ value: v, label: l }))} /></Field>
-        <Field label="Specific codes (comma separated)"><input defaultValue={(f.partyCodes ?? []).join(", ")} placeholder="e.g. C-0001, V-0002" onBlur={(e) => up((d) => { d.filters.partyCodes = e.target.value.split(",").map((s) => s.trim()).filter(Boolean); })} /></Field>
+        <Field label="Specific customers / vendors / employees" wide><Multi placeholder="All" value={f.partyCodes ?? []} onChange={(v) => up((d) => { d.filters.partyCodes = v; })}
+          options={lookups.parties.filter((p) => !f.partyTypes?.length || f.partyTypes.some((t) => t.toLowerCase() === p.type.toLowerCase())).map((p) => ({ value: p.code, label: `${p.code} · ${p.name} (${p.type})` }))} /></Field>
         <Field label="Text in narration, line or reference"><input value={f.text ?? ""} onChange={(e) => up((d) => { d.filters.text = e.target.value || undefined; })} /></Field>
         {info.statuses && <Field label="Entry status"><Multi placeholder={def.source === "gl_detail" ? "Posted" : "All"} value={f.statuses ?? []} onChange={(v) => up((d) => { d.filters.statuses = v as ReportDefinition["filters"]["statuses"]; })} options={STATUSES.map(([v, l]) => ({ value: v, label: l }))} /></Field>}
       </div>

@@ -4,6 +4,8 @@ import { prisma } from "@/lib/db";
 import { formatPeso } from "@/lib/money";
 import { depreciationSchedule } from "@/lib/assets/reports";
 import { PrintButton } from "@/components/PrintButton";
+import { MasterPicker } from "@/components/MasterPicker";
+import { codeOpts } from "@/lib/lookup";
 
 type SP = Promise<Record<string, string | undefined>>;
 
@@ -20,7 +22,7 @@ export default async function Schedule({ searchParams }: { searchParams: SP }) {
       <p className="print-only"><strong>{ctx.org.name}</strong></p>
       <form className="card row noprint">
         <div><label>Fiscal year</label><input name="year" type="number" defaultValue={year} /></div>
-        <div><label>Category</label><select name="category" defaultValue={sp.category ?? ""}><option value="">All</option>{cats.map((c) => <option key={c.code} value={c.code}>{c.name}</option>)}</select></div>
+        <div><label>Category</label><MasterPicker name="category" ariaLabel="Category" defaultValue={sp.category ?? ""} emptyLabel="All" placeholder="All" options={codeOpts(cats)} /></div>
         <div style={{ flex: 0 }}><button>Show</button></div>
       </form>
       <p className="muted">Posted months in normal type; <i>projected months in italics</i> (from the current cost, life and method).</p>

@@ -5,6 +5,8 @@ import { prisma } from "@/lib/db";
 import { can } from "@/lib/permissions";
 import { fmtDate } from "@/lib/format";
 import { peso, statusText } from "@/lib/ap/view";
+import { MasterPicker } from "@/components/MasterPicker";
+import { idOpts } from "@/lib/lookup";
 
 export default async function PoList({ searchParams }: { searchParams: Promise<{ status?: string; q?: string; vendor?: string }> }) {
   const ctx = await requireCtx("reports.view");
@@ -22,7 +24,7 @@ export default async function PoList({ searchParams }: { searchParams: Promise<{
       <div className="top"><h1>Purchase Orders</h1>{can(ctx.role, "journal.create") && <Link className="btn" href="/purchasing/orders/new">New purchase order</Link>}</div>
       <form className="card row noprint">
         <div><label>Search</label><input name="q" defaultValue={sp.q} placeholder="PO no., supplier, description" /></div>
-        <div><label>Supplier</label><select name="vendor" defaultValue={sp.vendor ?? ""}><option value="">All</option>{vendors.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}</select></div>
+        <div><label>Supplier</label><MasterPicker name="vendor" ariaLabel="Supplier" defaultValue={sp.vendor ?? ""} emptyLabel="All" placeholder="All" options={idOpts(vendors)} /></div>
         <div><label>Status</label><select name="status" defaultValue={sp.status ?? ""}><option value="">All</option>{["DRAFT", "PENDING_APPROVAL", "APPROVED", "CLOSED", "CANCELLED"].map((s) => <option key={s} value={s}>{statusText(s)}</option>)}</select></div>
         <div style={{ flex: 0 }}><button>Filter</button></div>
       </form>

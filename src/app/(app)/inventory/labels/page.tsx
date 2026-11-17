@@ -2,6 +2,9 @@ import { requireCtx } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { barcodeSvg } from "@/lib/inventory/barcode";
 import { PrintButton } from "@/components/PrintButton";
+import { MultiPicker } from "@/components/Multi";
+import { MasterPicker } from "@/components/MasterPicker";
+import { textOpts } from "@/lib/lookup";
 
 type SP = Promise<Record<string, string | string[] | undefined>>;
 
@@ -20,8 +23,8 @@ export default async function Labels({ searchParams }: { searchParams: SP }) {
     <>
       <div className="top"><h1>Barcode Labels</h1></div>
       <form className="card row noprint">
-        <div style={{ flex: 3 }}><label>Items</label><select name="items" multiple size={6} defaultValue={ids}>{all.map((i) => <option key={i.id} value={i.id}>{i.code} · {i.name}</option>)}</select></div>
-        <div><label>or whole category</label><select name="cat" defaultValue={cat}><option value="">—</option>{cats.map((c) => <option key={c.category} value={c.category!}>{c.category}</option>)}</select></div>
+        <div style={{ flex: 3 }}><label>Items</label><MultiPicker name="items" placeholder="Type to search and tick items…" defaultValue={ids} options={all.map((i) => ({ value: i.id, label: `${i.code} · ${i.name}` }))} /></div>
+        <div><label>or whole category</label><MasterPicker name="cat" ariaLabel="Category" defaultValue={cat} emptyLabel="—" placeholder="—" options={textOpts(cats.map((c) => c.category!))} /></div>
         <div><label>Copies each</label><input type="number" name="copies" min={1} max={50} defaultValue={copies} /></div>
         <div style={{ flex: 0 }}><button>Show labels</button></div>
         <div style={{ flex: 0 }}><PrintButton label="Print labels" /></div>

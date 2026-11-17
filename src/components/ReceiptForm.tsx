@@ -3,6 +3,8 @@ import { useActionState, useMemo, useState } from "react";
 import { saveReceiptAction } from "@/app/(app)/ar-actions";
 import type { ReceiptFormData } from "@/lib/ar/form-data";
 import { Errors } from "./Errors";
+import { MasterLookup } from "./MasterLookup";
+import { idOpts } from "@/lib/lookup";
 import { money } from "./InvoiceForm";
 
 export type ReceiptInitial = {
@@ -52,14 +54,11 @@ export function ReceiptForm({ data, initial, canPost }: { data: ReceiptFormData;
       <div className="card">
         <div className="row">
           <div style={{ flex: 2 }}><label>Received from (customer)</label>
-            <select value={h.customerId} onChange={(e) => setH({ ...h, customerId: e.target.value, applications: {} })} required>
-              <option value="">Choose…</option>{customers.map((c) => <option key={c.id} value={c.id}>{c.name} ({c.code})</option>)}
-            </select></div>
+            <MasterLookup ariaLabel="Customer" required value={h.customerId} options={idOpts(customers)} add={{ kind: "customers" }} onChange={(v) => setH({ ...h, customerId: v, applications: {} })} /></div>
           <div><label>Date received</label><input type="date" value={h.date} onChange={(e) => setH({ ...h, date: e.target.value })} required /></div>
           <div style={{ flex: 2 }}><label>Deposited to</label>
-            <select value={h.bankAccountId} onChange={(e) => setH({ ...h, bankAccountId: e.target.value, applications: {} })} required>
-              <option value="">Choose…</option>{banks.map((b) => <option key={b.id} value={b.id}>{b.code} · {b.name}{b.currencyCode !== baseCurrency ? ` (${b.currencyCode})` : ""}</option>)}
-            </select></div>
+            <MasterLookup ariaLabel="Deposited to" required value={h.bankAccountId} options={idOpts(banks, (b) => (b.currencyCode !== baseCurrency ? b.currencyCode : undefined))} add={{ kind: "banks" }}
+              onChange={(v) => setH({ ...h, bankAccountId: v, applications: {} })} /></div>
           {ccy !== baseCurrency && <div><label>Rate (1 {ccy} = ? {baseCurrency})</label><input className="num" value={h.fxRate} onChange={(e) => setH({ ...h, fxRate: e.target.value })} /></div>}
         </div>
         <div className="row" style={{ marginTop: 10 }}>
@@ -74,7 +73,7 @@ export function ReceiptForm({ data, initial, canPost }: { data: ReceiptFormData;
         <div className="row" style={{ marginTop: 10 }}>
           <div><label>Cash / check amount received ({ccy})</label><input className="num" inputMode="decimal" value={h.cashAmount} onChange={(e) => setH({ ...h, cashAmount: e.target.value })} required /></div>
           <div style={{ flex: 2 }}><label>Tax withheld by the customer (BIR 2307)</label>
-            <select value={h.withholdingTaxCodeId} onChange={(e) => setH({ ...h, withholdingTaxCodeId: e.target.value })}><option value="">None</option>{taxCodes.map((t) => <option key={t.id} value={t.id}>{t.code} · {t.name}</option>)}</select></div>
+            <MasterLookup ariaLabel="Tax withheld" placeholder="None" emptyLabel="None" value={h.withholdingTaxCodeId} options={idOpts(taxCodes, (t) => `${t.rate}%`)} add={{ kind: "taxes" }} onChange={(v) => setH({ ...h, withholdingTaxCodeId: v })} /></div>
           <div><label>Amount withheld</label><input className="num" inputMode="decimal" value={h.withholdingAmount} onChange={(e) => setH({ ...h, withholdingAmount: e.target.value })} /></div>
         </div>
         <div style={{ marginTop: 10 }}><label>Notes</label><input value={h.memo} onChange={(e) => setH({ ...h, memo: e.target.value })} /></div>

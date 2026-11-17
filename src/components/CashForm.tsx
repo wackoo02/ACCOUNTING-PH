@@ -4,7 +4,7 @@ import { saveCash } from "@/app/(app)/bank-actions";
 import type { CashFormData } from "@/lib/bank/form-data";
 import { Errors } from "./Errors";
 import { MasterLookup, type AddTarget, type LookupOption, type SavedRecord } from "./MasterLookup";
-import { DIMENSIONS } from "@/lib/ledger/dimensions";
+import { dimAdd } from "@/lib/lookup";
 import type { MasterKind } from "@/lib/masters/config";
 
 export type CashMode = "RECEIPT" | "DISBURSEMENT" | "PETTY" | "TRANSFER";
@@ -19,10 +19,6 @@ const cents = (s: string) => { const n = Number(String(s).replace(/,/g, "")); re
 const money = (c: number) => (c / 100).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const TYPES = ["ASSET", "LIABILITY", "EQUITY", "INCOME", "EXPENSE"];
 const PARTY_KIND: Record<string, MasterKind> = { CUSTOMER: "customers", VENDOR: "vendors", EMPLOYEE: "employees", PARTNER: "employees" };
-const dimAdd = (key: string) => {
-  const type = DIMENSIONS.find((d) => d.key === key)?.type;
-  return type ? { kind: "dimensions" as const, type, prefill: { type } } : undefined;
-};
 const METHOD_LABELS: Record<string, string> = { CASH: "Cash", CHECK: "Check", BANK_TRANSFER: "Bank transfer / InstaPay / PESONet", ONLINE: "Online / card", EWALLET: "GCash / Maya" };
 
 export function CashForm(props: CashFormData & { mode: CashMode; initial: CashInitial; canPost: boolean }) {

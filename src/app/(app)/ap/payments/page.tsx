@@ -5,6 +5,8 @@ import { prisma } from "@/lib/db";
 import { can } from "@/lib/permissions";
 import { fmtDate } from "@/lib/format";
 import { peso, statusText } from "@/lib/ap/view";
+import { MasterPicker } from "@/components/MasterPicker";
+import { idOpts } from "@/lib/lookup";
 
 export default async function PayList({ searchParams }: { searchParams: Promise<{ status?: string; vendor?: string; q?: string }> }) {
   const ctx = await requireCtx("reports.view");
@@ -25,7 +27,7 @@ export default async function PayList({ searchParams }: { searchParams: Promise<
       <div className="top"><h1>Payment Vouchers</h1>{can(ctx.role, "journal.create") && <div className="row" style={{ gap: 8, flex: 0, flexWrap: "nowrap" }}><Link className="btn" href="/ap/payments/new">New payment</Link><Link className="btn secondary" href="/ap/schedule">Payment schedule</Link></div>}</div>
       <form className="card row noprint">
         <div><label>Search</label><input name="q" defaultValue={sp.q} placeholder="PV no., check no., particulars" /></div>
-        <div><label>Supplier</label><select name="vendor" defaultValue={sp.vendor ?? ""}><option value="">All</option>{vendors.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}</select></div>
+        <div><label>Supplier</label><MasterPicker name="vendor" ariaLabel="Supplier" defaultValue={sp.vendor ?? ""} emptyLabel="All" placeholder="All" options={idOpts(vendors)} /></div>
         <div><label>Status</label><select name="status" defaultValue={sp.status ?? ""}><option value="">All</option>{["DRAFT", "PENDING_APPROVAL", "POSTED", "VOID"].map((s) => <option key={s} value={s}>{s === "POSTED" ? "RELEASED" : statusText(s)}</option>)}</select></div>
         <div style={{ flex: 0 }}><button>Filter</button></div>
       </form>

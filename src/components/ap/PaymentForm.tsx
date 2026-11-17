@@ -2,6 +2,8 @@
 import { useActionState, useState } from "react";
 import { savePaymentAction } from "@/app/(app)/ap-actions";
 import { Errors } from "../Errors";
+import { MasterLookup } from "../MasterLookup";
+import { idOpts } from "@/lib/lookup";
 
 export type OpenBill = { id: string; number: string; vendorId: string; invoiceNo: string; dueDate: string; currency: string; open: string; total: string; ewt: string; onHold: boolean };
 type Bank = { id: string; code: string; name: string; kind: string; currencyCode: string; nextCheckNo: number | null };
@@ -22,8 +24,9 @@ export function PaymentForm({ vendors, banks, bills, initial, baseCurrency, rate
     <form action={run}>
       <Errors errors={state?.errors} />
       <div className="card"><div className="row">
-        <div style={{ flex: 2 }}><label>Supplier</label><select value={h.vendorId} onChange={(e) => setH({ ...h, vendorId: e.target.value, amounts: {} })} required><option value="">Choose…</option>{vendors.map((v) => <option key={v.id} value={v.id}>{v.name} ({v.code})</option>)}</select></div>
-        <div style={{ flex: 2 }}><label>Pay from</label><select value={h.bankAccountId} onChange={(e) => { const b = banks.find((x) => x.id === e.target.value); setH({ ...h, bankAccountId: e.target.value, method: b && b.kind !== "CURRENT" && b.kind !== "SAVINGS" ? "CASH" : h.method, fxRate: b && b.currencyCode !== baseCurrency ? rates[b.currencyCode] ?? "" : "1" }); }} required><option value="">Choose…</option>{banks.map((b) => <option key={b.id} value={b.id}>{b.code} · {b.name}{b.currencyCode !== baseCurrency ? ` (${b.currencyCode})` : ""}</option>)}</select></div>
+        <div style={{ flex: 2 }}><label>Supplier</label><MasterLookup ariaLabel="Supplier" required value={h.vendorId} options={idOpts(vendors)} add={{ kind: "vendors", noun: "supplier" }} onChange={(v) => setH({ ...h, vendorId: v, amounts: {} })} /></div>
+        <div style={{ flex: 2 }}><label>Pay from</label><MasterLookup ariaLabel="Pay from" required value={h.bankAccountId} options={idOpts(banks, (b) => (b.currencyCode !== baseCurrency ? b.currencyCode : undefined))} add={{ kind: "banks" }}
+          onChange={(v) => { const b = banks.find((x) => x.id === v); setH({ ...h, bankAccountId: v, method: b && b.kind !== "CURRENT" && b.kind !== "SAVINGS" ? "CASH" : h.method, fxRate: b && b.currencyCode !== baseCurrency ? rates[b.currencyCode] ?? "" : "1" }); }} /></div>
         <div><label>Payment date</label><input type="date" value={h.date} onChange={(e) => setH({ ...h, date: e.target.value })} required /></div>
         <div><label>Method</label><select value={h.method} onChange={(e) => setH({ ...h, method: e.target.value })}>{check && <option value="CHECK">Check</option>}<option value="BANK_TRANSFER">Bank transfer / InstaPay / PESONet</option><option value="ONLINE">Online / card</option><option value="EWALLET">GCash / Maya</option><option value="CASH">Cash</option></select></div>
       </div>

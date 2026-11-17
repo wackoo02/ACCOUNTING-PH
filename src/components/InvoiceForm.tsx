@@ -3,6 +3,8 @@ import { Fragment, useActionState, useMemo, useState } from "react";
 import { saveInvoiceAction } from "@/app/(app)/ar-actions";
 import type { InvoiceFormData } from "@/lib/ar/form-data";
 import { Errors } from "./Errors";
+import { MasterLookup } from "./MasterLookup";
+import { dimAdd, idOpts } from "@/lib/lookup";
 
 export type InvLine = { productId: string; description: string; quantity: string; unit: string; unitPrice: string; discount: string; vatType: string; accountId: string; dims: Record<string, string>; lotNo?: string };
 export type InvoiceInitial = {
@@ -30,6 +32,8 @@ export function previewTotals(lines: InvLine[], inclusive: boolean, vatRegistere
 export function LineEditor({ lines, setLines, data, showAccounts }: { lines: InvLine[]; setLines: (f: (l: InvLine[]) => InvLine[]) => void; data: InvoiceFormData; showAccounts: boolean }) {
   const { products, accounts, dims, vatRegistered } = data;
   const [showDims, setShowDims] = useState(lines.some((l) => Object.values(l.dims).some(Boolean)));
+  const productOpts = useMemo(() => idOpts(products), [products]);
+  const accountOpts = useMemo(() => idOpts(accounts), [accounts]);
   const set = (i: number, p: Partial<InvLine>) => setLines((ls) => ls.map((l, j) => (j === i ? { ...l, ...p } : l)));
   const pick = (i: number, id: string) => {
     const p = products.find((x) => x.id === id);
@@ -46,7 +50,8 @@ export function LineEditor({ lines, setLines, data, showAccounts }: { lines: Inv
         {lines.map((l, i) => (
           <Fragment key={i}>
             <tr>
-              <td><select value={l.productId} onChange={(e) => pick(i, e.target.value)} aria-label={`Product line ${i + 1}`}><option value="">—</option>{products.map((p) => <option key={p.id} value={p.id}>{p.code} · {p.name}</option>)}</select></td>
+              <td><MasterLookup ariaLabel={`Product line ${i + 1}`} placeholder="Type item code or name…" emptyLabel="— None" value={l.productId} options={productOpts} add={{ kind: "products" }}
+                onChange={(v, rec) => (rec ? set(i, { productId: v, description: rec.label }) : pick(i, v))} /></td>
               <td><input value={l.description} onChange={(e) => set(i, { description: e.target.value })} aria-label={`Description line ${i + 1}`} />
                 {products.find((p) => p.id === l.productId)?.specific && <input value={l.lotNo ?? ""} onChange={(e) => set(i, { lotNo: e.target.value })} placeholder="Lot / serial no." aria-label={`Lot line ${i + 1}`} style={{ marginTop: 4 }} />}</td>
               <td><input className="num" inputMode="decimal" value={l.quantity} onChange={(e) => set(i, { quantity: e.target.value })} /></td>
@@ -54,13 +59,14 @@ export function LineEditor({ lines, setLines, data, showAccounts }: { lines: Inv
               <td><input className="num" inputMode="decimal" value={l.unitPrice} onChange={(e) => set(i, { unitPrice: e.target.value })} aria-label={`Unit price line ${i + 1}`} /></td>
               <td><input className="num" inputMode="decimal" value={l.discount} onChange={(e) => set(i, { discount: e.target.value })} /></td>
               {vatRegistered && <td><select value={l.vatType} onChange={(e) => set(i, { vatType: e.target.value })}><option value="VATABLE">VATable 12%</option><option value="ZERO_RATED">Zero-rated</option><option value="EXEMPT">VAT-exempt</option></select></td>}
-              {showAccounts && <td><select value={l.accountId} onChange={(e) => set(i, { accountId: e.target.value })}><option value="">Default</option>{accounts.map((a) => <option key={a.id} value={a.id}>{a.code} · {a.name}</option>)}</select></td>}
+              {showAccounts && <td><MasterLookup ariaLabel={`Revenue account line ${i + 1}`} placeholder="Default" emptyLabel="Default" value={l.accountId} options={accountOpts} add={{ kind: "accounts" }} onChange={(v) => set(i, { accountId: v })} /></td>}
               <td className="num">{money(Math.round((num(l.quantity) * num(l.unitPrice) - num(l.discount)) * 100) / 100)}</td>
               <td>{lines.length > 1 && <button type="button" className="link" style={{ color: "var(--danger)" }} onClick={() => setLines((ls) => ls.filter((_, j) => j !== i))} aria-label="Remove line">✕</button>}</td>
             </tr>
             {showDims && <tr><td colSpan={10} style={{ background: "#fafbfc" }}><div className="row" style={{ gap: 6 }}>
               {dims.map((d) => <div key={d.key} style={{ minWidth: 130 }}><label>{d.label}</label>
-                <select value={l.dims[d.key] ?? ""} onChange={(e) => set(i, { dims: { ...l.dims, [d.key]: e.target.value } })}><option value="">—</option>{d.values.map((v) => <option key={v.id} value={v.id}>{v.code} · {v.name}</option>)}</select></div>)}
+                <MasterLookup ariaLabel={`${d.label} line ${i + 1}`} placeholder="—" emptyLabel="— None" value={l.dims[d.key] ?? ""} options={idOpts(d.values)} add={dimAdd(d.key)}
+                  onChange={(v) => set(i, { dims: { ...l.dims, [d.key]: v } })} /></div>)}
             </div></td></tr>}
           </Fragment>
         ))}
@@ -100,9 +106,8 @@ export function InvoiceForm(props: { data: InvoiceFormData; initial: InvoiceInit
       <div className="card">
         <div className="row">
           <div style={{ flex: 2 }}><label>Customer</label>
-            <select value={h.customerId} onChange={(e) => pickCustomer(e.target.value)} required>
-              <option value="">Choose…</option>{customers.map((c) => <option key={c.id} value={c.id}>{c.name} ({c.code}){c.currencyCode !== baseCurrency ? ` · ${c.currencyCode}` : ""}</option>)}
-            </select></div>
+            <MasterLookup ariaLabel="Customer" required value={h.customerId} add={{ kind: "customers" }} onChange={(v) => pickCustomer(v)}
+              options={idOpts(customers, (c) => (c.currencyCode !== baseCurrency ? c.currencyCode : undefined))} /></div>
           <div><label>{cm ? "Credit memo date" : "Invoice date"}</label><input type="date" value={h.date} onChange={(e) => setH({ ...h, date: e.target.value })} required /></div>
           {!cm && <div><label>Terms (days)</label><input className="num" inputMode="numeric" value={h.termsDays} onChange={(e) => setH({ ...h, termsDays: e.target.value, dueDate: "" })} /></div>}
           {!cm && <div><label>Due date (blank = date + terms)</label><input type="date" value={h.dueDate} onChange={(e) => setH({ ...h, dueDate: e.target.value })} /></div>}
@@ -115,9 +120,9 @@ export function InvoiceForm(props: { data: InvoiceFormData; initial: InvoiceInit
           {cm && <div style={{ flex: 2 }}><label>Reason</label><input value={h.reason} onChange={(e) => setH({ ...h, reason: e.target.value })} placeholder="e.g. Returned 2 units, price adjustment" required /></div>}
           <div><label>Reference (customer PO, DR no.)</label><input value={h.reference} onChange={(e) => setH({ ...h, reference: e.target.value })} /></div>
           {!cm && data.warehouses.length > 0 && lines.some((l) => data.products.find((p) => p.id === l.productId)?.isStocked) && <div><label>Ship from warehouse</label>
-            <select value={h.warehouseId ?? ""} onChange={(e) => setH({ ...h, warehouseId: e.target.value })}><option value="">Item default</option>{data.warehouses.map((w) => <option key={w.id} value={w.id}>{w.code} · {w.name}</option>)}</select></div>}
+            <MasterLookup ariaLabel="Ship from warehouse" placeholder="Item default" emptyLabel="Item default" value={h.warehouseId ?? ""} options={idOpts(data.warehouses)} add={{ kind: "warehouses" }} onChange={(v) => setH({ ...h, warehouseId: v })} /></div>}
           {!cm && <div style={{ flex: 2 }}><label>Tax the customer will withhold (BIR 2307)</label>
-            <select value={h.ewtTaxCodeId} onChange={(e) => setH({ ...h, ewtTaxCodeId: e.target.value })}><option value="">None</option>{taxCodes.map((x) => <option key={x.id} value={x.id}>{x.code} · {x.name}</option>)}</select></div>}
+            <MasterLookup ariaLabel="Withholding tax" placeholder="None" emptyLabel="None" value={h.ewtTaxCodeId} options={idOpts(taxCodes, (x) => `${x.rate}%`)} add={{ kind: "taxes" }} onChange={(v) => setH({ ...h, ewtTaxCodeId: v })} /></div>}
         </div>
         <div className="row" style={{ marginTop: 10 }}>
           <div style={{ flex: 3 }}><label>Notes printed on the {cm ? "credit memo" : "invoice"}</label><input value={h.memo} onChange={(e) => setH({ ...h, memo: e.target.value })} /></div>

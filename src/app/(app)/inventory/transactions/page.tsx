@@ -6,6 +6,8 @@ import { can } from "@/lib/permissions";
 import { formatPeso, toCentavos } from "@/lib/money";
 import { fmtDate } from "@/lib/format";
 import { INV_LABELS, INV_TYPES, type InvType } from "@/lib/inventory/service";
+import { MasterPicker } from "@/components/MasterPicker";
+import { idOpts } from "@/lib/lookup";
 
 type SP = Promise<Record<string, string | undefined>>;
 
@@ -39,7 +41,7 @@ export default async function InventoryDocs({ searchParams }: { searchParams: SP
       <form className="card row noprint">
         <div><label>Search</label><input name="q" defaultValue={sp.q} placeholder="No., reference, particulars" /></div>
         <div><label>Type</label><select name="type" defaultValue={sp.type ?? ""}><option value="">All</option>{INV_TYPES.map((t) => <option key={t} value={t}>{INV_LABELS[t]}</option>)}</select></div>
-        <div><label>Warehouse</label><select name="wh" defaultValue={sp.wh ?? ""}><option value="">All</option>{whs.map((w) => <option key={w.id} value={w.id}>{w.code}</option>)}</select></div>
+        <div><label>Warehouse</label><MasterPicker name="wh" ariaLabel="Warehouse" defaultValue={sp.wh ?? ""} emptyLabel="All" placeholder="All" options={idOpts(whs)} /></div>
         <div><label>Status</label><select name="status" defaultValue={sp.status ?? ""}><option value="">All</option><option>DRAFT</option><option value="PENDING_APPROVAL">FOR APPROVAL</option><option>POSTED</option><option>VOID</option></select></div>
         <div><label>From</label><input type="date" name="from" defaultValue={sp.from} /></div>
         <div><label>To</label><input type="date" name="to" defaultValue={sp.to} /></div>

@@ -4,6 +4,8 @@ import { useActionState, useRef, useState, type FormEvent } from "react";
 import { saveMasterRecord } from "../../../actions";
 import { Errors } from "@/components/Errors";
 import { SimilarPopup } from "@/components/SimilarPopup";
+import { MasterPicker } from "@/components/MasterPicker";
+import type { LookupOption } from "@/components/MasterLookup";
 import type { Field } from "@/lib/masters/config";
 import type { SimilarMatch } from "@/lib/masters/similar";
 
@@ -21,9 +23,16 @@ export function UseRecordButton({ kind, code, type }: { kind: string; code: stri
   );
 }
 
-export function MasterForm({ kind, fields, record, originalCode, embed, skip = [], dimType, singular }: {
+function refAdd(f: Field, dimType?: string) {
+  const type = f.ref!.sameType ? dimType : f.ref!.type;
+  return { kind: f.ref!.kind, ...(type ? { type, prefill: { type } } : {}) };
+}
+
+export function MasterForm({ kind, fields, record, originalCode, embed, skip = [], dimType, singular, refs = {} }: {
   kind: string; fields: Field[]; record: Record<string, string | boolean>; originalCode?: string;
   embed?: boolean; skip?: string[]; dimType?: string; singular?: string;
+  /** Options for fields that hold another master record's code (Field.ref). */
+  refs?: Record<string, LookupOption[]>;
 }) {
   const [s, a, p] = useActionState(saveMasterRecord, undefined);
   const formRef = useRef<HTMLFormElement>(null);
@@ -75,6 +84,10 @@ export function MasterForm({ kind, fields, record, originalCode, embed, skip = [
                 {!f.required && <option value="">—</option>}
                 {f.options!.map((o) => <option key={o}>{o}</option>)}
               </select>
+            ) : f.ref && refs[f.key] ? (
+              <MasterPicker name={f.key} ariaLabel={f.header} options={refs[f.key]} defaultValue={String(record[f.key] ?? "")} required={f.required} valueIsCode
+                emptyLabel={f.required ? undefined : "— None"} placeholder={f.example !== undefined && f.example !== "" ? `e.g. ${f.example}` : "Type to search…"}
+                add={refAdd(f, dimType ?? (typeof record.type === "string" ? record.type : undefined))} />
             ) : (
               <input name={f.key} type={f.type === "date" ? "date" : "text"} inputMode={f.type === "number" || f.type === "int" ? "decimal" : undefined}
                 defaultValue={String(record[f.key] ?? "")} required={f.required} readOnly={f.key === "code" && !!originalCode} placeholder={f.example !== undefined && f.example !== "" ? `e.g. ${f.example}` : ""} />

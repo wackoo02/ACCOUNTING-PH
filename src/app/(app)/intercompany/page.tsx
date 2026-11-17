@@ -6,6 +6,8 @@ import { formatPeso, toCentavos } from "@/lib/money";
 import { fmtDate, today } from "@/lib/format";
 import { ActionForm } from "@/components/ActionForm";
 import { intercompanyTxn, reverseIntercompanyAction } from "../actions";
+import { MasterPicker } from "@/components/MasterPicker";
+import { idOpts } from "@/lib/lookup";
 
 export default async function Intercompany() {
   const ctx = await requireCtx("reports.view");
@@ -45,13 +47,11 @@ export default async function Intercompany() {
           </div>
           <div className="row" style={{ marginTop: 10 }}>
             <div><label>{ctx.org.name}: this entity&apos;s line is a</label><select name="fromSide" defaultValue="credit"><option value="credit">Credit (e.g. income earned / cash paid out)</option><option value="debit">Debit (e.g. expense / cash received)</option></select></div>
-            <div style={{ flex: 2 }}><label>{ctx.org.name}: account</label><select name="fromAccountId" required>{myAccts.filter((a) => !a.ifrsGroup.startsWith("Due ")).map(opt)}</select></div>
+            <div style={{ flex: 2 }}><label>{ctx.org.name}: account</label><MasterPicker name="fromAccountId" ariaLabel="Account" required options={idOpts(myAccts.filter((a) => !a.ifrsGroup.startsWith("Due ")))} add={{ kind: "accounts" }} /></div>
           </div>
           <div className="row" style={{ marginTop: 10 }}>
-            <div><label>Counterparty entity</label><select name="toOrgId" required>{cps.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}</select></div>
-            <div style={{ flex: 2 }}><label>Counterparty&apos;s account (opposite side)</label><select name="toAccountId" required>
-              {cps.map((o) => <optgroup key={o.id} label={o.name}>{theirAccts.filter((a) => a.organizationId === o.id && !a.ifrsGroup.startsWith("Due ")).map(opt)}</optgroup>)}
-            </select></div>
+            <div><label>Counterparty entity</label><MasterPicker name="toOrgId" ariaLabel="Counterparty entity" required options={cps.map((o) => ({ value: o.id, label: o.name }))} defaultValue={cps[0]?.id} /></div>
+            <div style={{ flex: 2 }}><label>Counterparty&apos;s account (opposite side)</label><MasterPicker name="toAccountId" ariaLabel="Counterparty account" required options={cps.flatMap((o) => theirAccts.filter((a) => a.organizationId === o.id && !a.ifrsGroup.startsWith("Due ")).map((a) => ({ value: a.id, code: a.code, label: a.name, group: o.name })))} /></div>
             <div style={{ flex: 0 }}><button>Post in both entities</button></div>
           </div>
         </ActionForm>

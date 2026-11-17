@@ -1,6 +1,9 @@
 "use client";
 import { useState } from "react";
 import { ActionForm } from "./ActionForm";
+import { MasterLookup } from "./MasterLookup";
+import { MasterPicker } from "./MasterPicker";
+import { codeOpts, dimAdd, idOpts } from "@/lib/lookup";
 import { saveLeaseAction } from "@/app/(app)/lease-actions";
 import type { LeaseFormData } from "@/lib/leases/form-data";
 
@@ -18,10 +21,9 @@ export function LeaseForm({ data, initial }: { data: LeaseFormData; initial: Lea
   const acct = (name: string, label: string, opts: { optional?: boolean; hint?: string; types?: string[] } = {}) => (
     <div>
       <label>{label}</label>
-      <select name={name} defaultValue={initial[name] !== undefined && initial[name] !== null ? v(name) : (data.defaults[name] ?? "")}>
-        {opts.optional && <option value="">(none)</option>}
-        {data.accounts.filter((a) => !opts.types || opts.types.includes(a.type)).map((a) => <option key={a.id} value={a.id}>{a.code} · {a.name}</option>)}
-      </select>
+      <MasterPicker name={name} ariaLabel={label} placeholder="Type account code or name…" required={!opts.optional} emptyLabel={opts.optional ? "(none)" : undefined} add={{ kind: "accounts" }}
+        defaultValue={initial[name] !== undefined && initial[name] !== null ? v(name) : (data.defaults[name] ?? "")}
+        options={idOpts(data.accounts.filter((a) => !opts.types || opts.types.includes(a.type)))} />
       {opts.hint && <div className="muted">{opts.hint}</div>}
     </div>
   );
@@ -32,10 +34,8 @@ export function LeaseForm({ data, initial }: { data: LeaseFormData; initial: Lea
       <div className="card grid">
         <div><label>Lease number</label><input name="number" defaultValue={v("number")} placeholder="Blank = automatic (LSE-YYYY-000001)" /></div>
         <div><label>Lessor (from vendor list)</label>
-          <select name="lessorVendorCode" value={vendor} onChange={(e) => setVendor(e.target.value)}>
-            <option value="">(not in the vendor list)</option>
-            {data.vendors.map((x) => <option key={x.code} value={x.code}>{x.name} ({x.code})</option>)}
-          </select>
+          <MasterLookup name="lessorVendorCode" ariaLabel="Lessor" emptyLabel="(not in the vendor list)" value={vendor} options={codeOpts(data.vendors)}
+            add={{ kind: "vendors", noun: "lessor", toValue: (r) => r.code }} onChange={(x) => setVendor(x)} />
           <div className="muted">Pick the vendor so payables show in its aging and BIR 2307.</div>
         </div>
         <div><label>Lessor name</label><input name="lessorName" defaultValue={v("lessorName")} placeholder={vendor ? "Blank = vendor name" : "Lessor's registered name"} /></div>
@@ -60,15 +60,13 @@ export function LeaseForm({ data, initial }: { data: LeaseFormData; initial: Lea
         <div><label>Escalation %</label><input name="escalationPct" defaultValue={v("escalationPct") || "0"} inputMode="decimal" /><div className="muted">e.g. 5 = rent goes up 5% each interval</div></div>
         <div><label>Escalation every (months)</label><input name="escalationEveryMonths" defaultValue={v("escalationEveryMonths") || "12"} inputMode="numeric" /></div>
         <div><label>Currency</label>
-          <select name="currencyCode" value={currency} onChange={(e) => setCurrency(e.target.value)}>
-            <option value={data.baseCurrency}>{data.baseCurrency}</option>
-            {data.currencies.filter((c) => c.code !== data.baseCurrency).map((c) => <option key={c.code}>{c.code}</option>)}
-          </select>
+          <MasterLookup name="currencyCode" ariaLabel="Currency" required value={currency} onChange={(x) => setCurrency(x)} add={{ kind: "currencies", toValue: (r) => r.code }}
+            options={[{ value: data.baseCurrency, code: data.baseCurrency, label: "base currency" }, ...data.currencies.filter((c) => c.code !== data.baseCurrency).map((c) => ({ value: c.code, code: c.code, label: `rate ${c.rate}` }))]} />
         </div>
         {currency !== data.baseCurrency && <div><label>Rate at start date</label><input name="fxRate" defaultValue={v("fxRate") || data.currencies.find((c) => c.code === currency)?.rate} /></div>}
         <div><label>&nbsp;</label><label style={{ display: "flex", gap: 6, alignItems: "center", color: "var(--ink)" }}><input type="checkbox" name="vatable" defaultChecked={!!initial.vatable} style={{ width: "auto" }} /> 12% VAT on payments</label></div>
         <div><label>Expanded withholding tax</label>
-          <select name="ewtTaxCodeId" defaultValue={v("ewtTaxCodeId")}><option value="">(none)</option>{data.taxCodes.map((t) => <option key={t.id} value={t.id}>{t.code} · {t.name} ({t.rate}%)</option>)}</select>
+          <MasterPicker name="ewtTaxCodeId" ariaLabel="Expanded withholding tax" placeholder="(none)" emptyLabel="(none)" defaultValue={v("ewtTaxCodeId")} options={idOpts(data.taxCodes, (t) => `${t.rate}%`)} add={{ kind: "taxes" }} />
           <div className="muted">Rent of real or personal property is usually 5%.</div>
         </div>
       </div>
@@ -105,7 +103,7 @@ export function LeaseForm({ data, initial }: { data: LeaseFormData; initial: Lea
       {data.dims.length > 0 && <>
         <h2>Dimensions (for interest, depreciation and rent)</h2>
         <div className="card grid">
-          {data.dims.map((d) => <div key={d.key}><label>{d.label}</label><select name={`dim_${d.key}`} defaultValue={initial.dims?.[d.key] ?? ""}><option value="">(none)</option>{d.values.map((x) => <option key={x.id} value={x.id}>{x.code} · {x.name}</option>)}</select></div>)}
+          {data.dims.map((d) => <div key={d.key}><label>{d.label}</label><MasterPicker name={`dim_${d.key}`} ariaLabel={d.label} placeholder="(none)" emptyLabel="(none)" defaultValue={initial.dims?.[d.key] ?? ""} options={idOpts(d.values)} add={dimAdd(d.key)} /></div>)}
         </div>
       </>}
 

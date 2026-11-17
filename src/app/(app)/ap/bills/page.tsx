@@ -8,6 +8,8 @@ import { peso, statusText } from "@/lib/ap/view";
 import { openBalances } from "@/lib/ap/bills";
 import { cents } from "@/lib/ap/common";
 import { formatPeso } from "@/lib/money";
+import { MasterPicker } from "@/components/MasterPicker";
+import { idOpts } from "@/lib/lookup";
 
 export default async function BillList({ searchParams }: { searchParams: Promise<{ status?: string; q?: string; vendor?: string; from?: string; to?: string }> }) {
   const ctx = await requireCtx("reports.view");
@@ -28,7 +30,7 @@ export default async function BillList({ searchParams }: { searchParams: Promise
       <div className="top"><h1>Supplier Bills (AP Vouchers)</h1>{can(ctx.role, "journal.create") && <div className="row" style={{ gap: 8, flex: 0, flexWrap: "nowrap" }}><Link className="btn" href="/ap/bills/new">New bill</Link><Link className="btn secondary" href="/ap/inbox">AP inbox</Link></div>}</div>
       <form className="card row noprint">
         <div><label>Search</label><input name="q" defaultValue={sp.q} placeholder="APV no., invoice no., particulars" /></div>
-        <div><label>Supplier</label><select name="vendor" defaultValue={sp.vendor ?? ""}><option value="">All</option>{vendors.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}</select></div>
+        <div><label>Supplier</label><MasterPicker name="vendor" ariaLabel="Supplier" defaultValue={sp.vendor ?? ""} emptyLabel="All" placeholder="All" options={idOpts(vendors)} /></div>
         <div><label>Status</label><select name="status" defaultValue={sp.status ?? ""}><option value="">All</option>{["DRAFT", "PENDING_APPROVAL", "POSTED", "VOID"].map((s) => <option key={s} value={s}>{statusText(s)}</option>)}</select></div>
         <div><label>From</label><input type="date" name="from" defaultValue={sp.from} /></div>
         <div><label>To</label><input type="date" name="to" defaultValue={sp.to} /></div>

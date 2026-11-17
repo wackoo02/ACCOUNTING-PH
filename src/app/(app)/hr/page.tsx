@@ -4,6 +4,7 @@ import { ActionForm } from "@/components/ActionForm";
 import { fmtDate } from "@/lib/format";
 import { manilaToday } from "@/lib/payroll/attendance";
 import { hrSetupAction } from "../payroll-actions";
+import { MasterPicker } from "@/components/MasterPicker";
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const HTYPE: Record<string, string> = { REGULAR: "Regular holiday", SPECIAL: "Special non-working day", SPECIAL_WORKING: "Special working day" };
@@ -32,7 +33,7 @@ export default async function HrSetup({ searchParams }: { searchParams: Promise<
         <ActionForm action={hrSetupAction}>
           <input type="hidden" name="op" value="shift" />
           <div className="row">
-            <div><label>Existing shift to edit</label><select name="shiftId" defaultValue=""><option value="">(new shift)</option>{shifts.map((s) => <option key={s.id} value={s.id}>{s.code}</option>)}</select></div>
+            <div><label>Existing shift to edit</label><MasterPicker name="shiftId" ariaLabel="Existing shift" defaultValue="" emptyLabel="(new shift)" placeholder="(new shift)" options={shifts.map((s) => ({ value: s.id, code: s.code, label: s.name ?? "" }))} /></div>
             <div><label>Code</label><input name="code" required placeholder="DAY" /></div>
             <div><label>Name</label><input name="name" required placeholder="Day shift 8-5" /></div>
             <div><label>Start</label><input type="time" name="startTime" defaultValue="08:00" required /></div>

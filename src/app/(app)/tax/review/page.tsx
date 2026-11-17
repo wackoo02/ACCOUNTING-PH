@@ -11,6 +11,8 @@ import { CLASS_LABEL, KIND_LABEL, PURCHASE_CLASSES, SALES_CLASSES } from "@/lib/
 import { ActionForm } from "@/components/ActionForm";
 import { classifyAction, unclassifyAction } from "../../tax-actions";
 import { PeriodPicker, TaxTabs, currentQuarter, num } from "../ui";
+import { MasterPicker } from "@/components/MasterPicker";
+import { partyOpt } from "@/lib/lookup";
 
 export default async function TaxReview({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const ctx = await requireCtx("reports.view");
@@ -58,13 +60,13 @@ export default async function TaxReview({ searchParams }: { searchParams: Promis
                   <div><label>This is</label><select name="kind" defaultValue={u.kind}>
                     <option value={u.kind}>{KIND_LABEL[u.kind]}</option><option value="EXCLUDED">{KIND_LABEL.EXCLUDED}</option></select></div>
                   {vat && <div><label>Classification</label><select name="vatClass" defaultValue={u.kind === "OUTPUT_VAT" ? "VATABLE" : "GOODS"}>{classes.map((c) => <option key={c} value={c}>{CLASS_LABEL[c]}</option>)}</select></div>}
-                  {!vat && <div><label>ATC</label><select name="atcCode" defaultValue="">{codes.map((c) => <option key={c.id} value={c.atcCode!}>{c.atcCode} · {c.name}</option>)}</select></div>}
+                  {!vat && <div><label>ATC</label><MasterPicker name="atcCode" ariaLabel="ATC" options={codes.map((c) => ({ value: c.atcCode!, code: c.atcCode!, label: c.name }))} defaultValue={codes[0]?.atcCode ?? ""} /></div>}
                   <div><label>Tax base (net of VAT)</label><input name="taxBase" className="num" defaultValue={fromCentavos(u.suggestedBase)} /></div>
                   <div style={{ maxWidth: 90 }}><label>Rate %</label><input name="rate" className="num" defaultValue={rate} /></div>
                   <div><label>Tax</label><input name="taxAmount" className="num" defaultValue={fromCentavos(u.amount)} /></div>
                 </div>
                 <div className="row" style={{ marginTop: 8 }}>
-                  <div><label>Customer / supplier</label><select name="party" defaultValue={defParty}><option value="">Other (type below)</option>{parties.map((x) => <option key={x.v} value={x.v}>{x.l}</option>)}</select></div>
+                  <div><label>Customer / supplier</label><MasterPicker name="party" ariaLabel="Customer / supplier" defaultValue={defParty} emptyLabel="Other (type below)" placeholder="Other (type below)" options={parties.map((x) => partyOpt(x.v, x.l))} /></div>
                   <div><label>or name</label><input name="partyName" /></div>
                   <div><label>TIN</label><input name="partyTin" placeholder="000-000-000-00000" /></div>
                   <div><label>Invoice no.</label><input name="docNumber" defaultValue={u.reference ?? ""} /></div>

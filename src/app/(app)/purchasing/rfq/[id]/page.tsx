@@ -10,6 +10,8 @@ import { peso } from "@/lib/ap/view";
 import { ActionForm } from "@/components/ActionForm";
 import { Workflow } from "@/components/ap/Workflow";
 import { awardAction, quoteAction } from "../../../ap-actions";
+import { MasterPicker } from "@/components/MasterPicker";
+import { idOpts } from "@/lib/lookup";
 
 type RfqLine = { lineNo: number; description: string; quantity: string; unit: string | null };
 
@@ -59,7 +61,7 @@ export default async function RfqView({ params }: { params: Promise<{ id: string
         <strong>Record a supplier quote</strong>
         <input type="hidden" name="rfqId" value={rfq.id} />
         <div className="row" style={{ marginTop: 8 }}>
-          <div style={{ flex: 2 }}><label>Supplier</label><select name="vendorId" required><option value="">Choose…</option>{vendors.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}</select></div>
+          <div style={{ flex: 2 }}><label>Supplier</label><MasterPicker name="vendorId" ariaLabel="Supplier" required placeholder="Type to search…" options={idOpts(vendors)} add={{ kind: "vendors", noun: "supplier" }} /></div>
           <div><label>Quote ref.</label><input name="quoteRef" /></div>
           <div><label>Quote date</label><input type="date" name="quoteDate" defaultValue={today()} /></div>
           <div><label>Valid until</label><input type="date" name="validUntil" /></div>

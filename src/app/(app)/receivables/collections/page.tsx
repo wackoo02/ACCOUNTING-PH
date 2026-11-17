@@ -5,6 +5,8 @@ import { prisma } from "@/lib/db";
 import { can } from "@/lib/permissions";
 import { formatPeso, toCentavos } from "@/lib/money";
 import { fmtDate } from "@/lib/format";
+import { MasterPicker } from "@/components/MasterPicker";
+import { idOpts } from "@/lib/lookup";
 
 type SP = Promise<Record<string, string | undefined>>;
 const c = (v: { toString(): string }) => toCentavos(v.toString());
@@ -19,7 +21,7 @@ export default async function CollectionList({ searchParams }: { searchParams: S
   if (sp.from || sp.to) where.date = { ...(sp.from ? { gte: new Date(sp.from) } : {}), ...(sp.to ? { lte: new Date(sp.to) } : {}) };
   const [rows, customers, banks] = await Promise.all([
     prisma.arReceipt.findMany({ where, orderBy: [{ date: "desc" }, { createdAt: "desc" }], take: 300 }),
-    prisma.customer.findMany({ where: { organizationId: ctx.org.id }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    prisma.customer.findMany({ where: { organizationId: ctx.org.id }, orderBy: { name: "asc" }, select: { id: true, code: true, name: true } }),
     prisma.bankAccount.findMany({ where: { organizationId: ctx.org.id } }),
   ]);
   const bank = new Map(banks.map((b) => [b.id, b.code]));
@@ -29,7 +31,7 @@ export default async function CollectionList({ searchParams }: { searchParams: S
         {can(ctx.role, "journal.create") && <Link className="btn noprint" href="/receivables/collections/new">Record collection</Link>}</div>
       <form className="card row noprint">
         <div><label>Search</label><input name="q" defaultValue={sp.q} placeholder="No., customer, check no." /></div>
-        <div><label>Customer</label><select name="customer" defaultValue={sp.customer ?? ""}><option value="">All</option>{customers.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></div>
+        <div><label>Customer</label><MasterPicker name="customer" ariaLabel="Customer" defaultValue={sp.customer ?? ""} emptyLabel="All" placeholder="All" options={idOpts(customers)} /></div>
         <div><label>Status</label><select name="status" defaultValue={sp.status ?? ""}><option value="">All</option><option>DRAFT</option><option value="PENDING_APPROVAL">FOR APPROVAL</option><option>POSTED</option><option>VOID</option></select></div>
         <div><label>From</label><input type="date" name="from" defaultValue={sp.from} /></div>
         <div><label>To</label><input type="date" name="to" defaultValue={sp.to} /></div>

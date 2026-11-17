@@ -10,6 +10,8 @@ import { loanAction, modifyAction } from "../../debt-actions";
 import { LOAN_TYPES, METRICS, TXN_LABELS, amortizationTable, evaluateCovenants, loanBalances, paymentDue } from "@/lib/debt/service";
 import { DAY_COUNT_LABELS, FREQUENCY_LABELS, REPAYMENT_LABELS } from "@/lib/debt/schedule";
 import { AccountSelect } from "../LoanForm";
+import { MasterPicker } from "@/components/MasterPicker";
+import { idOpts } from "@/lib/lookup";
 
 const p = (v: { toString(): string } | null | undefined) => formatPeso(toCentavos(v?.toString() ?? "0"), { blankZero: true });
 const input = (c: bigint) => fromCentavos(c);
@@ -49,9 +51,7 @@ export default async function LoanView({ params }: { params: Promise<{ id: strin
   const name = (aid: string | null) => (aid ? `${acct.get(aid)?.code} · ${acct.get(aid)?.name}` : "—");
   const hidden = <input type="hidden" name="loanId" value={id} />;
   const bankSel = (
-    <select name="bankAccountId" defaultValue={loan.bankAccountId ?? ""} required>
-      <option value="">Choose…</option>{banks.map((b) => <option key={b.id} value={b.id}>{b.code} · {b.name}</option>)}
-    </select>
+    <MasterPicker name="bankAccountId" ariaLabel="Bank account" defaultValue={loan.bankAccountId ?? ""} required placeholder="Type to search…" options={idOpts(banks)} add={{ kind: "banks" }} />
   );
 
   return (
@@ -147,7 +147,7 @@ export default async function LoanView({ params }: { params: Promise<{ id: strin
             <div className="row">
               <div><label>Fees paid to the lender</label><input name="fees" defaultValue="0" inputMode="decimal" /></div>
               <div><label>Fees paid from</label>
-                <select name="bankAccountId" defaultValue={loan.bankAccountId ?? ""}><option value="">—</option>{banks.map((b) => <option key={b.id} value={b.id}>{b.code} · {b.name}</option>)}</select></div>
+                <MasterPicker name="bankAccountId" ariaLabel="Bank account" defaultValue={loan.bankAccountId ?? ""} emptyLabel="—" placeholder="—" options={idOpts(banks)} add={{ kind: "banks" }} /></div>
               <div><label>Gain / loss account</label><AccountSelect name="gainLossAccountId" accounts={accounts} types={["EXPENSE", "INCOME"]} value={loan.interestExpenseAccountId} /></div>
               <div style={{ flex: 2 }}><label>Reason / agreement reference</label><input name="reason" required /></div>
             </div>

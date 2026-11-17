@@ -10,6 +10,8 @@ import { ITEM_CATEGORIES, type Line } from "@/lib/payroll/compute";
 import { DE_MINIMIS } from "@/lib/payroll/rates";
 import { employeeName } from "@/lib/hr/service";
 import { runAction } from "../../payroll-actions";
+import { MasterPicker } from "@/components/MasterPicker";
+import { idOpts, empOpts } from "@/lib/lookup";
 
 const peso = (n: unknown) => Number(n ?? 0).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -76,7 +78,7 @@ export default async function PayrollRunPage({ params }: { params: Promise<{ id:
           {run.status === "FINALIZED" && approve && !run.releasedAt && <Op id={run.id} op="release" label="Release payslips to employees" confirm="Employees will see their payslips in the portal. Continue?" />}
           {run.status === "FINALIZED" && approve && !run.paymentEntryId && (
             <Op id={run.id} op="pay" label="Record salary payment" cls="secondary">
-              <div><select name="bankAccountId" required defaultValue=""><option value="" disabled>Paid from…</option>{banks.map((b) => <option key={b.id} value={b.id}>{b.code} {b.name}</option>)}</select></div>
+              <div><MasterPicker name="bankAccountId" ariaLabel="Paid from" defaultValue="" required options={idOpts(banks)} add={{ kind: "banks" }} placeholder="Paid from…" /></div>
               <div><input type="date" name="date" defaultValue={fmtDate(run.payDate)} /></div>
             </Op>
           )}
@@ -99,7 +101,7 @@ export default async function PayrollRunPage({ params }: { params: Promise<{ id:
           <ActionForm action={runAction}>
             <input type="hidden" name="id" value={run.id} /><input type="hidden" name="op" value="adjust" />
             <div className="row">
-              <div><label>Employee</label><select name="employeeId" required>{emps.map((e) => <option key={e.id} value={e.id}>{e.code} {employeeName(e)}</option>)}</select></div>
+              <div><label>Employee</label><MasterPicker name="employeeId" ariaLabel="Employee" required options={empOpts(emps)} defaultValue={emps[0]?.id} /></div>
               <div><label>Type</label><select name="type">{categories.map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
               <div><label>De minimis kind</label><select name="deMinimisCode" defaultValue=""><option value="">(n/a)</option>{Object.entries(DE_MINIMIS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}</select></div>
               <div><label>Description</label><input name="name" required placeholder="e.g. Sales commission - May" /></div>

@@ -11,10 +11,13 @@ const JOURNAL_SOURCES = ["MANUAL", "OPENING_BALANCE", "SALES", "PURCHASES", "BAN
 export async function builderLookups(userId: string, orgId: string): Promise<BuilderLookups> {
   const entities = await reportableEntities(userId);
   const ids = entities.map((e) => e.id);
-  const [dims, accounts, members] = await Promise.all([
+  const [dims, accounts, members, customers, vendors, employees] = await Promise.all([
     prisma.dimensionValue.findMany({ where: { organizationId: { in: ids } }, orderBy: { code: "asc" } }),
     prisma.account.findMany({ where: { organizationId: orgId }, orderBy: { code: "asc" }, select: { code: true, name: true, type: true, ifrsGroup: true } }),
     prisma.membership.findMany({ where: { organizationId: orgId }, include: { user: { select: { id: true, name: true } } } }),
+    prisma.customer.findMany({ where: { organizationId: orgId }, orderBy: { code: "asc" }, select: { code: true, name: true } }),
+    prisma.vendor.findMany({ where: { organizationId: orgId }, orderBy: { code: "asc" }, select: { code: true, name: true } }),
+    prisma.employee.findMany({ where: { organizationId: orgId }, orderBy: { code: "asc" }, select: { code: true, firstName: true, lastName: true, isPartner: true } }),
   ]);
   return {
     currentOrgId: orgId,
@@ -27,6 +30,11 @@ export async function builderLookups(userId: string, orgId: string): Promise<Bui
     accounts,
     ifrsGroups: [...new Set(accounts.map((a) => a.ifrsGroup))].sort(),
     journalSources: JOURNAL_SOURCES,
+    parties: [
+      ...customers.map((c) => ({ code: c.code, name: c.name, type: "Customer" })),
+      ...vendors.map((v) => ({ code: v.code, name: v.name, type: "Vendor" })),
+      ...employees.map((e) => ({ code: e.code, name: `${e.firstName} ${e.lastName}`.trim(), type: e.isPartner ? "Partner" : "Employee" })),
+    ],
     members: members.filter((m) => m.userId !== userId).map((m) => ({ id: m.user.id, name: m.user.name, role: m.role })),
     roles: (Object.keys(ROLE_LABELS) as Role[]).map((r) => ({ id: r, label: ROLE_LABELS[r] })),
   };

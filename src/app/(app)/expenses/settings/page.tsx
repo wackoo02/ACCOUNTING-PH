@@ -6,6 +6,8 @@ import { CONNECTORS, MODULES } from "@/lib/expense/catalog";
 import { ActionForm } from "@/components/ActionForm";
 
 import { saveMappingAction } from "../../expense-actions";
+import { MasterPicker } from "@/components/MasterPicker";
+import { idOpts } from "@/lib/lookup";
 
 export default async function MobilitySettings() {
   const ctx = await requireCtx("reports.view");
@@ -29,7 +31,7 @@ export default async function MobilitySettings() {
                 <ActionForm action={saveMappingAction} className="row">
                   <input type="hidden" name="transactionType" value={t.key} />
                   <div className="row" style={{ gap: 6, flexWrap: "nowrap" }}>
-                    <select name="accountId" defaultValue={t.account?.id ?? ""}><option value="">Default ({t.codes.join(" or ")})</option>{accounts.map((a) => <option key={a.id} value={a.id}>{a.code} {a.name}</option>)}</select>
+                    <MasterPicker name="accountId" ariaLabel="Account" defaultValue={t.account?.id ?? ""} emptyLabel={`Default (${t.codes.join(" or ")})`} placeholder={`Default (${t.codes.join(" or ")})`} options={idOpts(accounts)} add={{ kind: "accounts" }} />
                     <button className="secondary">Save</button>
                   </div>
                 </ActionForm>

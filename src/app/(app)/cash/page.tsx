@@ -6,6 +6,8 @@ import { can } from "@/lib/permissions";
 import { formatPeso, toCentavos } from "@/lib/money";
 import { fmtDate } from "@/lib/format";
 import { cashTypeLabel } from "@/lib/bank/cash";
+import { MasterPicker } from "@/components/MasterPicker";
+import { idOpts } from "@/lib/lookup";
 
 type SP = Promise<Record<string, string | undefined>>;
 
@@ -39,7 +41,7 @@ export default async function CashList({ searchParams }: { searchParams: SP }) {
       <form className="card row noprint">
         <div><label>Search</label><input name="q" defaultValue={sp.q} placeholder="No., payee, check no., particulars" /></div>
         <div><label>Type</label><select name="type" defaultValue={sp.type ?? ""}><option value="">All</option><option value="RECEIPT">Receipts</option><option value="DISBURSEMENT">Disbursements</option><option value="PETTY">Petty cash vouchers</option><option value="TRANSFER">Transfers</option></select></div>
-        <div><label>Account</label><select name="bank" defaultValue={sp.bank ?? ""}><option value="">All</option>{banks.map((b) => <option key={b.id} value={b.id}>{b.code}</option>)}</select></div>
+        <div><label>Account</label><MasterPicker name="bank" ariaLabel="Account" defaultValue={sp.bank ?? ""} emptyLabel="All" placeholder="All" options={idOpts(banks)} /></div>
         <div><label>Status</label><select name="status" defaultValue={sp.status ?? ""}><option value="">All</option><option>DRAFT</option><option value="PENDING_APPROVAL">FOR APPROVAL</option><option>POSTED</option><option>VOID</option></select></div>
         <div><label>From</label><input type="date" name="from" defaultValue={sp.from} /></div>
         <div><label>To</label><input type="date" name="to" defaultValue={sp.to} /></div>
