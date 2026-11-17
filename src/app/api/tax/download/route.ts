@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { requireCtx } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { alphaFileName, alphalistDat, csv, qapDat, reliefFileName, reliefPurchases, reliefSales, sawtDat, type FilerInfo } from "@/lib/tax/dat";
-import { alphalist, certificates2307, qap, sawt, slsp } from "@/lib/tax/lists";
+import { alphaFileName, alphalist1604CDat, alphalistDat, csv, nonTaxableTotal, taxableTotal, qapDat, reliefFileName, reliefPurchases, reliefSales, sawtDat, type FilerInfo } from "@/lib/tax/dat";
+import { alphalist, alphalistEmployees, certificates2307, qap, sawt, slsp } from "@/lib/tax/lists";
 import { computeReturn } from "@/lib/tax/returns";
 import { BOOKS, book, isBook } from "@/lib/tax/books";
 import { isForm, quarter } from "@/lib/tax/periods";
@@ -47,6 +47,14 @@ export async function GET(req: Request) {
         return send(csv(["Seq", "TIN", "Branch", "Withholding agent", "ATC", "Rate", "Income payment", "Tax withheld"], r.rows.map((x, i) => [i + 1, x.tin9, x.branch, party(x.party), x.atcCode, x.rate, x.base, x.tax])), `SAWT-${form}-${p.label.replace(" ", "-")}.csv`, "text/csv");
       }
       case "alpha": case "alpha-csv": {
+        if (q.get("kind") === "1604C") {
+          const rows = (await alphalistEmployees(org.id, year)) ?? [];
+          if (type === "alpha") return send(alphalist1604CDat(filer, year, rows), alphaFileName(filer, new Date(Date.UTC(year, 11, 31)), "1604C"));
+          return send(csv(
+            ["Schedule", "Seq", "TIN", "Branch", "Employee code", "Last name", "First name", "Middle name", "Period from", "Period to", "MWE", "Gross compensation", "Non-taxable", "Taxable", "Taxable from previous employer", "Tax due", "Withheld Jan-Nov", "Withheld total (present employer)", "Withheld previous employer", "Substituted filing", "2316 status"],
+            rows.map((r, i) => [r.schedule, i + 1, r.tin9, r.branch, r.employeeCode, r.lastName, r.firstName, r.middleName, r.periodFrom, r.periodTo, r.minimumWageEarner ? "Y" : "N", r.grossCompensation, nonTaxableTotal(r).toFixed(2), taxableTotal(r).toFixed(2), r.taxableFromPreviousEmployer ?? "0.00", r.taxDue, r.taxWithheldJanNov ?? "", r.taxWithheldPresent, r.taxWithheldPrevious ?? "0.00", r.substitutedFiling ? "Y" : "N", r.formStatus ?? ""]),
+          ), `1604C-${year}.csv`, "text/csv");
+        }
         const kind = q.get("kind") === "1604F" ? "1604F" : "1604E";
         const r = await alphalist(org.id, kind, year);
         if (type === "alpha") return send(alphalistDat(filer, kind, year, r.rows), alphaFileName(filer, new Date(Date.UTC(year, 11, 31)), kind));

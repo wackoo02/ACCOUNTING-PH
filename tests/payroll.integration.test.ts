@@ -7,6 +7,9 @@ import { addRunAdjustment, computeRun, createRun, finalizeRun, recordPayment, re
 import { compute2316, generate2316, set2316Status } from "@/lib/payroll/bir2316";
 import { attendancePdf, form2316Pdf, laborCostPdf, leavePdf, payslipsPdf, registerPdf, taxReportPdf, earningsSummaryPdf } from "@/lib/payroll/documents";
 import { manilaInstant } from "@/lib/payroll/attendance";
+import { computeReturn } from "@/lib/tax/returns";
+import { alphalistEmployees } from "@/lib/tax/lists";
+import { alphalist1604CDat } from "@/lib/tax/dat";
 
 let orgId = "", owner = "", accountant = "", mgrUser = "", staffUser = "";
 let mgr = "", staff = "", daily = "";
@@ -161,5 +164,47 @@ describe("payroll run", () => {
     await voidRun(orgId, owner, run.id, "duplicate");
     const rev = await prisma.journalEntry.findFirst({ where: { reversalOfId: journal.id } });
     expect(rev).not.toBeNull();
+  });
+});
+
+describe("payroll feeds the BIR tax engine", () => {
+  it("fills 1601-C for the month from finalized runs and ties to the GL", async () => {
+    const slips = await prisma.payslip.findMany({ where: { organizationId: orgId, run: { status: "FINALIZED", payDate: { gte: new Date("2026-06-01"), lte: new Date("2026-06-30") } } } });
+    const withheld = slips.reduce((n, s) => n + Number(s.withholdingTax), 0);
+    const gross = slips.reduce((n, s) => n + Number(s.gross), 0);
+    const r = await computeReturn(orgId, "1601C", 2026, 6);
+    const row = (k: string) => r.sections.flatMap((x) => x.rows).find((x) => x.key === k)!;
+    expect(Number(row("withheld").tax) / 100).toBeCloseTo(withheld, 2);
+    expect(Number(row("comp.total").base) / 100).toBeCloseTo(gross, 2);
+    expect(Number(row("comp.nonTaxable").base! + row("comp.taxable").base!) / 100).toBeCloseTo(gross, 2);
+    expect(Number(row("comp.smw").base)).toBeGreaterThan(0); // Ana is a minimum wage earner
+    expect(Number(r.taxDue) / 100).toBeCloseTo(withheld, 2);
+    expect(r.payrollRuns).toHaveLength(1);
+    expect(r.warnings).toEqual([]);
+  });
+  it("leaves voided runs out of 1601-C", async () => {
+    const r = await computeReturn(orgId, "1601C", 2026, 12);
+    expect(r.payrollRuns).toHaveLength(0);
+    expect(r.taxDue).toBe(0n);
+  });
+  it("lists every paid employee in the 1604-C alphalist with their 2316 figures", async () => {
+    const rows = (await alphalistEmployees(orgId, 2026))!;
+    expect(rows).toHaveLength(3);
+    const ana = rows.find((r) => r.lastName === "Reyes")!;
+    expect(ana.schedule).toBe("7.5");
+    expect(ana.formStatus).toBe("DRAFT");
+    const juan = rows.find((r) => r.lastName === "Dela Cruz")!;
+    expect(juan.schedule).toBe("7.3");
+    expect(juan.formStatus).toBe("RELEASED");
+    const f = await compute2316(orgId, staff, 2026);
+    expect(Number(juan.grossCompensation)).toBeCloseTo(f.i19_gross, 2);
+    expect(Number(juan.taxWithheldPresent)).toBeCloseTo(f.i25a_withheldPresent, 2);
+    expect(juan.tin9).toBe("123456789");
+    await prisma.organization.update({ where: { id: orgId }, data: { tin: "987-654-321-000", rdoCode: "39" } });
+    const dat = alphalist1604CDat({ tin: "987-654-321-000", rdoCode: "39", name: "Payroll Co" }, 2026, rows).split("\r\n").filter(Boolean);
+    expect(dat[0]).toBe("H1604C,987654321,0000,12/31/2026,039");
+    expect(dat.filter((l) => l.startsWith("D7.3,"))).toHaveLength(2);
+    expect(dat.filter((l) => l.startsWith("D7.5,"))).toHaveLength(1);
+    expect(dat.some((l) => l.startsWith("C7.3,1604C,987654321"))).toBe(true);
   });
 });

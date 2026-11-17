@@ -1,13 +1,14 @@
 // BIR return computations, built from the tax ledger plus the manual items saved on the draft return.
 // Each return is a list of sections and rows so one screen, print layout and CSV export serve them all.
-// Field names follow the current forms (2550Q / 2551Q Jan 2023 ENCS, 1601-EQ / 1601-FQ Jan 2018 ENCS,
+// Field names follow the current forms (2550Q / 2551Q Jan 2023 ENCS, 1601-EQ / 1601-FQ / 1601-C Jan 2018 ENCS,
 // 0619-E / 0619-F); line numbers are left out on purpose because BIR renumbers them between versions.
 import "server-only";
 import { prisma } from "@/lib/db";
 import { fromCentavos, toCentavos } from "@/lib/money";
 import { taxLines } from "./ledger";
 import { FORMS, periodFor, quarter, month, type FormCode, type Period } from "./periods";
-import { CLASS_LABEL, type TaxLine } from "./types";
+import { CLASS_LABEL, getCompensationFeed, type CompensationWithholding, type TaxLine } from "./types";
+import "@/lib/payroll/tax-feed"; // registers payroll's compensation feed (1601-C)
 
 export type Row = {
   key: string;
@@ -26,6 +27,8 @@ export type ReturnResult = {
   carryOver?: bigint;
   warnings: string[];
   lines: TaxLine[];
+  /** 1601-C: the finalized payroll runs paid in the month. */
+  payrollRuns?: NonNullable<CompensationWithholding["runs"]>;
   saved: { id: string; status: string; inputs: Record<string, string>; filedAt: Date | null; filingRef: string | null; amountPaid: bigint; paymentRef: string | null; journalEntryId: string | null; figures: unknown } | null;
 };
 
@@ -182,6 +185,61 @@ export async function computeReturn(organizationId: string, form: FormCode, year
           { key: "interest", label: "Add: interest", tax: inp("interest"), input: true },
           { key: "compromise", label: "Add: compromise", tax: inp("compromise"), input: true },
           { key: "taxDue", label: "Total amount payable", tax: taxDue, strong: true }] },
+      ],
+    };
+  }
+
+  if (form === "1601C") {
+    const feed = getCompensationFeed();
+    const months = feed ? await feed.monthly1601C(organizationId, period.from, period.to) : [];
+    const c = (f: (m: CompensationWithholding) => string | undefined) => months.reduce((s, m) => s + cents(f(m)), 0n);
+    const total = c((m) => m.totalCompensation ?? fromCentavos(cents(m.taxableCompensation) + cents(m.nonTaxable)));
+    const b = (k: keyof NonNullable<CompensationWithholding["breakdown"]>) => c((m) => m.breakdown?.[k]);
+    const nonTaxable = c((m) => m.nonTaxable), taxable = c((m) => m.taxableCompensation);
+    const notWithheld = b("taxableNotWithheld");
+    const withheld = c((m) => m.taxWithheld);
+    const forRemittance = withheld + inp("adjustment");
+    const remitted = inp("previouslyFiled") + inp("otherRemittances");
+    const still = forRemittance - remitted;
+    const penalties = inp("surcharge") + inp("interest") + inp("compromise");
+    const taxDue = pos(still) + (still > 0n ? penalties : 0n);
+    const runs = months.flatMap((m) => m.runs ?? []);
+    if (!feed) warnings.push("Payroll is not connected to the tax engine.");
+    else if (!months.length) warnings.push(`No finalized payroll was paid in ${period.label}. If you paid salaries outside Veritus, enter the figures on the return itself.`);
+    // Tie-out: tax withheld per payslips vs what the payroll entries credited to Withholding Tax Payable - Compensation.
+    const ids = runs.map((r) => r.journalEntryId).filter((x): x is string => !!x);
+    if (ids.length) {
+      const gl = await prisma.journalLine.aggregate({ _sum: { credit: true, debit: true }, where: { organizationId, journalEntryId: { in: ids }, account: { systemRole: "WTC_PAYABLE" } } });
+      const glAmt = cents(gl._sum.credit) - cents(gl._sum.debit);
+      if (glAmt !== withheld) warnings.push(`The payroll entries credited ${fromCentavos(glAmt)} to Withholding Tax Payable - Compensation, but the payslips withheld ${fromCentavos(withheld)}. Check the payroll account mapping.`);
+    }
+    return {
+      ...base, lines: [], payrollRuns: runs, taxDue,
+      sections: [
+        { title: "Computation of tax", rows: [
+          { key: "comp.total", label: "Total amount of compensation", base: total, strong: true },
+          { key: "comp.smw", label: "Less: statutory minimum wage (MWEs)", base: b("smwMwe") },
+          { key: "comp.mweOther", label: "Less: holiday pay, overtime pay, night shift differential and hazard pay (MWEs)", base: b("holidayOtNdHazardMwe") },
+          { key: "comp.13th", label: "Less: 13th month pay and other benefits (up to P90,000)", base: b("thirteenthMonthAndOther") },
+          { key: "comp.deMinimis", label: "Less: de minimis benefits", base: b("deMinimis") },
+          { key: "comp.contributions", label: "Less: SSS, GSIS, PhilHealth, Pag-IBIG contributions and union dues (employee share)", base: b("govContributions") },
+          { key: "comp.otherNonTax", label: "Less: other non-taxable compensation", base: b("otherNonTaxable") },
+          { key: "comp.nonTaxable", label: "Total non-taxable compensation", base: nonTaxable, strong: true },
+          { key: "comp.taxable", label: "Total taxable compensation", base: taxable, strong: true },
+          { key: "comp.notWithheld", label: "Less: taxable compensation not subject to withholding tax (non-MWEs earning P250,000 and below)", base: notWithheld },
+          { key: "comp.net", label: "Net taxable compensation", base: taxable - notWithheld, strong: true },
+          { key: "withheld", label: "Total taxes withheld", tax: withheld, strong: true },
+          { key: "adjustment", label: "Add / (less): adjustment of taxes withheld from previous month(s)", tax: inp("adjustment"), input: true },
+          { key: "forRemittance", label: "Taxes withheld for remittance", tax: forRemittance, strong: true },
+        ] },
+        { title: "Remittances and tax still due", rows: [
+          { key: "previouslyFiled", label: "Less: tax remitted in return previously filed (if amended)", tax: inp("previouslyFiled"), input: true },
+          { key: "otherRemittances", label: "Less: other remittances made", tax: inp("otherRemittances"), input: true },
+          { key: "still", label: "Tax still due / (over-remittance)", tax: still, strong: true },
+          { key: "surcharge", label: "Add: surcharge", tax: inp("surcharge"), input: true },
+          { key: "interest", label: "Add: interest", tax: inp("interest"), input: true },
+          { key: "compromise", label: "Add: compromise", tax: inp("compromise"), input: true },
+          { key: "taxDue", label: "Total amount of remittance", tax: taxDue, strong: true }] },
       ],
     };
   }

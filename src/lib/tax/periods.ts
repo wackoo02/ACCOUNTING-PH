@@ -4,7 +4,8 @@
 // RR 2-98 Sec. 2.58 as amended by RR 11-2018 (0619-E/0619-F by the 10th of the following month,
 // 1601-EQ/1601-FQ with QAP by the last day of the month after the quarter, 2307 within 20 days
 // after the quarter, 1604-E by March 1, 1604-C/1604-F by January 31); RR 1-2017 (SLSP quarterly,
-// 25th day after the quarter). eFPS filers in groups A-E may have staggered 0619 deadlines.
+// 25th day after the quarter); RR 2-98 Sec. 2.58(A)(2) (1601-C by the 10th of the following month,
+// December's by January 15). eFPS filers in groups A-E may have staggered 0619 deadlines.
 
 export type Period = { from: Date; to: Date; label: string };
 const utc = (y: number, m: number, d: number) => new Date(Date.UTC(y, m - 1, d));
@@ -32,6 +33,7 @@ export const FORMS = {
   "1601EQ": { name: "Quarterly Remittance of Expanded Withholding Tax", freq: "Q", vat: null },
   "0619F": { name: "Monthly Remittance of Final Income Taxes Withheld", freq: "M", vat: null },
   "1601FQ": { name: "Quarterly Remittance of Final Income Taxes Withheld", freq: "Q", vat: null },
+  "1601C": { name: "Monthly Remittance Return of Income Taxes Withheld on Compensation", freq: "M", vat: null },
 } as const;
 export type FormCode = keyof typeof FORMS;
 export const isForm = (f: string): f is FormCode => f in FORMS;
@@ -48,6 +50,7 @@ export function dueDate(kind: FormCode | "SLSP" | "2307" | "1604E" | "1604F" | "
   switch (kind) {
     case "2550Q": case "2551Q": case "SLSP": case "2550M": case "SAWT": return utc(next.y, next.m, 25);
     case "0619E": case "0619F": return utc(next.y, next.m, 10);
+    case "1601C": return utc(next.y, next.m, m === 12 ? 15 : 10);
     case "1601EQ": case "1601FQ": case "QAP": return utc(next.y, next.m, lastDay(next.y, next.m));
     case "2307": return utc(next.y, next.m, 20);
     case "1604E": return utc(y + 1, 3, 1);
@@ -67,6 +70,10 @@ export function deadlines(year: number, vatRegistered: boolean): Deadline[] {
     out.push({ form: "1601EQ", label: "1601-EQ + QAP", period: p, due: dueDate("1601EQ", p.to), href: `/tax/returns/1601EQ?year=${year}&n=${q}`, n: q });
     out.push({ form: "1601FQ", label: "1601-FQ + QAP", period: p, due: dueDate("1601FQ", p.to), href: `/tax/returns/1601FQ?year=${year}&n=${q}`, n: q });
     out.push({ form: "2307", label: "Issue BIR 2307 to payees", period: p, due: dueDate("2307", p.to), href: `/tax/2307?year=${year}&q=${q}`, n: q });
+    for (const k of [1, 2, 3]) {
+      const c = month(year, (q - 1) * 3 + k);
+      out.push({ form: "1601C", label: "1601-C withholding on compensation", period: c, due: dueDate("1601C", c.to), href: `/tax/returns/1601C?year=${year}&n=${(q - 1) * 3 + k}`, n: (q - 1) * 3 + k });
+    }
     for (const k of [1, 2]) {
       const m = month(year, (q - 1) * 3 + k);
       out.push({ form: "0619E", label: "0619-E", period: m, due: dueDate("0619E", m.to), href: `/tax/returns/0619E?year=${year}&n=${(q - 1) * 3 + k}`, n: (q - 1) * 3 + k });

@@ -50,7 +50,7 @@ export default async function TaxOverview({ searchParams }: { searchParams: Prom
         <tbody>
           {list.map((d) => {
             const r = statusOf(d.form, d.period.from);
-            const isReturn = ["2550Q", "2551Q", "0619E", "1601EQ", "0619F", "1601FQ"].includes(d.form);
+            const isReturn = ["2550Q", "2551Q", "0619E", "1601EQ", "0619F", "1601FQ", "1601C"].includes(d.form);
             const st = r?.status === "FILED" ? "FILED" : isReturn && d.due < now ? "OVERDUE" : r ? "DRAFT" : "";
             return (
               <tr key={`${d.form}-${d.period.label}`}>

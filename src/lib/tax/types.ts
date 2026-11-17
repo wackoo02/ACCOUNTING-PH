@@ -114,10 +114,29 @@ export type Bir2316Data = {
   taxWithheldPresent: string;
   taxWithheldPrevious?: string;
   substitutedFiling: boolean;
+  /** Filled by payroll: employee code, 2316 status (DRAFT | FINALIZED | RELEASED, or NONE when not yet prepared), separation. */
+  employeeCode?: string;
+  formStatus?: string;
+  /** Left before December 31 (1604-C schedule of terminated employees). */
+  separatedDuringYear?: boolean;
+  /** Tax withheld January to November; the rest is the December / year-end adjustment. */
+  taxWithheldJanNov?: string;
 };
 
 /** One line of the 1601-C monthly remittance, from a posted payroll. */
-export type CompensationWithholding = { month: Date; taxableCompensation: string; nonTaxable: string; taxWithheld: string; employees: number };
+export type CompensationWithholding = {
+  month: Date; taxableCompensation: string; nonTaxable: string; taxWithheld: string; employees: number;
+  /** Optional detail for the 1601-C computation (items 14-23). */
+  totalCompensation?: string;
+  breakdown?: {
+    smwMwe: string; holidayOtNdHazardMwe: string; thirteenthMonthAndOther: string; deMinimis: string;
+    govContributions: string; otherNonTaxable: string;
+    /** Taxable compensation of non-MWE employees with no tax withheld in the month (P250,000-and-below annual bracket). */
+    taxableNotWithheld: string;
+  };
+  /** Payroll runs paid in the month, for the drill-down. */
+  runs?: { id: string; number: string; payDate: Date; journalEntryId: string | null; employees: number; taxableCompensation: string; taxWithheld: string }[];
+};
 
 export type CompensationFeed = {
   year2316(organizationId: string, year: number): Promise<Bir2316Data[]>;

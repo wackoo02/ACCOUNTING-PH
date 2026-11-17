@@ -7,7 +7,7 @@
 // Run every file through the BIR validation module before the first real submission; if BIR changes
 // a layout, this file is the only place to update.
 import { fromCentavos } from "@/lib/money";
-import type { PayeeRow, SlpRow, SlsRow } from "./lists";
+import type { EmployeeRow, PayeeRow, SlpRow, SlsRow } from "./lists";
 import { splitTin } from "./tin";
 
 export type FilerInfo = {
@@ -119,6 +119,55 @@ export function alphalistDat(f: FilerInfo, form: "1604E" | "1604F", year: number
   const out = [[`H${form}`, t.tin9, t.branch.slice(-4), end].join(",")];
   rows.forEach((r, i) => out.push([`D${sch}`, form, t.tin9, t.branch.slice(-4), end, i + 1, r.tin9, r.branch.slice(-4), ...payeeNames(r), r.atcCode, rate(r.rate), amt(r.base), amt(r.tax)].join(",")));
   out.push([`C${sch}`, form, t.tin9, t.branch.slice(-4), end, amt(rows.reduce((s, r) => s + r.base, 0n)), amt(rows.reduce((s, r) => s + r.tax, 0n))].join(","));
+  return lines(out);
+}
+
+// ---------- 1604-C: alphalist of employees (from payroll, per BIR 2316) ----------
+
+const p2 = (v: string | undefined | null) => Number(v ?? 0).toFixed(2);
+const yn = (b: boolean) => (b ? "Y" : "N");
+const decWithheld = (r: EmployeeRow) => Number(r.taxWithheldPresent) - Number(r.taxWithheldJanNov ?? r.taxWithheldPresent);
+export const nonTaxableTotal = (r: EmployeeRow) => Object.values(r.nonTaxable).reduce((s, v) => s + Number(v ?? 0), 0);
+export const taxableTotal = (r: EmployeeRow) => Object.values(r.taxable).reduce((s, v) => s + Number(v ?? 0), 0);
+
+export function issues1604C(rows: EmployeeRow[]) {
+  const out: string[] = [];
+  for (const r of rows) {
+    const who = `${r.lastName}, ${r.firstName}`;
+    if (r.tin9.length !== 9) out.push(`${who}: ${r.tin9 ? "TIN must have 9 digits" : "no TIN"} (set it on the employee record)`);
+  }
+  return out;
+}
+
+/**
+ * 1604-C DAT: H1604C header; one detail record per employee in its schedule (D7.1, D7.3, D7.4, D7.5)
+ * with the BIR 2316 figures; a control record per schedule (C7.x) with totals.
+ */
+export function alphalist1604CDat(f: FilerInfo, year: number, rows: EmployeeRow[]) {
+  const t = filerTin(f);
+  const end = `12/31/${year}`;
+  const out = [["H1604C", t.tin9, t.branch.slice(-4), end, rdo(f.rdoCode)].join(",")];
+  for (const sch of ["7.1", "7.3", "7.4", "7.5"] as const) {
+    const rs = rows.filter((r) => r.schedule === sch);
+    if (!rs.length) continue;
+    rs.forEach((r, i) => {
+      const n = r.nonTaxable, x = r.taxable;
+      const head = [`D${sch}`, "1604C", t.tin9, t.branch.slice(-4), end, i + 1, r.tin9, r.branch.slice(-4), txt(r.lastName), txt(r.firstName), txt(r.middleName)];
+      const period = sch === "7.1" ? [mmddyyyy(r.periodFrom), mmddyyyy(r.periodTo)] : [];
+      const mwe = sch === "7.5" ? [p2(n.basicSmw), p2(n.holidayPay), p2(n.overtimePay), p2(n.nightDiff), p2(n.hazardPay)] : [];
+      const nonTax = [p2(n.thirteenthMonthAndOther), p2(n.deMinimis), p2(n.govContributions), p2(n.salariesOther), nonTaxableTotal(r).toFixed(2)];
+      const tax = [p2(x.basic), p2(x.thirteenthMonthExcess), (Number(x.others ?? 0) + Number(x.commission ?? 0) + Number(x.overtimePay ?? 0) + Number(x.othersSupplementary ?? 0)).toFixed(2), taxableTotal(r).toFixed(2)];
+      const prev = sch === "7.4" ? [p2(r.taxableFromPreviousEmployer), p2(r.taxWithheldPrevious)] : [];
+      const withheld = Number(r.taxWithheldPresent) + Number(r.taxWithheldPrevious ?? 0);
+      const diff = withheld - Number(r.taxDue);
+      const refund = diff > 0 ? diff : 0;
+      // Tax due · withheld Jan-Nov · withheld December (year-end adjustment) · over-withheld refunded · withheld as adjusted
+      const wt = [p2(r.taxDue), p2(r.taxWithheldJanNov ?? r.taxWithheldPresent), decWithheld(r).toFixed(2), refund.toFixed(2), (withheld - refund).toFixed(2)];
+      out.push([...head, ...period, p2(r.grossCompensation), ...mwe, ...nonTax, ...tax, ...prev, ...wt, ...(sch === "7.1" ? [] : [yn(r.substitutedFiling)])].join(","));
+    });
+    const sum = (g: (r: EmployeeRow) => number) => rs.reduce((s, r) => s + g(r), 0).toFixed(2);
+    out.push([`C${sch}`, "1604C", t.tin9, t.branch.slice(-4), end, sum((r) => Number(r.grossCompensation)), sum(nonTaxableTotal), sum(taxableTotal), sum((r) => Number(r.taxDue)), sum((r) => Number(r.taxWithheldPresent) + Number(r.taxWithheldPrevious ?? 0))].join(","));
+  }
   return lines(out);
 }
 
