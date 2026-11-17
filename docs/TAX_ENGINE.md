@@ -20,7 +20,9 @@ income tax / VAT / percentage tax a customer withheld from us (2307 received), o
    entry is posted and not reversed, so voids and reversals drop out by themselves.
    - AR: `OUTPUT_VAT` per invoice line (VATABLE / GOVERNMENT / ZERO_RATED / EXEMPT), `CWT` / `VAT_WITHHELD` when the customer's 2307 is recorded, `PERCENTAGE` for non-VAT sellers.
    - AP: `INPUT_VAT` per bill line (CAPITAL_GOODS / GOODS / SERVICES / IMPORT_GOODS / SERVICES_NONRESIDENT / NOT_QUALIFIED / EXEMPT / ZERO_RATED), `EWT` or `FWT` with the ATC when withholding on payment or accrual.
-   - Payroll: register a `CompensationFeed` (`src/lib/tax/types.ts`) for 1601-C, 1604-C and BIR 2316.
+   - Payroll: `src/lib/payroll/tax-feed.ts` registers the `CompensationFeed` (`src/lib/tax/types.ts`) that the engine reads
+     for 1601-C, 1604-C and BIR 2316. Only FINALIZED payroll runs count, by pay date; voided runs drop out. The 1604-C uses a
+     2316 that payroll already finalized or released as issued, and computes drafts live from the payslips.
 2. **Built-in adapters** read modules that already hold tax data: AR sales invoices and credit memos (output VAT, or 3%
    percentage tax for non-VAT sellers) and collections (CWT / VAT withheld from 2307s received); AP supplier bills (input VAT
    by purchase class, EWT/FWT by ATC on the bill date); cash receipts/disbursements (EWT withheld, CWT received)
@@ -38,7 +40,9 @@ The overview compares the tax ledger with the GL tax accounts per quarter.
 | 0619-E / 1601-EQ, 0619-F / 1601-FQ | EWT / FWT by ATC | quarterly less the filed 0619 remittances |
 | SLSP (RELIEF S and P DAT) | VAT lines by TIN | RR 1-2017, quarterly |
 | QAP (1601-EQ / 1601-FQ DAT), SAWT (2550Q / 2551Q / 1702Q DAT) | withholding by payee/agent + ATC | |
-| 1604-E / 1604-F DAT, 1604-C | yearly withholding; payroll feed | |
+| 1601-C | payroll feed (finalized runs paid in the month) | compensation split per 2316 Part IV-B; ties tax withheld to the payroll entries' Withholding Tax Payable - Compensation |
+| 1604-E / 1604-F DAT | yearly withholding | |
+| 1604-C DAT + CSV | payroll feed, per employee 2316 | schedules 7.1 (separated), 7.3 (no previous employer), 7.4 (previous employer), 7.5 (MWE) |
 | BIR 2307 | EWT by payee, by month of quarter | printable + CSV |
 | Books of accounts | posted journals | General Journal, Cash Receipts, Cash Disbursements, Sales, Purchase (RR 9-2009) |
 

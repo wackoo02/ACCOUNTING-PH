@@ -1,8 +1,9 @@
 import { requireCtx } from "@/lib/auth";
 import { formatPeso } from "@/lib/money";
 import { fmtDate } from "@/lib/format";
-import { alphalist, alphalistEmployees } from "@/lib/tax/lists";
-import { issues } from "@/lib/tax/dat";
+import Link from "next/link";
+import { alphalist, alphalistEmployees, SCHEDULE_LABEL, type EmployeeRow } from "@/lib/tax/lists";
+import { issues, issues1604C, nonTaxableTotal, taxableTotal } from "@/lib/tax/dat";
 import { dueDate, yearPeriod } from "@/lib/tax/periods";
 import { formatTin } from "@/lib/tax/tin";
 import { PrintButton } from "@/components/PrintButton";
@@ -32,14 +33,44 @@ export default async function Alphalist({ searchParams }: { searchParams: Promis
   );
   if (kind === "1604C") {
     const rows = await alphalistEmployees(ctx.org.id, year);
+    if (rows === null) return <>{head()}<div className="notice">Payroll is not connected to the tax engine.</div></>;
+    const iss = issues1604C(rows);
+    const open = rows.filter((r) => r.formStatus === "DRAFT" || r.formStatus === "NONE").length;
+    const p = (v: number | string | undefined) => Number(v ?? 0).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const tot = (rs: EmployeeRow[], f: (r: EmployeeRow) => number) => rs.reduce((s, r) => s + f(r), 0);
+    const schedules = (["7.1", "7.3", "7.4", "7.5"] as const).map((k) => ({ k, rs: rows.filter((r) => r.schedule === k) })).filter((x) => x.rs.length);
     return (
-      <>{head()}
-        {rows === null
-          ? <div className="notice">The 1604-C alphalist of employees and BIR 2316 certificates come from payroll. They will appear here once the payroll module is live (it plugs into the tax engine through the compensation feed).</div>
-          : <div className="table-wrap"><table>
-            <thead><tr><th>TIN</th><th>Employee</th><th className="num">Gross compensation</th><th className="num">Tax due</th><th className="num">Tax withheld</th><th>MWE</th><th>Substituted filing</th></tr></thead>
-            <tbody>{rows.map((r) => <tr key={r.employeeId}><td>{formatTin(r.tin)}</td><td>{r.lastName}, {r.firstName}</td><td className="num">{r.grossCompensation}</td><td className="num">{r.taxDue}</td><td className="num">{r.taxWithheldPresent}</td><td>{r.minimumWageEarner ? "Yes" : ""}</td><td>{r.substitutedFiling ? "Yes" : ""}</td></tr>)}</tbody>
-          </table></div>}
+      <>{head("dat")}
+        <p className="muted">Built from finalized payroll runs paid in {year}, with the same figures as each employee&apos;s BIR 2316.
+          Forms finalized in <Link href={`/payroll/2316?year=${year}`}>Payroll · BIR 2316</Link> are used as issued; the rest are computed live from payslips.</p>
+        {open > 0 && <div className="notice">{open} employee(s) have a draft or no 2316 yet for {year}. Review and finalize them in <Link href={`/payroll/2316?year=${year}`}>Payroll · BIR 2316</Link> so the alphalist matches the certificates you give employees.</div>}
+        {iss.length > 0 && <div className="errors">Fix before submitting: <ul>{iss.slice(0, 20).map((i) => <li key={i}>{i}</li>)}</ul></div>}
+        {rows.length === 0 && <div className="notice">No finalized payroll was paid in {year}.</div>}
+        {schedules.map(({ k, rs }) => (
+          <div key={k} style={{ marginBottom: 14 }}>
+            <h2>{SCHEDULE_LABEL[k]}</h2>
+            <div className="table-wrap"><table>
+              <thead><tr><th>#</th><th>TIN</th><th>Employee</th>{k === "7.1" && <th>Period</th>}<th className="num">Gross compensation</th><th className="num">Non-taxable</th><th className="num">Taxable</th><th className="num">Tax due</th><th className="num">Tax withheld</th><th className="num">Difference</th>{k !== "7.1" && <th>Substituted filing</th>}<th>2316</th></tr></thead>
+              <tbody>
+                {rs.map((r, i) => {
+                  const withheld = Number(r.taxWithheldPresent) + Number(r.taxWithheldPrevious ?? 0);
+                  const diff = Math.round((Number(r.taxDue) - withheld) * 100) / 100;
+                  return (
+                    <tr key={r.employeeId}><td>{i + 1}</td><td>{formatTin(r.tin) || <span className="diff-bad">no TIN</span>}</td><td>{r.employeeCode} {r.lastName}, {r.firstName}{r.middleName ? ` ${r.middleName}` : ""}</td>
+                      {k === "7.1" && <td>{fmtDate(r.periodFrom)} to {fmtDate(r.periodTo)}</td>}
+                      <td className="num">{p(r.grossCompensation)}</td><td className="num">{p(nonTaxableTotal(r))}</td><td className="num">{p(taxableTotal(r))}</td>
+                      <td className="num">{p(r.taxDue)}</td><td className="num">{p(withheld)}</td><td className={`num ${diff ? "diff-bad" : "diff-ok"}`}>{p(diff)}</td>
+                      {k !== "7.1" && <td>{r.substitutedFiling ? "Yes" : "No"}</td>}
+                      <td><span className={`badge ${r.formStatus}`}>{r.formStatus === "NONE" ? "not prepared" : r.formStatus}</span></td></tr>
+                  );
+                })}
+                <tr className="total"><td colSpan={k === "7.1" ? 4 : 3}>Total</td><td className="num">{p(tot(rs, (r) => Number(r.grossCompensation)))}</td><td className="num">{p(tot(rs, nonTaxableTotal))}</td><td className="num">{p(tot(rs, taxableTotal))}</td>
+                  <td className="num">{p(tot(rs, (r) => Number(r.taxDue)))}</td><td className="num">{p(tot(rs, (r) => Number(r.taxWithheldPresent) + Number(r.taxWithheldPrevious ?? 0)))}</td><td colSpan={k === "7.1" ? 2 : 3}></td></tr>
+              </tbody>
+            </table></div>
+          </div>
+        ))}
+        <p className="muted">A difference between tax due and tax withheld should be settled in the last payroll of the year (year-end adjustment). Substituted filing means the employee&apos;s 2316 stands in for their own 1700, so it applies only to employees with one employer for the whole year and no under- or over-withholding.</p>
       </>
     );
   }

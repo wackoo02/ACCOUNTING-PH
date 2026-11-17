@@ -22,33 +22,29 @@ export type Form2316Data = {
   payslips: number;
 };
 
-export async function compute2316(organizationId: string, employeeId: string, year: number): Promise<Form2316Data> {
-  const [org, emp] = await Promise.all([
-    prisma.organization.findUniqueOrThrow({ where: { id: organizationId } }),
-    prisma.employee.findFirst({ where: { id: employeeId, organizationId } }),
-  ]);
-  if (!emp) fail("Employee not found");
-  const slips = await prisma.payslip.findMany({
-    where: { organizationId, employeeId, run: { status: "FINALIZED", payDate: { gte: new Date(`${year}-01-01`), lte: new Date(`${year}-12-31`) } } },
-    include: { run: true }, orderBy: { run: { payDate: "asc" } },
-  });
-  const d: Form2316Data = {
-    year,
-    employee: {
-      code: emp!.code, name: `${emp!.lastName}, ${emp!.firstName}${emp!.middleName ? " " + emp!.middleName : ""}`, tin: emp!.tin, birthDate: emp!.birthDate?.toISOString().slice(0, 10) ?? null,
-      address: emp!.address, mwe: emp!.minimumWageEarner,
-      periodFrom: (emp!.dateHired && emp!.dateHired.getUTCFullYear() === year ? emp!.dateHired.toISOString().slice(0, 10) : `${year}-01-01`),
-      periodTo: (emp!.separationDate && emp!.separationDate.getUTCFullYear() === year ? emp!.separationDate.toISOString().slice(0, 10) : `${year}-12-31`),
-    },
-    employer: { name: org.name, tin: org.tin, address: org.registeredAddress },
+/** What the 2316 / 1601-C figures need from a finalized payslip. */
+export type SlipFigures = {
+  minimumWageEarner: boolean; earnings: unknown;
+  sssEE: unknown; mpfEE: unknown; phicEE: unknown; hdmfEE: unknown; withholdingTax: unknown;
+};
+
+/** Part IV-B figures (non-taxable / taxable compensation) and tax withheld for a set of payslips. */
+export type CompensationFigures = Pick<Form2316Data,
+  "i27_basicSmw" | "i28_holidayMwe" | "i29_otMwe" | "i30_ndMwe" | "i31_hazardMwe" | "i32_13thExempt" | "i33_deMinimis" | "i34_contributions" | "i35_otherNonTax" | "i36_totalNonTax" |
+  "i37_basic" | "i42_otherAllowances" | "i43_commission" | "i46_13thTaxable" | "i48_overtime" | "i49_others" | "i50_totalTaxable" | "i19_gross" | "i25a_withheldPresent">;
+
+/**
+ * Classify payslip earnings the way BIR 2316 Part IV-B (and 1601-C items 14-22) lays them out.
+ * Pure: used for the annual 2316, the 1604-C alphalist and the monthly 1601-C.
+ */
+export function summarizeSlips(slips: SlipFigures[]): CompensationFigures {
+  const d: CompensationFigures = {
     i27_basicSmw: 0, i28_holidayMwe: 0, i29_otMwe: 0, i30_ndMwe: 0, i31_hazardMwe: 0, i32_13thExempt: 0, i33_deMinimis: 0, i34_contributions: 0, i35_otherNonTax: 0, i36_totalNonTax: 0,
-    i37_basic: 0, i42_otherAllowances: 0, i43_commission: 0, i46_13thTaxable: 0, i48_overtime: 0, i49_others: 0, i50_totalTaxable: 0,
-    i19_gross: 0, i20_lessNonTax: 0, i21_taxablePresent: 0, i22_taxablePrevious: 0, i23_grossTaxable: 0, i24_taxDue: 0, i25a_withheldPresent: 0, i25b_withheldPrevious: 0, i26_totalWithheld: 0,
-    payslips: slips.length,
+    i37_basic: 0, i42_otherAllowances: 0, i43_commission: 0, i46_13thTaxable: 0, i48_overtime: 0, i49_others: 0, i50_totalTaxable: 0, i19_gross: 0, i25a_withheldPresent: 0,
   };
   for (const s of slips) {
     const mwe = s.minimumWageEarner;
-    for (const l of s.earnings as unknown as Line[]) {
+    for (const l of (s.earnings ?? []) as Line[]) {
       const a = l.amount;
       d.i19_gross += a;
       switch (l.group) {
@@ -74,22 +70,56 @@ export async function compute2316(organizationId: string, employeeId: string, ye
     if (mwe) d.i27_basicSmw -= contrib; else d.i37_basic -= contrib;
     d.i25a_withheldPresent += num(s.withholdingTax);
   }
-  const r = (k: keyof Form2316Data) => { (d as Record<string, unknown>)[k] = round2((d as unknown as Record<string, number>)[k]); };
-  (Object.keys(d) as (keyof Form2316Data)[]).filter((k) => typeof d[k] === "number").forEach(r);
+  for (const k of Object.keys(d) as (keyof CompensationFigures)[]) d[k] = round2(d[k]);
   d.i36_totalNonTax = round2(d.i27_basicSmw + d.i28_holidayMwe + d.i29_otMwe + d.i30_ndMwe + d.i31_hazardMwe + d.i32_13thExempt + d.i33_deMinimis + d.i34_contributions + d.i35_otherNonTax);
   d.i50_totalTaxable = round2(d.i37_basic + d.i42_otherAllowances + d.i43_commission + d.i46_13thTaxable + d.i48_overtime + d.i49_others);
-  d.i20_lessNonTax = d.i36_totalNonTax;
-  d.i21_taxablePresent = d.i50_totalTaxable;
+  return d;
+}
+
+type EmployeeFor2316 = { code: string; lastName: string; firstName: string; middleName: string | null; tin: string | null; birthDate: Date | null; address: string | null; minimumWageEarner: boolean; dateHired: Date | null; separationDate: Date | null };
+
+/** The whole 2316 from the employee, employer and the year's finalized payslips. Pure. */
+export function build2316(year: number, emp: EmployeeFor2316, employer: Form2316Data["employer"], slips: SlipFigures[]): Form2316Data {
+  const f = summarizeSlips(slips);
+  const d: Form2316Data = {
+    year,
+    employee: {
+      code: emp.code, name: `${emp.lastName}, ${emp.firstName}${emp.middleName ? " " + emp.middleName : ""}`, tin: emp.tin, birthDate: emp.birthDate?.toISOString().slice(0, 10) ?? null,
+      address: emp.address, mwe: emp.minimumWageEarner,
+      periodFrom: (emp.dateHired && emp.dateHired.getUTCFullYear() === year ? emp.dateHired.toISOString().slice(0, 10) : `${year}-01-01`),
+      periodTo: (emp.separationDate && emp.separationDate.getUTCFullYear() === year ? emp.separationDate.toISOString().slice(0, 10) : `${year}-12-31`),
+    },
+    employer,
+    ...f,
+    i20_lessNonTax: f.i36_totalNonTax, i21_taxablePresent: f.i50_totalTaxable, i22_taxablePrevious: 0, i23_grossTaxable: 0,
+    i24_taxDue: 0, i25b_withheldPrevious: 0, i26_totalWithheld: 0,
+    payslips: slips.length,
+  };
   d.i23_grossTaxable = round2(d.i21_taxablePresent + d.i22_taxablePrevious);
   d.i24_taxDue = withholdingTax(d.i23_grossTaxable, "ANNUAL");
   d.i26_totalWithheld = round2(d.i25a_withheldPresent + d.i25b_withheldPrevious);
   return d;
 }
 
+/** Finalized payslips paid in a calendar year (pay date decides the year, as BIR counts compensation paid). */
+export const paidInYear = (organizationId: string, year: number) => ({
+  organizationId, run: { status: "FINALIZED", payDate: { gte: new Date(`${year}-01-01`), lte: new Date(`${year}-12-31`) } },
+});
+
+export async function compute2316(organizationId: string, employeeId: string, year: number): Promise<Form2316Data> {
+  const [org, emp] = await Promise.all([
+    prisma.organization.findUniqueOrThrow({ where: { id: organizationId } }),
+    prisma.employee.findFirst({ where: { id: employeeId, organizationId } }),
+  ]);
+  if (!emp) fail("Employee not found");
+  const slips = await prisma.payslip.findMany({ where: { ...paidInYear(organizationId, year), employeeId }, include: { run: true }, orderBy: { run: { payDate: "asc" } } });
+  return build2316(year, emp!, { name: org.name, tin: org.tin, address: org.registeredAddress }, slips);
+}
+
 /** Recompute drafts for all employees paid in the year (finalized/released forms are kept). */
 export async function generate2316(organizationId: string, userId: string, year: number) {
   const paid = await prisma.payslip.findMany({
-    where: { organizationId, run: { status: "FINALIZED", payDate: { gte: new Date(`${year}-01-01`), lte: new Date(`${year}-12-31`) } } },
+    where: paidInYear(organizationId, year),
     distinct: ["employeeId"], select: { employeeId: true },
   });
   let n = 0;

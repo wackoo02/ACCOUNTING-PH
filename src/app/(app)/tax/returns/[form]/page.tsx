@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { requireCtx } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { can } from "@/lib/permissions";
-import { formatPeso, fromCentavos } from "@/lib/money";
+import { formatPeso, fromCentavos, toCentavos } from "@/lib/money";
 import { fmtDate, today } from "@/lib/format";
 import { computeReturn } from "@/lib/tax/returns";
 import { FORMS, dueDate, isForm } from "@/lib/tax/periods";
@@ -19,6 +19,7 @@ const ATTACH: Record<string, { label: string; href: (y: number, n: number) => st
   "2551Q": [{ label: "SAWT (percentage tax withheld)", href: (y, n) => `/tax/lists/sawt?year=${y}&n=${n}&form=2551Q` }],
   "1601EQ": [{ label: "QAP", href: (y, n) => `/tax/lists/qap?year=${y}&n=${n}&form=1601EQ` }, { label: "BIR 2307 certificates", href: (y, n) => `/tax/2307?year=${y}&q=${n}` }],
   "1601FQ": [{ label: "QAP", href: (y, n) => `/tax/lists/qap?year=${y}&n=${n}&form=1601FQ` }],
+  "1601C": [{ label: "Payroll tax and contributions report", href: () => `/payroll/reports` }, { label: "1604-C alphalist (year end)", href: (y) => `/tax/alphalist?year=${y}&kind=1604C` }],
 };
 
 export default async function ReturnPage({ params, searchParams }: { params: Promise<{ form: string }>; searchParams: Promise<Record<string, string | undefined>> }) {
@@ -41,7 +42,7 @@ export default async function ReturnPage({ params, searchParams }: { params: Pro
       <div className="top">
         <h1>BIR {form} · {FORMS[form].name}</h1>
         <div style={{ display: "flex", gap: 8 }} className="noprint">
-          <a className="btn secondary" href={`/api/tax/return?form=${form}&year=${year}&n=${n}`}>Download CSV</a>
+          <a className="btn secondary" href={`/api/tax/download?type=return&form=${form}&year=${year}&n=${n}`}>Download CSV</a>
           <PrintButton />
         </div>
       </div>
@@ -122,21 +123,39 @@ export default async function ReturnPage({ params, searchParams }: { params: Pro
         </div>
       )}
 
-      <h2>Transactions in this return</h2>
-      <div className="table-wrap"><table>
-        <thead><tr><th>Date</th><th>Type</th><th>Class / ATC</th><th>Document</th><th>Party</th><th>TIN</th><th>Entry</th><th className="num">Base</th><th className="num">Tax</th></tr></thead>
-        <tbody>
-          {r.lines.map((l) => (
-            <tr key={l.key}>
-              <td>{fmtDate(l.date)}</td><td>{KIND_LABEL[l.kind]}</td><td>{l.vatClass ? CLASS_LABEL[l.vatClass] ?? l.vatClass : l.atcCode}</td>
-              <td>{[l.docType, l.docNumber].filter(Boolean).join(" ")}</td><td>{l.party.name}</td><td>{formatTin(l.party.tin)}</td>
-              <td>{l.journalEntryId ? <Link href={`/journals/${l.journalEntryId}`}>{l.journalNumber}</Link> : ""}</td>
-              <td className="num">{formatPeso(l.base)}</td><td className="num">{formatPeso(l.tax)}</td>
-            </tr>
-          ))}
-          {r.lines.length === 0 && <tr><td colSpan={9} className="muted">No transactions in this period.</td></tr>}
-        </tbody>
-      </table></div>
+      {r.payrollRuns ? <>
+        <h2>Payroll runs in this return</h2>
+        <p className="muted">Finalized payroll runs paid in {r.period.label}, by pay date. Voided runs are left out.</p>
+        <div className="table-wrap"><table>
+          <thead><tr><th>Pay date</th><th>Payroll run</th><th>Entry</th><th className="num">Employees</th><th className="num">Taxable compensation</th><th className="num">Tax withheld</th></tr></thead>
+          <tbody>
+            {r.payrollRuns.map((p) => (
+              <tr key={p.id}>
+                <td>{fmtDate(p.payDate)}</td><td><Link href={`/payroll/${p.id}`}>{p.number}</Link></td>
+                <td>{p.journalEntryId ? <Link href={`/journals/${p.journalEntryId}`}>Open entry</Link> : ""}</td>
+                <td className="num">{p.employees}</td><td className="num">{formatPeso(toCentavos(p.taxableCompensation))}</td><td className="num">{formatPeso(toCentavos(p.taxWithheld))}</td>
+              </tr>
+            ))}
+            {r.payrollRuns.length === 0 && <tr><td colSpan={6} className="muted">No finalized payroll paid in this month.</td></tr>}
+          </tbody>
+        </table></div>
+      </> : <>
+        <h2>Transactions in this return</h2>
+        <div className="table-wrap"><table>
+          <thead><tr><th>Date</th><th>Type</th><th>Class / ATC</th><th>Document</th><th>Party</th><th>TIN</th><th>Entry</th><th className="num">Base</th><th className="num">Tax</th></tr></thead>
+          <tbody>
+            {r.lines.map((l) => (
+              <tr key={l.key}>
+                <td>{fmtDate(l.date)}</td><td>{KIND_LABEL[l.kind]}</td><td>{l.vatClass ? CLASS_LABEL[l.vatClass] ?? l.vatClass : l.atcCode}</td>
+                <td>{[l.docType, l.docNumber].filter(Boolean).join(" ")}</td><td>{l.party.name}</td><td>{formatTin(l.party.tin)}</td>
+                <td>{l.journalEntryId ? <Link href={`/journals/${l.journalEntryId}`}>{l.journalNumber}</Link> : ""}</td>
+                <td className="num">{formatPeso(l.base)}</td><td className="num">{formatPeso(l.tax)}</td>
+              </tr>
+            ))}
+            {r.lines.length === 0 && <tr><td colSpan={9} className="muted">No transactions in this period.</td></tr>}
+          </tbody>
+        </table></div>
+      </>}
     </>
   );
 }

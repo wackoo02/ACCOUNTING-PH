@@ -4,7 +4,8 @@ import "server-only";
 import { taxLines } from "./ledger";
 import { splitTin } from "./tin";
 import { monthInQuarter, quarter, yearPeriod, type Period } from "./periods";
-import { getCompensationFeed, type Party, type TaxKind, type TaxLine } from "./types";
+import { getCompensationFeed, type Bir2316Data, type Party, type TaxKind, type TaxLine } from "./types";
+import "@/lib/payroll/tax-feed"; // registers payroll's compensation feed (1604-C, 2316)
 
 export type PartyKey = { key: string; party: Party; tin9: string; branch: string };
 
@@ -89,10 +90,34 @@ export async function alphalist(organizationId: string, kind: "1604E" | "1604F",
   return { period: p, rows: byPayeeAtc(await taxLines(organizationId, p.from, p.to, { kinds: [kind === "1604E" ? "EWT" : "FWT"] })) };
 }
 
-/** 1604-C needs payroll: until the payroll module registers its feed, this returns null. */
-export async function alphalistEmployees(organizationId: string, year: number) {
+/**
+ * 1604-C schedules, as the BIR Alphalist Data Entry module groups employees:
+ *   7.1 separated before December 31 · 7.3 as of December 31, no previous employer in the year ·
+ *   7.4 as of December 31, with a previous employer · 7.5 minimum wage earners.
+ */
+export type EmployeeSchedule = "7.1" | "7.3" | "7.4" | "7.5";
+export const SCHEDULE_LABEL: Record<EmployeeSchedule, string> = {
+  "7.1": "Schedule 7.1 · employees separated before December 31",
+  "7.3": "Schedule 7.3 · employees as of December 31 with no previous employer",
+  "7.4": "Schedule 7.4 · employees as of December 31 with a previous employer",
+  "7.5": "Schedule 7.5 · minimum wage earners",
+};
+export type EmployeeRow = Bir2316Data & { schedule: EmployeeSchedule; tin9: string; branch: string };
+
+export function scheduleOf(r: Bir2316Data): EmployeeSchedule {
+  if (r.separatedDuringYear) return "7.1";
+  if (r.minimumWageEarner) return "7.5";
+  return Number(r.taxableFromPreviousEmployer ?? 0) > 0 || Number(r.taxWithheldPrevious ?? 0) > 0 ? "7.4" : "7.3";
+}
+
+/** 1604-C alphalist of employees from payroll (null only if no payroll feed is registered). */
+export async function alphalistEmployees(organizationId: string, year: number): Promise<EmployeeRow[] | null> {
   const feed = getCompensationFeed();
-  return feed ? feed.year2316(organizationId, year) : null;
+  if (!feed) return null;
+  const order = ["7.1", "7.3", "7.4", "7.5"];
+  return (await feed.year2316(organizationId, year))
+    .map((r) => ({ ...r, schedule: scheduleOf(r), ...splitTin(r.tin) }))
+    .sort((a, b) => order.indexOf(a.schedule) - order.indexOf(b.schedule) || a.lastName.localeCompare(b.lastName) || a.firstName.localeCompare(b.firstName));
 }
 
 /** BIR 2307 (Certificate of Creditable Tax Withheld at Source) per payee for a quarter. */
